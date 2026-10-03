@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.72]
+
+### 排版 EPUB 墨水屏 ZIP 不再因文件名对不上回落 web
+
+- `Text/page_14_split_0.xhtml` 不是 chapterUid。mapped 改用目录里的 `chapter.files` 对 ZIP 条目。
+- 不再只靠文件名里的数字 uid；对不上才打 `falling back to web chapters`。
+
+
 ## [1.2.71]
 
 ### 合订本关书再进仍显示已下载划线

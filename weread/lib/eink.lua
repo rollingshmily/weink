@@ -600,29 +600,53 @@ function Eink.build_uid_index(files)
     return index
 end
 
+-- page_N_split_0.xhtml is a layout EPUB page, not chapterUid N.
+function Eink.resolve_chapter_name(files, chapter, uid_index)
+    if type(files) ~= "table" or type(chapter) ~= "table" then
+        return nil
+    end
+    for _, file in ipairs(chapter.files or {}) do
+        local _, name = lookup_file(files, file)
+        if name then
+            return name
+        end
+    end
+    local uid = tostring(chapter.chapterUid or "")
+    if uid == "" then
+        return nil
+    end
+    uid_index = uid_index or Eink.build_uid_index(files)
+    if uid_index[uid] and files[uid_index[uid]] ~= nil then
+        return uid_index[uid]
+    end
+    local _, name = lookup_uid(files, uid)
+    return name
+end
+
+function Eink.index_chapter_files(files, chapters, uid_index)
+    uid_index = uid_index or Eink.build_uid_index(files)
+    for _, chapter in ipairs(chapters or {}) do
+        local uid = tostring(chapter.chapterUid or "")
+        if uid ~= "" and not uid_index[uid] then
+            local name = Eink.resolve_chapter_name(files, chapter, uid_index)
+            if name then
+                uid_index[uid] = name
+            end
+        end
+    end
+    return uid_index
+end
+
 function Eink.chapter_xhtml(files, chapter, uid_index)
     if type(files) ~= "table" or type(chapter) ~= "table" then
         return nil
     end
-    local uid = tostring(chapter.chapterUid or "")
-    local body, name
-    for _, file in ipairs(chapter.files or {}) do
-        body, name = lookup_file(files, file)
-        if body then
-            break
-        end
+    local name = Eink.resolve_chapter_name(files, chapter, uid_index)
+    if not name then
+        return nil
     end
-    if not body then
-        uid_index = uid_index or Eink.build_uid_index(files)
-        name = uid_index[uid]
-        if name then
-            body = files[name]
-        end
-    end
-    if not body then
-        body, name = lookup_uid(files, uid)
-    end
-    if not body then
+    local body = files[name]
+    if type(body) ~= "string" or body == "" then
         return nil
     end
     return Eink.to_chapter_xhtml(body), name
@@ -647,6 +671,12 @@ function Eink.chapter_xhtml_from_dir(dir, chapter, uid_index)
         return nil
     end
     local body = Eink.read_file(dir .. "/" .. name)
+    if not body then
+        body = Eink.read_file(dir .. "/" .. basename(name))
+        if body then
+            name = basename(name)
+        end
+    end
     if not body then
         return nil
     end

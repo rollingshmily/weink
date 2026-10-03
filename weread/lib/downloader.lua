@@ -308,7 +308,7 @@ function Downloader:_loadEinkBulk(dl)
             return
         end
         local files_by_uid = {}
-        for _, item in ipairs(info.chapters or {}) do
+        for _, item in ipairs(info.chapters or info.updated or info.chapterInfos or {}) do
             files_by_uid[tostring(item.chapterUid)] = item.files
         end
         for _, item in ipairs(dl.chapters or {}) do
@@ -342,14 +342,15 @@ function Downloader:_loadEinkBulk(dl)
     if info_ok then
         apply_chapter_files(info)
     end
-    dl.eink_uid_index = Eink.build_uid_index(files)
+    dl.eink_uid_index = Eink.index_chapter_files(
+        files, dl.chapters, Eink.build_uid_index(files))
     local file_count, mapped = 0, 0
     for _name in pairs(files) do
         file_count = file_count + 1
     end
     for _, chapter in ipairs(dl.chapters or {}) do
         local uid = tostring(chapter.chapterUid or "")
-        if dl.eink_uid_index[uid] then
+        if uid ~= "" and dl.eink_uid_index[uid] then
             mapped = mapped + 1
         end
     end
@@ -360,7 +361,7 @@ function Downloader:_loadEinkBulk(dl)
         "kind=", packed.kind)
     if mapped == 0 then
         local sample = Eink.sample_file_names(files, 8)
-        logger.warn("eink zip mapped 0 chapters; sample files:",
+        logger.warn("eink zip mapped 0 chapters, falling back to web chapters; sample files:",
             table.concat(sample, ", "))
         dl.eink_files = nil
         dl.eink_uid_index = nil

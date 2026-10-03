@@ -2005,7 +2005,7 @@ local function ensure_eink_chapter_files(client, book, chapters)
     end
     local info = client:eink_chapterinfo(book.book_id or book.bookId)
     local files_by_uid = {}
-    for _, chapter in ipairs(info.chapters or {}) do
+    for _, chapter in ipairs(info.chapters or info.updated or info.chapterInfos or {}) do
         files_by_uid[tostring(chapter.chapterUid)] = chapter.files
     end
     for _, chapter in ipairs(chapters or {}) do

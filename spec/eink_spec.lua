@@ -147,6 +147,38 @@ do
 end
 
 do
+    local files = {
+        ["Text/page_14_split_0.xhtml"] = "<html>page 14</html>",
+        ["Text/page_15_split_0.xhtml"] = "<html>page 15</html>",
+    }
+    local index = Eink.build_uid_index(files)
+    assert_eq(index["14"] and "1" or "0", "0", "page_split is not chapterUid 14")
+    assert_eq(index["15"] and "1" or "0", "0", "page_split is not chapterUid 15")
+    local chapters = {
+        { chapterUid = 2, files = { "Text/page_14_split_0.xhtml" } },
+        { chapterUid = 3, files = { "page_15_split_0.xhtml" } },
+    }
+    index = Eink.index_chapter_files(files, chapters, index)
+    assert_eq(index["2"], "Text/page_14_split_0.xhtml", "page_split via chapter.files uid 2")
+    assert_eq(index["3"], "Text/page_15_split_0.xhtml", "page_split basename via chapter.files uid 3")
+    local xhtml = Eink.chapter_xhtml(files, chapters[1], index)
+    assert_eq(xhtml, "<html>page 14</html>", "page_split chapter xhtml")
+    local mapped = 0
+    for _, chapter in ipairs(chapters) do
+        if index[tostring(chapter.chapterUid)] then
+            mapped = mapped + 1
+        end
+    end
+    assert_eq(tostring(mapped), "2", "page_split mapped count uses chapter.files")
+    local unmapped = Eink.index_chapter_files(files, {
+        { chapterUid = 2 },
+        { chapterUid = 14 },
+    }, Eink.build_uid_index(files))
+    assert_eq(unmapped["2"] and "1" or "0", "0", "page_split without files list stays unmapped")
+    assert_eq(unmapped["14"] and "1" or "0", "0", "page number is not chapterUid")
+end
+
+do
     local xhtml = Eink.txt_to_xhtml("a < b & c")
     local expected = "<p>a " .. "&" .. "lt; b " .. "&" .. "amp; c</p>"
     assert_eq(xhtml:find(expected, 1, true) and "1" or "0", "1", "txt xml escape")
