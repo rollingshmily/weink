@@ -40,7 +40,7 @@ end
 
 local function boot(plugin)
     clear_idle(plugin)
-    require("weread.plugin_runtime").boot(plugin)
+    require("weread.lib.plugin_runtime").boot(plugin)
 end
 
 function WeReadPlugin:init()

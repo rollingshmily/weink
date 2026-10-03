@@ -44,7 +44,7 @@ plugin:init()
 
 expect(plugin._weread_idle_reader == true, "unmarked book stays idle")
 expect(plugin.settings == nil, "idle reader does not construct Settings")
-expect(package.loaded["weread.plugin_runtime"] == nil,
+expect(package.loaded["weread.lib.plugin_runtime"] == nil,
     "idle reader does not load plugin_runtime")
 expect(package.loaded["weread.lib.client"] == nil,
     "idle reader does not load the WeRead client")
