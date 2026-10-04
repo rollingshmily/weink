@@ -279,14 +279,14 @@ local LibraryView = FocusManager:extend{
 function LibraryView:tabBar()
     local tabs = {
         { mode = "books", text = T(_("Books (%1)"), #(self.books or {})) },
-        { mode = "public_account", text = T(_("Public Accounts (%1)"), #(self.accounts or {})) },
+        { mode = "articles", text = _("WeChat Articles") },
     }
     local cell_w = math.floor(self.screen_w / #tabs)
     local row = HorizontalGroup:new{}
     self._tab_buttons = {}
     for index, tab in ipairs(tabs) do
         local active = tab.mode == self.mode
-        local enabled = tab.mode ~= "public_account" or self.wp_enable
+        local enabled = tab.mode ~= "articles" or self.wp_enable ~= false
         local width = index == #tabs and self.screen_w - cell_w or cell_w
         local button = Button:new{
             text = tab.text,

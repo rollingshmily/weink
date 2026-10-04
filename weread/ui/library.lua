@@ -427,6 +427,10 @@ function M:showShelfView(mode, keyword, old_view, options)
         cover_loading = cover_loading,
     }, {
         on_switch = function(new_mode)
+            if new_mode == "articles" or new_mode == "public_account" then
+                self:showWeChatArticlesTab()
+                return
+            end
             local next_options = {}
             for key, value in pairs(options) do next_options[key] = value end
             next_options.prepared_shelf = { books = books, accounts = accounts }
