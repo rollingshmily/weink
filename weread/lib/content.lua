@@ -2568,9 +2568,9 @@ function Content.download_mp_images_to_files(
         return url
     end
 
-    local asset_name = ".weread-mp-" .. basename_safe(
-        article.reviewId or article.originalId or article.bookId
-            or book.book_id or book.bookId or article.title or "article") .. "-assets"
+    local book_identifier = article.reviewId or article.originalId or article.bookId
+        or (book and (book.book_id or book.bookId)) or article.title or "article"
+    local asset_name = ".weread-mp-" .. basename_safe(book_identifier) .. "-assets"
     local asset_dir = article_dir .. "/" .. asset_name
     ensure_directory(asset_dir)
 
@@ -2803,9 +2803,11 @@ end
 
 function Content.save_mp_article_html(settings, book, article, body_html)
     local mp_css
-    local book_id = book.book_id or book.bookId
+    local book_id = book and (book.book_id or book.bookId) or (article and article.bookId)
     -- MP articles stay in the sidecar tree so the flat library only holds EPUBs.
-    Content.ensure_book_meta_dir(settings, book_id, book)
+    if book_id and book_id ~= "" then
+        Content.ensure_book_meta_dir(settings, book_id, book)
+    end
     local title = article.title or "Article"
     local path = Content.mp_article_path(settings, book, article)
     body_html = strip_mp_reader_font_styles(body_html)
@@ -2884,7 +2886,7 @@ function Content.fetch_mp_article_html(client, settings, book, article, opts)
     opts = opts or {}
     local book_id = article.bookId
     if not book_id or book_id == "" then
-        book_id = book.book_id or book.bookId
+        book_id = book and (book.book_id or book.bookId) or nil
     end
     local referer = book_id and book_id ~= "" and WeRead.mp_reader_url(book_id) or "https://weread.qq.com/"
     local candidate_ids = {}
@@ -2975,7 +2977,8 @@ function Content.fetch_mp_article_html(client, settings, book, article, opts)
         end
         error("Could not extract article body. See KOReader log for details.", 0)
     end
-    local cache = settings:get("cache", {})
+    local cache = (settings and type(settings.get) == "function" and settings:get("cache", {}))
+        or (settings and settings.cache) or {}
     if cache.download_mp_images then
         body = Content.download_mp_images_to_files(
             client, settings, book, article, body, opts.progress)
