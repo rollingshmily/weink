@@ -2644,9 +2644,17 @@ function Content.download_mp_images_to_files(
 end
 
 function Content.mp_article_path(settings, book, article)
-    local book_id = book.book_id or book.bookId
-    local dir = Content.book_resolved_dir(settings, book_id, book)
-    local title = filename_safe(article.title or "article")
+    local book_id = book and (book.book_id or book.bookId) or (article and article.bookId)
+    local dir
+    if book_id and book_id ~= "" then
+        dir = Content.book_resolved_dir(settings, book_id, book)
+    else
+        local root = settings and (settings.cache_dir or settings.data_dir) or "/tmp/weread-articles"
+        local sub = article and (article.account or article.mpName) or "wechat"
+        dir = root .. "/articles/" .. filename_safe(sub)
+        pcall(function() os.execute("mkdir -p " .. string.format("%q", dir)) end)
+    end
+    local title = filename_safe(article and article.title or "article")
     return dir .. "/" .. title .. ".html"
 end
 
@@ -2936,7 +2944,7 @@ function Content.fetch_mp_article_html(client, settings, book, article, opts)
         end
     end
 
-    local source_url = tostring(article.sourceUrl or "")
+    local source_url = tostring(article.url or article.sourceUrl or "")
     if (not html or html:match("^%s*$")) and source_url:match("^https?://mp%.weixin%.qq%.com/") then
         local ok, source_html, source_meta = pcall(function()
             return client:get_public_text(source_url)

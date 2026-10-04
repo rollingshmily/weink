@@ -17,7 +17,7 @@ end
 
 local WEREAD_BASE = "https://i.weread.qq.com"
 local WX_APPID = "wxab9b71ad2b90ff34"
-local WX_SCOPE = "snsapi_userinfo,snsapi_timeline,snsapi_friend"
+local WX_SCOPE = "snsapi_userinfo,snsapi_friend,snsapi_favorites"
 local QRCONNECT_URL = "https://open.weixin.qq.com/connect/sdk/qrconnect"
 local POLL_URL = "https://long.open.weixin.qq.com/connect/l/qrconnect"
 local CONFIRM_URL = "https://open.weixin.qq.com/connect/confirm"

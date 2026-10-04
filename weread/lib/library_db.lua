@@ -51,6 +51,10 @@ end
 function LibraryDB:accountKey()
     local account = self.settings:get("account", {})
     local user_vid = type(account) == "table" and account.user_vid or nil
+    if user_vid == nil or tostring(user_vid) == "" then
+        local eink = self.settings:get("eink", {})
+        user_vid = type(eink) == "table" and eink.vid or nil
+    end
     if user_vid == nil or tostring(user_vid) == "" then return nil end
     return string.sub(Crypto.sha256_hex("weread-library:" .. tostring(user_vid)), 1, 20)
 end
@@ -102,10 +106,31 @@ function LibraryDB:open()
                 PRIMARY KEY (book_id, chapter_uid)
             ) WITHOUT ROWID
         ]])
+        db:exec([[
+            CREATE TABLE IF NOT EXISTS mp_articles (
+                review_id         TEXT PRIMARY KEY,
+                list_type         INTEGER NOT NULL,
+                idx               INTEGER NOT NULL,
+                key               TEXT,
+                book_id           TEXT,
+                title             TEXT NOT NULL,
+                account           TEXT,
+                url               TEXT,
+                thumb_url         TEXT,
+                mpavatar          TEXT,
+                update_time       INTEGER,
+                from_wechat       INTEGER DEFAULT 1,
+                cached_path       TEXT,
+                is_read           INTEGER DEFAULT 0,
+                created_at        INTEGER NOT NULL,
+                updated_at        INTEGER NOT NULL
+            ) WITHOUT ROWID
+        ]])
         -- Adds the richer detail snapshot for databases created by an early
         -- development build. Duplicate-column errors are intentionally ignored.
         pcall(function() db:exec("ALTER TABLE books ADD COLUMN detail_payload TEXT") end)
         db:exec("CREATE INDEX IF NOT EXISTS chapters_position ON chapters(book_id, position)")
+        db:exec("CREATE INDEX IF NOT EXISTS mp_articles_type_idx ON mp_articles(list_type, idx)")
     end)
     if not schema_ok then
         logger.warn("library_db schema init failed:", schema_err)
@@ -283,6 +308,127 @@ function LibraryDB:getChapters(book_id)
     close_statement(stmt)
     pcall(function() db:close() end)
     return ok and #chapters > 0 and chapters or nil
+end
+
+function LibraryDB:cacheMpArticles(list_type, articles)
+    list_type = tonumber(list_type) or 1
+    if type(articles) ~= "table" then return false end
+    local db = self:open()
+    if not db then return false end
+    local transaction_open = false
+    local stmt
+    local ok, err = pcall(function()
+        db:exec("BEGIN")
+        transaction_open = true
+        local del_stmt = db:prepare("DELETE FROM mp_articles WHERE list_type=?")
+        del_stmt:reset():bind(list_type):step()
+        del_stmt:close()
+        stmt = db:prepare([[
+            INSERT INTO mp_articles (
+                review_id, list_type, idx, key, book_id, title,
+                account, url, thumb_url, mpavatar, update_time,
+                from_wechat, cached_path, is_read, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ]])
+        local now = os.time()
+        for idx, item in ipairs(articles) do
+            local review_id = item.reviewId or item.review_id or tostring(idx)
+            local book_id = item.bookId or item.book_id or ""
+            local title = item.title or "Untitled"
+            local account = item.account or item.mpName or ""
+            local url = item.url or ""
+            local thumb_url = item.thumbUrl or item.thumb_url or ""
+            local mpavatar = item.mpavatar or item.avatar or ""
+            local update_time = tonumber(item.updateTime or item.update_time) or now
+            local from_wechat = (item.fromWechat == 1 or item.from_wechat == 1) and 1 or 0
+            local cached_path = item.cached_path or item.cachedPath or ""
+            local is_read = (item.is_read == 1 or item.isRead == 1) and 1 or 0
+            stmt:reset():bind(
+                tostring(review_id), list_type, idx, tostring(item.key or ""),
+                tostring(book_id), tostring(title), tostring(account),
+                tostring(url), tostring(thumb_url), tostring(mpavatar),
+                update_time, from_wechat, tostring(cached_path), is_read, now, now
+            ):step()
+        end
+        close_statement(stmt)
+        stmt = nil
+        db:exec("COMMIT")
+        transaction_open = false
+    end)
+    close_statement(stmt)
+    if not ok and transaction_open then pcall(function() db:exec("ROLLBACK") end) end
+    pcall(function() db:close() end)
+    if not ok then logger.warn("library_db mp_articles write failed:", err) end
+    return ok
+end
+
+function LibraryDB:getMpArticles(list_type)
+    list_type = tonumber(list_type) or 1
+    local db = self:open()
+    if not db then return nil end
+    local articles = {}
+    local stmt
+    local ok = pcall(function()
+        stmt = db:prepare([[
+            SELECT review_id, list_type, idx, key, book_id, title,
+                   account, url, thumb_url, mpavatar, update_time,
+                   from_wechat, cached_path, is_read
+            FROM mp_articles
+            WHERE list_type=?
+            ORDER BY idx ASC
+        ]])
+        local row = stmt:reset():bind(list_type):step()
+        while row do
+            articles[#articles + 1] = {
+                reviewId = row[1],
+                listType = row[2],
+                idx = row[3],
+                key = row[4],
+                bookId = row[5],
+                title = row[6],
+                account = row[7],
+                url = row[8],
+                thumbUrl = row[9],
+                mpavatar = row[10],
+                updateTime = row[11],
+                fromWechat = row[12],
+                cached_path = row[13] ~= "" and row[13] or nil,
+                is_read = row[14],
+            }
+            row = stmt:step()
+        end
+    end)
+    close_statement(stmt)
+    pcall(function() db:close() end)
+    return ok and articles or nil
+end
+
+function LibraryDB:removeMpArticle(review_id)
+    if not review_id then return false end
+    local db = self:open()
+    if not db then return false end
+    local stmt
+    local ok = pcall(function()
+        stmt = db:prepare("DELETE FROM mp_articles WHERE review_id=?")
+        stmt:reset():bind(tostring(review_id)):step()
+    end)
+    close_statement(stmt)
+    pcall(function() db:close() end)
+    return ok
+end
+
+function LibraryDB:updateMpArticleCachePath(review_id, path)
+    if not review_id then return false end
+    local db = self:open()
+    if not db then return false end
+    local stmt
+    local ok = pcall(function()
+        stmt = db:prepare("UPDATE mp_articles SET cached_path=?, updated_at=? WHERE review_id=?")
+        stmt:reset():bind(tostring(path or ""), os.time(), tostring(review_id)):step()
+    end)
+    close_statement(stmt)
+    pcall(function() db:close() end)
+    return ok
 end
 
 return LibraryDB

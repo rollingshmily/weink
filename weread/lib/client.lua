@@ -1516,4 +1516,39 @@ function Client:eink_delete_review(review_id)
     return data
 end
 
+function Client:eink_mp_list(list_type, synckey, count)
+    local params = {
+        listType = tonumber(list_type) or 1,
+        count = tonumber(count) or 20,
+    }
+    if synckey and tonumber(synckey) and tonumber(synckey) > 0 then
+        params.synckey = tonumber(synckey)
+    end
+    return self:eink_json("/mp/list", params)
+end
+
+function Client:eink_report_mp_read(article, is_delete)
+    if type(article) ~= "table" then
+        error("eink report mp read missing article")
+    end
+    local payload = {
+        bookId = tostring(article.bookId or article.book_id or ""),
+        reviewId = tostring(article.reviewId or article.review_id or ""),
+        url = tostring(article.url or article.sourceUrl or ""),
+        title = tostring(article.title or ""),
+        thumbUrl = tostring(article.thumbUrl or article.thumb_url or ""),
+        account = tostring(article.account or article.mpName or ""),
+        isDelete = is_delete and 1 or 0,
+    }
+    return self:eink_post_json("/mp/read", payload)
+end
+
+function Client:eink_mp_notifications(today_new, favourite, floating)
+    return self:eink_json("/mp/notifications", {
+        todayNew = tonumber(today_new) or 0,
+        favourite = tonumber(favourite) or 0,
+        floating = tonumber(floating) or 0,
+    })
+end
+
 return Client

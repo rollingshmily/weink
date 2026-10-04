@@ -619,10 +619,6 @@ end
 function M:showBookRecord(book)
     local books = self.settings:get("books", {})
     local book_id = book.book_id or book.bookId
-    if WeRead.is_mp_book(book_id) then
-        self:showMPAccount(book)
-        return
-    end
     if not book_id then return end
 
     local account_key = self.library_db and self.library_db:accountKey() or nil
@@ -952,14 +948,146 @@ function M:showShelfTabs()
             end),
         },
         {
-            text = _("Public Accounts"),
-            post_text = T(_("%1 accounts"), tostring(#self.shelf_mp)),
-            callback = self:safeCallback(_("Public Accounts"), function()
-                self:showMPShelfPage()
+            text = _("WeChat Articles"),
+            callback = self:safeCallback(_("WeChat Articles"), function()
+                self:showWeChatArticlesTab()
             end),
         },
     }
     self:showList(_("WeRead Bookshelf"), items, _("Your WeRead shelf is empty."))
+end
+
+function M:showWeChatArticlesTab()
+    local items = {
+        {
+            text = _("WeChat Floating Articles"),
+            callback = self:safeCallback(_("WeChat Floating Articles"), function()
+                self:showWeChatArticlesPage(2, _("WeChat Floating Articles"))
+            end),
+        },
+        {
+            text = _("WeChat Favorites"),
+            callback = self:safeCallback(_("WeChat Favorites"), function()
+                self:showWeChatArticlesPage(1, _("WeChat Favorites"))
+            end),
+        },
+    }
+    self:showList(_("WeChat Articles"), items, _("No WeChat articles."))
+end
+
+function M:showWeChatArticlesPage(list_type, title)
+    list_type = tonumber(list_type) or 2
+    title = title or (list_type == 2 and _("WeChat Floating Articles") or _("WeChat Favorites"))
+    local cached = self.library_db and self.library_db:getMpArticles(list_type) or nil
+    if cached and #cached > 0 then
+        self:renderWeChatArticleList(list_type, title, cached)
+        return
+    end
+    self:fetchWeChatArticles(list_type, title)
+end
+
+function M:fetchWeChatArticles(list_type, title)
+    list_type = tonumber(list_type) or 2
+    title = title or (list_type == 2 and _("WeChat Floating Articles") or _("WeChat Favorites"))
+    self:runOnlineTask(_("Sync WeChat articles..."), function()
+        self:showBusy(_("Sync WeChat articles..."))
+        local ok, res_or_err = pcall(function()
+            return self.client:eink_mp_list(list_type, 0, 50)
+        end)
+        self:closeBusy()
+        if not ok or type(res_or_err) ~= "table" then
+            logger.err("fetch WeChat articles failed:", log_error(res_or_err))
+            self:showInfo(T(_("Sync WeChat articles failed:\n%1"), display_error(res_or_err)))
+            return
+        end
+        local articles = res_or_err.lists or {}
+        if self.library_db then
+            self.library_db:cacheMpArticles(list_type, articles)
+        end
+        self:renderWeChatArticleList(list_type, title, articles)
+    end)
+end
+
+function M:renderWeChatArticleList(list_type, title, articles)
+    local items = {}
+    local refresh_fn
+    for _i, article in ipairs(articles or {}) do
+        local cached_path = article.cached_path or Content.mp_article_cached_path(self.settings, nil, article)
+        local is_cached = cached_path ~= nil and file_exists(cached_path)
+        local post_text = article.account or article.mpName or ""
+        table.insert(items, {
+            text = article.title or _("Article"),
+            post_text = post_text,
+            mandatory = is_cached and _("Cached") or "",
+            callback = self:safeCallback(article.title or _("Article"), function()
+                if is_cached then
+                    self:openFile(cached_path)
+                else
+                    self:downloadWeChatArticleAndRead(article, list_type, refresh_fn)
+                end
+            end),
+        })
+    end
+    table.insert(items, {
+        text = _("↻ Refresh WeChat articles"),
+        callback = self:safeCallback(_("↻ Refresh WeChat articles"), function()
+            self:fetchWeChatArticles(list_type, title)
+        end),
+    })
+    local menu = self:showList(title, items, _("No WeChat articles."))
+    refresh_fn = function()
+        local latest = self.library_db and self.library_db:getMpArticles(list_type) or articles
+        self:renderWeChatArticleList(list_type, title, latest)
+    end
+    return menu
+end
+
+function M:downloadWeChatArticleAndRead(article, list_type, on_complete)
+    self:runOnlineTask(_("Download article and read"), function()
+        self:showBusy(T(_("Downloading article: %1"), article.title or ""))
+        local progress_dialog
+        local ok, path_or_err = pcall(function()
+            local html = Content.fetch_mp_article_html(self.client, self.settings, nil, article, {
+                progress = function(current, total)
+                    if not progress_dialog then
+                        self:closeBusy()
+                        progress_dialog = ProgressbarDialog:new{
+                            title = T(_("Downloading images: %1"), article.title or ""),
+                            progress_max = total,
+                        }
+                        progress_dialog:show()
+                        self:refreshUI()
+                    end
+                    progress_dialog:reportProgress(current)
+                end,
+            })
+            if not html or html == "" then
+                error("article HTML is empty")
+            end
+            local saved_path = Content.save_mp_article_html(self.settings, nil, article, html)
+            if self.library_db and article.reviewId then
+                self.library_db:updateMpArticleCachePath(article.reviewId, saved_path)
+            end
+            pcall(function()
+                self.client:eink_report_mp_read(article, false)
+            end)
+            return saved_path
+        end)
+        if progress_dialog then
+            progress_dialog:close()
+        else
+            self:closeBusy()
+        end
+        if not ok then
+            logger.err("download WeChat article failed:", log_error(path_or_err))
+            self:showInfo(T(_("Download failed:\n%1"), display_error(path_or_err)))
+            return
+        end
+        if type(on_complete) == "function" then
+            pcall(on_complete)
+        end
+        self:openFile(path_or_err)
+    end)
 end
 
 function M:showMPShelfPage()
