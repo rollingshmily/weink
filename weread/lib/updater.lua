@@ -114,11 +114,17 @@ end
 
 local function is_allowed_download_url(url, owner, repo)
     local host, path = tostring(url or ""):match("^https://([^/]+)/(.+)$")
-    if host ~= Updater.ALLOWED_DOWNLOAD_HOST then return false end
-    local prefix = tostring(owner) .. "/" .. tostring(repo) .. "/"
-    if path:sub(1, #prefix) ~= prefix then return false end
-    return path:find("/releases/download/", 1, true) ~= nil
-        or path:find("/archive/refs/", 1, true) ~= nil
+    if host == Updater.ALLOWED_DOWNLOAD_HOST then
+        local prefix = tostring(owner) .. "/" .. tostring(repo) .. "/"
+        if path:sub(1, #prefix) ~= prefix then return false end
+        return path:find("/releases/download/", 1, true) ~= nil
+            or path:find("/archive/refs/", 1, true) ~= nil
+    elseif host == "api.github.com" then
+        local prefix = "repos/" .. tostring(owner) .. "/" .. tostring(repo) .. "/"
+        if path:sub(1, #prefix) ~= prefix then return false end
+        return path:find("/zipball", 1, true) ~= nil or path:find("/tarball", 1, true) ~= nil
+    end
+    return false
 end
 
 local function ensure_dir(path)
@@ -786,15 +792,15 @@ function Updater:pick_release_download_url(release)
             end
         end
     end
-    if type(release.zipball_url) == "string" and release.zipball_url ~= "" then
-        return release.zipball_url, "release-zipball"
-    end
     local tag = tostring(release.tag_name or "")
     if tag ~= "" then
         return string.format(
             "https://github.com/%s/%s/archive/refs/tags/%s.zip",
             self.owner, self.repo, tag
         ), "tag-archive:" .. tag
+    end
+    if type(release.zipball_url) == "string" and release.zipball_url ~= "" then
+        return release.zipball_url, "release-zipball"
     end
     return nil
 end
