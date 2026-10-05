@@ -1,6 +1,25 @@
 local I18n = {}
 
 local zh = {
+    ["My underlines/thoughts"] = "我的划线/想法",
+    ["My underline"] = "我的划线",
+    ["My thought"] = "我的想法",
+    ["Book or account changed. Reopen My underlines/thoughts."] = "书籍或账号已切换，重新打开「我的划线/想法」。",
+    ["Thought pagination did not advance. Refresh and retry."] = "想法分页游标未前进，刷新后重试。",
+    ["Delete this %1 from WeRead cloud? This cannot be undone.\n\n%2\n\nOnly this record will be deleted. KOReader notes and downloaded public underlines/thoughts are not changed."] = "从微信读书云端删除这条「%1」？此操作无法撤销。\n\n%2\n\n只删除这一条记录，不修改 KOReader 本地笔记及已下载的公开划线/想法。",
+    ["Delete from WeRead"] = "从微信读书删除",
+    ["Deleting cloud note..."] = "正在删除云端记录……",
+    ["Note list changed. Refresh and retry."] = "记录列表已变化，刷新后重试。",
+    ["Deleted from WeRead, but refresh failed:\n%1\nUse Refresh to reload the cloud list."] = "已从微信读书删除，但刷新失败：\n%1\n点击刷新重新获取云端列表。",
+    ["Quoted text"] = "划线原文",
+    ["No quoted text."] = "暂无原文。",
+    ["Refresh from WeRead"] = "刷新云端记录",
+    ["Load more of my thoughts"] = "加载更多我的想法",
+    ["No personal underlines or thoughts in this book."] = "本书暂无个人划线或想法。",
+    ["Cloud notes · more thoughts available"] = "云端记录 · 还有更多想法",
+    ["Cloud notes · all loaded"] = "云端记录 · 已全部加载",
+    ["Loading my underlines/thoughts..."] = "正在加载我的划线/想法……",
+
     ["WeRead"] = "微信读书",
     ["WeRead · Sync reading progress"] = "微信读书·同步阅读进度",
     ["Bookshelf"] = "书架",

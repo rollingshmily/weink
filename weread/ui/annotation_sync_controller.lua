@@ -776,6 +776,8 @@ function M:getUnifiedAnnotationMenuItems()
         { text = binding and T(_("Linked WeRead book: %1"), binding.title or binding.book_id)
                 or _("Match with WeRead book"),
             callback = function(menu) self:bindExternalAnnotationsBook(menu) end },
+        { text = _("My underlines/thoughts"), callback = function()
+            require("weread.ui.own_notes").show(self) end },
         { text = _("Download thoughts for this chapter"), callback = function()
             self:downloadCurrentChapterThoughts() end },
         { text_func = function()

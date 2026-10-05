@@ -1052,13 +1052,23 @@ function Client:eink_bestbookmarks(book_id, chapter_uid)
     return data
 end
 
-function Client:eink_bookmarklist(book_id)
+-- APK NoteService.loadUserBookReviewList: USER_NOTE=11, mine=1, listMode=0.
+-- synckey/hasMore are an incremental cursor, not an offset or a page number.
+function Client:eink_own_reviews(book_id, synckey)
+    assert(book_id and tostring(book_id) ~= "", "missing own-note bookId")
+    return self:eink_json("/review/list", {
+        bookId = tostring(book_id), listType = 11, mine = 1,
+        listMode = 0, synckey = tonumber(synckey) or 0,
+    })
+end
+
+function Client:eink_bookmarklist(book_id, refresh)
     book_id = tostring(book_id or "")
     self._eink_bookmark_cache = self._eink_bookmark_cache or {}
-    if self._eink_bookmark_cache[book_id] then
+    if not refresh and self._eink_bookmark_cache[book_id] then
         return self._eink_bookmark_cache[book_id]
     end
-    local body, code = self:eink_request("/book/bookmarklist", { bookId = book_id })
+    local body, code = self:eink_request("/book/bookmarklist", { bookId = book_id, synckey = 0 })
     if not code or code < 200 or code >= 300 then
         error("eink bookmarklist failed: HTTP " .. tostring(code or "unknown"))
     end
