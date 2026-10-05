@@ -2130,37 +2130,6 @@ function Content.fetch_first_chapter(client, settings, book)
     return Content.fetch_chapter_epub(client, settings, book, chapter)
 end
 
-function Content.parse_mp_articles(data)
-    local articles = {}
-    for _, group in ipairs(data.reviews or {}) do
-        for _, sub in ipairs(group.subReviews or {}) do
-            local review = sub.review or sub
-            local mp = review.mpInfo or {}
-            local review_ids = {}
-            local seen_ids = {}
-            for _, review_id in ipairs({ sub.reviewId, review.reviewId, mp.originalId }) do
-                review_id = tostring(review_id or "")
-                if review_id ~= "" and not seen_ids[review_id] then
-                    seen_ids[review_id] = true
-                    table.insert(review_ids, review_id)
-                end
-            end
-            table.insert(articles, {
-                reviewId = review.reviewId or sub.reviewId or "",
-                reviewIds = review_ids,
-                originalId = mp.originalId or "",
-                bookId = review.belongBookId or "",
-                sourceUrl = mp.content_url or mp.contentUrl or mp.source_url or mp.sourceUrl or mp.url
-                    or review.content_url or review.contentUrl or review.source_url or review.sourceUrl or review.url or "",
-                title = mp.title or "",
-                pic_url = mp.pic_url or "",
-                createTime = review.createTime or 0,
-            })
-        end
-    end
-    return articles
-end
-
 function Content.extract_mp_body(html)
     html = tostring(html or "")
     local body = html:match('<div[^>]*id="js_content"[^>]*>(.-)</div>%s*<script')
@@ -2573,6 +2542,9 @@ function Content.download_mp_images_to_files(
     local asset_name = ".weread-mp-" .. basename_safe(book_identifier) .. "-assets"
     local asset_dir = article_dir .. "/" .. asset_name
     ensure_directory(asset_dir)
+    local source_url = tostring(article.url or article.sourceUrl or "")
+    local image_referer = source_url:match("^https://mp%.weixin%.qq%.com/")
+        and source_url or "https://mp.weixin.qq.com/"
 
     local unique_urls, total = {}, 0
     body_html:gsub([=[src=(["'])([^"']-)["']]=], function(_quote, src)
@@ -2599,7 +2571,7 @@ function Content.download_mp_images_to_files(
         local ok, err = pcall(function()
             client:download_to_file(url, incoming, {
                 accept = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-                referer = "https://weread.qq.com/",
+                referer = image_referer,
                 max_bytes = 64 * 1024 * 1024,
             })
         end)

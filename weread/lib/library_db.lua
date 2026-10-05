@@ -108,7 +108,7 @@ function LibraryDB:open()
         ]])
         db:exec([[
             CREATE TABLE IF NOT EXISTS mp_articles (
-                review_id         TEXT PRIMARY KEY,
+                review_id         TEXT NOT NULL,
                 list_type         INTEGER NOT NULL,
                 idx               INTEGER NOT NULL,
                 key               TEXT,
@@ -123,9 +123,48 @@ function LibraryDB:open()
                 cached_path       TEXT,
                 is_read           INTEGER DEFAULT 0,
                 created_at        INTEGER NOT NULL,
-                updated_at        INTEGER NOT NULL
+                updated_at        INTEGER NOT NULL,
+                PRIMARY KEY (list_type, review_id)
             ) WITHOUT ROWID
         ]])
+        -- v1.2.77 used review_id as the sole primary key. The same article can
+        -- be both a favorite and a floating article, so migrate in place while
+        -- retaining the older list and its cached file paths.
+        local pragma = db:prepare("PRAGMA table_info(mp_articles)")
+        local primary_key = {}
+        local column = pragma:step()
+        while column do
+            local position = tonumber(column[6]) or 0
+            if position > 0 then primary_key[position] = column[2] end
+            column = pragma:step()
+        end
+        pragma:close()
+        if #primary_key > 0
+            and (primary_key[1] ~= "list_type" or primary_key[2] ~= "review_id") then
+            local migration_ok, migration_err = pcall(function()
+                db:exec("BEGIN")
+                db:exec([[
+                    CREATE TABLE mp_articles_new (
+                        review_id TEXT NOT NULL, list_type INTEGER NOT NULL,
+                        idx INTEGER NOT NULL, key TEXT, book_id TEXT,
+                        title TEXT NOT NULL, account TEXT, url TEXT,
+                        thumb_url TEXT, mpavatar TEXT, update_time INTEGER,
+                        from_wechat INTEGER DEFAULT 1, cached_path TEXT,
+                        is_read INTEGER DEFAULT 0, created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        PRIMARY KEY (list_type, review_id)
+                    ) WITHOUT ROWID
+                ]])
+                db:exec("INSERT INTO mp_articles_new SELECT * FROM mp_articles")
+                db:exec("DROP TABLE mp_articles")
+                db:exec("ALTER TABLE mp_articles_new RENAME TO mp_articles")
+                db:exec("COMMIT")
+            end)
+            if not migration_ok then
+                pcall(function() db:exec("ROLLBACK") end)
+                error(migration_err)
+            end
+        end
         -- Adds the richer detail snapshot for databases created by an early
         -- development build. Duplicate-column errors are intentionally ignored.
         pcall(function() db:exec("ALTER TABLE books ADD COLUMN detail_payload TEXT") end)
@@ -320,6 +359,16 @@ function LibraryDB:cacheMpArticles(list_type, articles)
     local ok, err = pcall(function()
         db:exec("BEGIN")
         transaction_open = true
+        local old_paths = {}
+        local old_stmt = db:prepare("SELECT review_id, cached_path FROM mp_articles WHERE list_type=?")
+        local old_row = old_stmt:reset():bind(list_type):step()
+        while old_row do
+            if old_row[2] and old_row[2] ~= "" then
+                old_paths[tostring(old_row[1])] = old_row[2]
+            end
+            old_row = old_stmt:step()
+        end
+        old_stmt:close()
         local del_stmt = db:prepare("DELETE FROM mp_articles WHERE list_type=?")
         del_stmt:reset():bind(list_type):step()
         del_stmt:close()
@@ -331,24 +380,29 @@ function LibraryDB:cacheMpArticles(list_type, articles)
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ]])
         local now = os.time()
+        local seen = {}
         for idx, item in ipairs(articles) do
-            local review_id = item.reviewId or item.review_id or tostring(idx)
-            local book_id = item.bookId or item.book_id or ""
-            local title = item.title or "Untitled"
-            local account = item.account or item.mpName or ""
-            local url = item.url or ""
-            local thumb_url = item.thumbUrl or item.thumb_url or ""
-            local mpavatar = item.mpavatar or item.avatar or ""
-            local update_time = tonumber(item.updateTime or item.update_time) or now
-            local from_wechat = (item.fromWechat == 1 or item.from_wechat == 1) and 1 or 0
-            local cached_path = item.cached_path or item.cachedPath or ""
-            local is_read = (item.is_read == 1 or item.isRead == 1) and 1 or 0
-            stmt:reset():bind(
-                tostring(review_id), list_type, idx, tostring(item.key or ""),
-                tostring(book_id), tostring(title), tostring(account),
-                tostring(url), tostring(thumb_url), tostring(mpavatar),
-                update_time, from_wechat, tostring(cached_path), is_read, now, now
-            ):step()
+            local review_id = tostring(item.reviewId or item.review_id or "")
+            if review_id == "" then review_id = tostring(item.key or idx) end
+            if not seen[review_id] then
+                seen[review_id] = true
+                local book_id = item.bookId or item.book_id or ""
+                local title = item.title or "Untitled"
+                local account = item.account or item.mpName or ""
+                local url = item.url or ""
+                local thumb_url = item.thumbUrl or item.thumb_url or ""
+                local mpavatar = item.mpavatar or item.avatar or ""
+                local update_time = tonumber(item.updateTime or item.update_time) or now
+                local from_wechat = (item.fromWechat == 1 or item.from_wechat == 1) and 1 or 0
+                local cached_path = item.cached_path or item.cachedPath or old_paths[review_id] or ""
+                local is_read = (item.is_read == 1 or item.isRead == 1) and 1 or 0
+                stmt:reset():bind(
+                    review_id, list_type, idx, tostring(item.key or ""),
+                    tostring(book_id), tostring(title), tostring(account),
+                    tostring(url), tostring(thumb_url), tostring(mpavatar),
+                    update_time, from_wechat, tostring(cached_path), is_read, now, now
+                ):step()
+            end
         end
         close_statement(stmt)
         stmt = nil
@@ -359,6 +413,15 @@ function LibraryDB:cacheMpArticles(list_type, articles)
     if not ok and transaction_open then pcall(function() db:exec("ROLLBACK") end) end
     pcall(function() db:close() end)
     if not ok then logger.warn("library_db mp_articles write failed:", err) end
+    return ok
+end
+
+function LibraryDB:clearMpArticles()
+    local db = self:open()
+    if not db then return false end
+    local ok, err = pcall(function() db:exec("DELETE FROM mp_articles") end)
+    pcall(function() db:close() end)
+    if not ok then logger.warn("library_db mp_articles clear failed:", err) end
     return ok
 end
 

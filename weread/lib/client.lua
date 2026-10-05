@@ -656,49 +656,6 @@ function Client:get_read_stats(mode, base_time)
     return self:gateway("/readdata/detail", params)
 end
 
-function Client:get_mp_articles(book_id, max_idx, count, wr_ticket)
-    local url = string.format(
-        "https://weread.qq.com/web/mp/articles?bookId=%s&maxIdx=%d&count=%d",
-        WeRead.urlencode(book_id),
-        max_idx or 0,
-        count or 100
-    )
-
-    local custom_headers = {
-        ["Accept"] = "application/json, text/plain, */*",
-        ["Referer"] = "https://weread.qq.com/",
-    }
-
-    if wr_ticket and wr_ticket ~= "" then
-        custom_headers["x-wr-ticket"] = wr_ticket
-    end
-
-    local wrpa = self.settings:get("wr_wrpa", "")
-    if wrpa ~= "" then
-        custom_headers["x-wrpa-0"] = wrpa
-    end
-
-    local text, code, resp_headers = self:request({
-        url = url,
-        method = "GET",
-        headers = custom_headers,
-    })
-
-    if code and code >= 200 and code < 300 then
-        local data = self:decode_http_json(text, {
-            method = "GET",
-            url = url,
-            code = code,
-            headers = resp_headers,
-        })
-        if data.errCode and data.errCode ~= 0 then
-            return nil, data.errCode
-        end
-        return data, nil
-    end
-    error(http_error(self, code, text, resp_headers))
-end
-
 function Client:get_mp_content(review_id, opts)
     opts = opts or {}
     local url = "https://weread.qq.com/web/mp/content?reviewId=" .. WeRead.urlencode(review_id)

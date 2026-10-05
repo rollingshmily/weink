@@ -258,7 +258,6 @@ local LibraryView = FocusManager:extend{
     title = nil,
     wp_enable = true,
     books = nil,
-    accounts = nil,
     articles = nil,
     keyword = nil,
     sort_label = nil,
@@ -293,7 +292,7 @@ function LibraryView:tabBar()
     for index, tab in ipairs(tabs) do
         local active = tab.mode == self.mode
         local enabled = tab.mode == "books" or self.wp_enable ~= false
-        local width = index == #tabs and self.screen_w - cell_w or cell_w
+        local width = index == #tabs and self.screen_w - cell_w * (#tabs - 1) or cell_w
         local button = Button:new{
             text = tab.text,
             width = width,
@@ -399,7 +398,6 @@ function LibraryView:itemStatus(book)
         local account = book.account or book.mpName or ""
         return book._cached and (account ~= "" and "✓  " .. account or "✓") or account
     end
-    if self.mode == "public_account" then return book.author or "" end
     local status = ""
     if book.readUpdateTime and book.readUpdateTime > 0 then
         status = os.date("%Y-%m-%d", book.readUpdateTime)
@@ -414,8 +412,7 @@ end
 
 function LibraryView:preparePagination()
     local source = (self.mode == "favorites" or self.mode == "floating")
-        and (self.articles or {})
-        or (self.mode == "public_account" and (self.accounts or {}) or (self.books or {}))
+        and (self.articles or {}) or (self.books or {})
     self.page_size = math.max(1, math.floor(tonumber(self.page_size) or 10))
     if self.cover_mode and self.mode == "books" then
         local columns = math.max(1, math.floor(tonumber(self.cover_columns) or 3))
@@ -433,8 +430,7 @@ end
 
 function LibraryView:content()
     local source = (self.mode == "favorites" or self.mode == "floating")
-        and (self.articles or {})
-        or (self.mode == "public_account" and (self.accounts or {}) or (self.books or {}))
+        and (self.articles or {}) or (self.books or {})
     local content = VerticalGroup:new{
         align = "left",
         HorizontalSpan:new{ width = self.list_width },
@@ -663,7 +659,6 @@ function M.show(data, callbacks)
         title = data.title,
         wp_enable = data.wp_enable ~= false,
         books = data.books,
-        accounts = data.accounts,
         articles = data.articles,
         keyword = data.keyword,
         sort_label = data.sort_label,

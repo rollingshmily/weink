@@ -317,7 +317,7 @@ function M:getSettingsMenuItems()
                         shelf.view_mode = mode
                         self.settings:set("shelf", shelf)
                         self.settings:flush()
-                        self.shelf_view_pages = { books = 1, public_account = 1 }
+                        self.shelf_view_pages = { books = 1, favorites = 1, floating = 1 }
                         if touchmenu_instance then touchmenu_instance:updateItems() end
                     end
                 end
@@ -327,7 +327,7 @@ function M:getSettingsMenuItems()
                         shelf.paginated = paginated
                         self.settings:set("shelf", shelf)
                         self.settings:flush()
-                        self.shelf_view_pages = { books = 1, public_account = 1 }
+                        self.shelf_view_pages = { books = 1, favorites = 1, floating = 1 }
                         if touchmenu_instance then touchmenu_instance:updateItems() end
                     end
                 end
@@ -496,24 +496,24 @@ function M:getSettingsMenuItems()
                         end),
                     },
                     {
-                        text = _("Public account article images"),
+                        text = _("WeChat article images (favorites and floating)"),
                         keep_menu_open = true,
                         checked_func = function()
                             return self.settings:get("cache").download_mp_images
                         end,
                         check_callback_updates_menu = true,
-                        callback = self:safeCallback(_("Public account article images"), function(touchmenu_instance)
+                        callback = self:safeCallback(_("WeChat article images (favorites and floating)"), function(touchmenu_instance)
                             local cache = self.settings:get("cache")
                             if cache.download_mp_images then
-                                self:setMPImageDownload(false)
+                                self:setArticleImageDownload(false)
                                 touchmenu_instance:updateItems()
                                 return
                             end
                             UIManager:show(ConfirmBox:new{
-                                text = _("Downloading public account article images may significantly increase download time. Continue?"),
+                                text = _("Downloading WeChat article images may significantly increase download time. Continue?"),
                                 ok_text = _("Confirm"),
                                 ok_callback = self:safeCallback(_("Confirm"), function()
-                                    self:setMPImageDownload(true)
+                                    self:setArticleImageDownload(true)
                                     touchmenu_instance:updateItems()
                                 end),
                                 cancel_text = _("Cancel"),

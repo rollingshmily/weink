@@ -83,7 +83,7 @@ package.preload["weread.ui.library_view"] = function()
     return {
         show = function(data, callbacks)
             shown[#shown + 1] = { data = data, callbacks = callbacks }
-            local source = data.mode == "public_account" and data.accounts or data.books
+            local source = data.books
             local page_count = math.max(1, math.ceil(#source / data.page_size))
             local page = math.max(1, math.min(data.page or 1, page_count))
             return { page = page, page_count = page_count }
@@ -178,9 +178,9 @@ expect(shown[7].data.cover_mode == true and shown[7].data.paged == true,
     "cover view did not enforce lightweight page rendering")
 expect(shown[7].data.page_size == 6,
     "cover view did not limit the current page to six books")
-host:showShelfView("public_account", nil, shown[7], {})
-expect(shown[8].data.cover_mode == false and shown[8].data.paged == false,
-    "cover preference changed the public-account list")
+host:showShelfView("books", nil, shown[7], {})
+expect(shown[8].data.cover_mode == true and shown[8].data.paged == true,
+    "bookshelf cover preference was not retained")
 
 local cover_requests = {}
 for index = 1, 8 do shelf[index].cover = "https://cdn.example/" .. tostring(index) end

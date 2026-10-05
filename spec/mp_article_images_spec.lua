@@ -48,7 +48,8 @@ end
 local progress = {}
 local settings = { cache_dir = root }
 local book = { book_id = "mp-book", cache_dir = root }
-local article = { reviewId = "review/1", title = "Disk images" }
+local article = { reviewId = "review/1", title = "Disk images",
+    url = "https://mp.weixin.qq.com/s/article" }
 local body = [[
 <p><img src="//mmbiz.qpic.cn/image?id=1&amp;format=png"></p>
 <p><img src='https://mmbiz.qpic.cn/image?id=1&format=png'></p>
@@ -71,6 +72,8 @@ expect(downloads[1].url
     "protocol-relative or HTML-escaped MP image URL was not normalized")
 expect(downloads[1].opts.max_bytes == 64 * 1024 * 1024,
     "MP image download size limit was not applied")
+expect(downloads[1].opts.referer == article.url,
+    "WeChat article images used a legacy WeRead referer")
 expect(#progress == 2 and progress[1][1] == 1 and progress[1][2] == 2
         and progress[2][1] == 2 and progress[2][2] == 2,
     "MP image progress did not count unique URLs")

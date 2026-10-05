@@ -1121,7 +1121,9 @@ Fix:
 - Add them to EPUB manifest.
 - Rewrite `img src` to local relative paths.
 
-## 6. MP (公众号) Article Interfaces
+## 6. Legacy MP (公众号) Article Interfaces
+
+本节记录旧版按「关注公众号」浏览的 Web 接口，仅供历史数据排障；插件书架已不再调用 `/web/mp/articles`。当前「文章收藏 / 微信浮窗」列表走墨水屏 `GET /mp/list`（`listType=1/2`），缓存按这两类文章统一管理。旧 `/web/mp/content` 仍作为正文候选来源之一，不能把整节接口一并删除。
 
 MP books are public account subscriptions. Their `bookId` starts with `MP_WXS_` (e.g. `MP_WXS_3286016687`). Content fetching is completely different from regular epub/txt books.
 

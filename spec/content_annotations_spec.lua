@@ -125,24 +125,4 @@ expect(not stripped:lower():find("<img", 1, true)
     and stripped:find("before", 1, true) and stripped:find("after", 1, true),
     "MP image stripping removed text or kept media")
 
-local articles = Content.parse_mp_articles({
-    reviews = {{
-        subReviews = {{
-            reviewId = "outer",
-            review = {
-                reviewId = "inner",
-                belongBookId = "book",
-                mpInfo = {
-                    originalId = "original",
-                    title = "Article",
-                    content_url = "https://mp.example/article",
-                },
-            },
-        }},
-    }},
-})
-expect(#articles == 1 and articles[1].title == "Article"
-    and #articles[1].reviewIds == 3,
-    "MP article metadata was not normalized")
-
 print(("content_annotations_spec: %d checks"):format(checks))

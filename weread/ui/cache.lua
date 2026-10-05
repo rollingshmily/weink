@@ -1,6 +1,7 @@
 -- Cache settings, directory selection, scanning, and cleanup UI.
 local ButtonDialog = require("ui/widget/buttondialog")
 local ConfirmBox = require("ui/widget/confirmbox")
+local ArticleCache = require("weread.lib.article_cache")
 local Content = require("weread.lib.content")
 local logger = require("weread.lib.logger")
 local PathChooser = require("ui/widget/pathchooser")
@@ -17,14 +18,14 @@ local file_exists = PluginUtil.file_exists
 
 local M = {}
 
-function M:setMPImageDownload(enabled)
+function M:setArticleImageDownload(enabled)
     local cache = self.settings:get("cache")
     cache.download_mp_images = enabled == true
     self.settings:set("cache", cache)
     self.settings:flush()
     logger.info(
         "image download setting changed:",
-        "target=mp",
+        "target=wechat_articles",
         "enabled=", tostring(cache.download_mp_images)
     )
 end
@@ -553,8 +554,8 @@ function M:showCacheManagement()
     local items = {}
     local entries = {}
     local seen_dirs = {}
-    local total_size = 0
-    local mp_total_size = 0
+    local article_snapshot = ArticleCache.snapshot(self.settings, books, lfs)
+    local total_size = article_snapshot.size
 
     local function directory_stats(path)
         local size = 0
@@ -592,6 +593,7 @@ function M:showCacheManagement()
     end
 
     local function add_cache_entry(book_id, book)
+        if WeRead.is_mp_book(book_id) then return end
         local book_dir = Content.book_resolved_dir(self.settings, book_id, book)
         local key = book_dir or book_id
         if seen_dirs[key] then
@@ -626,17 +628,12 @@ function M:showCacheManagement()
         if file_count == 0 then
             return
         end
-        local is_mp = WeRead.is_mp_book(book_id)
         total_size = total_size + size
-        if is_mp then
-            mp_total_size = mp_total_size + size
-        end
         table.insert(entries, {
             book_id = book_id,
             title = (book and book.title) or book_id,
             size = size,
             file_count = file_count,
-            is_mp = is_mp,
         })
     end
 
@@ -648,27 +645,28 @@ function M:showCacheManagement()
     end
 
     table.sort(entries, function(a, b)
-        if a.is_mp ~= b.is_mp then
-            return a.is_mp
-        end
         return tostring(a.title):lower() < tostring(b.title):lower()
     end)
 
     local total_str = total_size < 1024 * 1024
         and string.format("%.0f KB", total_size / 1024)
         or string.format("%.1f MB", total_size / 1024 / 1024)
-    local mp_total_str = mp_total_size < 1024 * 1024
-        and string.format("%.0f KB", mp_total_size / 1024)
-        or string.format("%.1f MB", mp_total_size / 1024 / 1024)
+    local article_total_str = article_snapshot.size < 1024 * 1024
+        and string.format("%.0f KB", article_snapshot.size / 1024)
+        or string.format("%.1f MB", article_snapshot.size / 1024 / 1024)
     table.insert(items, {
-        text = T(_("[Cleanup] Clear all public account cache (%1)"), mp_total_str),
-        callback = self:safeCallback(_("Clear all public account cache"), function()
+        text = T(_("[Cleanup] Clear WeChat article cache (%1)"), article_total_str),
+        callback = self:safeCallback(_("Clear WeChat article cache"), function()
             UIManager:show(ConfirmBox:new{
-                text = _("Clear all public account cache? Downloaded articles and cached article lists will be deleted."),
+                text = _("Clear downloaded favorites, floating articles and their cached lists? Book notes will be kept."),
                 ok_text = _("Clear"),
                 ok_callback = function()
-                    self:clearAllMPCache()
-                    self:refreshCacheManagement(_("Public account cache cleared"))
+                    local ok, err = self:clearAllArticleCache()
+                    if ok then
+                        self:refreshCacheManagement(_("WeChat article cache cleared"))
+                    else
+                        self:showInfo(T(_("WeChat article cache cleanup failed:\n%1"), err))
+                    end
                 end,
             })
         end),
@@ -681,8 +679,12 @@ function M:showCacheManagement()
                 text = _("Clear all cache? Downloaded books and articles will be deleted."),
                 ok_text = _("Clear"),
                 ok_callback = function()
-                    self:clearAllCache()
-                    self:refreshCacheManagement(_("Cache cleared"))
+                    local ok, err = self:clearAllCache()
+                    if ok then
+                        self:refreshCacheManagement(_("Cache cleared"))
+                    else
+                        self:showInfo(T(_("WeChat article cache cleanup failed:\n%1"), err))
+                    end
                 end,
             })
         end),
@@ -695,7 +697,7 @@ function M:showCacheManagement()
         table.insert(items, {
             text = entry.title,
             post_text = T(_("%1 files, %2"), tostring(entry.file_count), size_str),
-            mandatory = entry.is_mp and _("Public Account") or "",
+            mandatory = "",
             callback = self:safeCallback(entry.title, function()
                 self:confirmClearBookCache(entry.book_id, entry.title)
             end),
@@ -855,22 +857,30 @@ function M:clearBookCache(book_id)
     self:refreshShelfCacheIndicators()
 end
 
-function M:clearAllMPCache()
-    -- Delete each MP book's sidecar/content files rather than scanning only the
-    -- current roots, and only touch plugin-owned entries tracked in books.
+function M:clearAllArticleCache()
     local books = self.settings:get("books", {})
+    local snapshot = ArticleCache.snapshot(self.settings, books)
+    local ok, err = ArticleCache.clear(snapshot)
+    if not ok then return false, err end
+    if self.library_db and not self.library_db:clearMpArticles() then
+        return false, _("Could not clear cached WeChat article lists")
+    end
     for book_id, book in pairs(books) do
         if WeRead.is_mp_book(book_id) then
-            Content.remove_book_files(self.settings, book_id, book)
-            books[book_id] = nil
+            book.mp_articles = nil
+            book.mp_articles_file = nil
+            book.mp_articles_time = nil
         end
     end
     self.settings:set("books", books)
     self.settings:flush()
     self:refreshShelfCacheIndicators()
+    return true
 end
 
 function M:clearAllCache()
+    local article_ok, article_err = self:clearAllArticleCache()
+    if not article_ok then return false, article_err end
     local books = self.settings:get("books", {})
     for book_id, book in pairs(books) do
         Content.remove_book_files(self.settings, book_id, book)
@@ -878,6 +888,7 @@ function M:clearAllCache()
     self.settings:set("books", {})
     self.settings:flush()
     self:refreshShelfCacheIndicators()
+    return true
 end
 
 return M

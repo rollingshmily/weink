@@ -12,11 +12,6 @@ local TextViewer = require("ui/widget/textviewer")
 local UIManager = require("ui/uimanager")
 local WeRead = require("weread.lib.protocol")
 
-local ok_json, json = pcall(require, "json")
-if not ok_json then
-    ok_json, json = pcall(require, "rapidjson")
-end
-
 local PluginUtil = require("weread.lib.plugin_util")
 local _ = PluginUtil.tr
 local T = PluginUtil.T
@@ -266,7 +261,6 @@ function M:fetchVisibleShelfCovers(view, books, options)
             for key, value in pairs(options) do next_options[key] = value end
             next_options.prepared_shelf = {
                 books = books,
-                accounts = options.prepared_accounts or self.shelf_mp or {},
             }
             next_options.page = view.page
             next_options.skip_cover_fetch_once = true
@@ -371,7 +365,6 @@ function M:showShelfView(mode, keyword, old_view, options)
     end
     local prepared = options.prepared_shelf
     local books = prepared and prepared.books or filtered(self.shelf_regular, true)
-    local accounts = prepared and prepared.accounts or filtered(self.shelf_mp, false)
     local shelf_settings = self.settings:get("shelf")
     local cover_mode = mode == "books" and shelf_settings.view_mode == "cover"
     local paged = cover_mode or shelf_settings.paginated ~= false
@@ -412,7 +405,6 @@ function M:showShelfView(mode, keyword, old_view, options)
         title = options.title,
         wp_enable = options.wp_enable,
         books = books,
-        accounts = accounts,
         keyword = keyword,
         sort_label = self:shelfSortSummary(),
         filter_label = self:shelfFilterSummary(),
@@ -433,7 +425,7 @@ function M:showShelfView(mode, keyword, old_view, options)
             end
             local next_options = {}
             for key, value in pairs(options) do next_options[key] = value end
-            next_options.prepared_shelf = { books = books, accounts = accounts }
+            next_options.prepared_shelf = { books = books }
             next_options.page = self.shelf_view_pages[new_mode] or 1
             self:showShelfView(new_mode, keyword, view, next_options)
         end,
@@ -441,7 +433,7 @@ function M:showShelfView(mode, keyword, old_view, options)
             self:showShelfSearchDialog(view, mode, keyword, options)
         end,
         on_refresh = function()
-            self.shelf_view_pages = { books = 1, public_account = 1 }
+            self.shelf_view_pages = { books = 1, favorites = 1, floating = 1 }
             local refresh_options = {}
             for key, value in pairs(options) do refresh_options[key] = value end
             refresh_options.prepared_shelf = nil
@@ -450,7 +442,7 @@ function M:showShelfView(mode, keyword, old_view, options)
         end,
         on_sort = function()
             self:showShelfSortOptions(function()
-                self.shelf_view_pages = { books = 1, public_account = 1 }
+                self.shelf_view_pages = { books = 1, favorites = 1, floating = 1 }
                 options.prepared_shelf = nil
                 options.page = 1
                 self:showShelfView(mode, keyword, view, options)
@@ -458,7 +450,7 @@ function M:showShelfView(mode, keyword, old_view, options)
         end,
         on_filter = function()
             self:showShelfFilterOptions(function()
-                self.shelf_view_pages = { books = 1, public_account = 1 }
+                self.shelf_view_pages = { books = 1, favorites = 1, floating = 1 }
                 options.prepared_shelf = nil
                 options.page = 1
                 self:showShelfView(mode, keyword, view, options)
@@ -467,8 +459,6 @@ function M:showShelfView(mode, keyword, old_view, options)
         on_select = function(book, selected_mode)
             if options.on_select then
                 options.on_select(book, selected_mode, view)
-            elseif selected_mode == "public_account" then
-                self:showMPAccount(book)
             else
                 self:showBookRecord(book)
             end
@@ -477,7 +467,7 @@ function M:showShelfView(mode, keyword, old_view, options)
             self.shelf_view_pages[mode] = new_page
             local next_options = {}
             for key, value in pairs(options) do next_options[key] = value end
-            next_options.prepared_shelf = { books = books, accounts = accounts }
+            next_options.prepared_shelf = { books = books }
             next_options.page = new_page
             self:showShelfView(mode, keyword, view, next_options)
         end,
@@ -487,7 +477,6 @@ function M:showShelfView(mode, keyword, old_view, options)
     if cover_mode and not skip_cover_fetch_once then
         local fetch_options = {}
         for key, value in pairs(options) do fetch_options[key] = value end
-        fetch_options.prepared_accounts = accounts
         self:fetchVisibleShelfCovers(view, books, fetch_options)
     end
 end
@@ -503,7 +492,7 @@ function M:showShelfSearchDialog(view, mode, keyword, options)
                 text = _("Clear"),
                 callback = self:safeCallback(_("Clear"), function()
                     UIManager:close(dialog)
-                    self.shelf_view_pages = { books = 1, public_account = 1 }
+                    self.shelf_view_pages = { books = 1, favorites = 1, floating = 1 }
                     options.prepared_shelf = nil
                     options.page = 1
                     self:showShelfView(mode, nil, view, options)
@@ -515,7 +504,7 @@ function M:showShelfSearchDialog(view, mode, keyword, options)
                 callback = self:safeCallback(_("Search"), function()
                     local value = dialog:getInputText()
                     UIManager:close(dialog)
-                    self.shelf_view_pages = { books = 1, public_account = 1 }
+                    self.shelf_view_pages = { books = 1, favorites = 1, floating = 1 }
                     options.prepared_shelf = nil
                     options.page = 1
                     self:showShelfView(
@@ -1082,307 +1071,6 @@ function M:downloadWeChatArticleAndRead(article, list_type, on_complete)
         end
         if type(on_complete) == "function" then
             pcall(on_complete)
-        end
-        self:openFile(path_or_err)
-    end)
-end
-
-function M:showMPShelfPage()
-    local books = self.shelf_mp or {}
-    if #books == 0 then
-        self:showInfo(_("No items."))
-        return
-    end
-    local menu, buildItems
-    local function refresh() menu:switchItemTable(nil, buildItems()) end
-    buildItems = function()
-        local items = self:shelfToolbarItems(false, refresh)
-        local sorted = sortBooks(books, self.settings:get("shelf").sort_order)
-        for _i, book in ipairs(sorted) do
-            table.insert(items, {
-                text = book.title or book.bookId or _("Untitled"),
-                post_text = book.author or "",
-                callback = self:safeCallback(book.title or book.bookId or _("Untitled"), function()
-                    self:showMPAccount(book)
-                end),
-            })
-        end
-        return items
-    end
-    menu = self:showList(_("Public Accounts"), buildItems(), _("No items."))
-end
-
-function M:showMPAccount(book)
-    self:rememberMPAccount(book)
-    local book_id = book.book_id or book.bookId
-    local cached = self:getCachedMPArticles(book_id)
-    if cached and #cached > 0 then
-        self:showMPArticleList(book, cached)
-        return
-    end
-    if not self:requireLogin(true, false) then return end
-    self:fetchMPArticles(book)
-end
-
-function M:rememberMPAccount(book)
-    local book_id = book.book_id or book.bookId
-    if not book_id then
-        return
-    end
-    local books = self.settings:get("books", {})
-    local record = books[book_id] or {}
-    record.book_id = book_id
-    record.title = book.title or record.title
-    record.author = book.author or record.author
-    record.updated_at = os.time()
-    -- Keep the resolved cache directory in sync both ways so the transient book
-    -- object used for cached-path lookups knows where its articles actually live.
-    record.cache_dir = book.cache_dir or record.cache_dir
-    book.cache_dir = record.cache_dir
-    books[book_id] = record
-    self.settings:set("books", books)
-    self.settings:flush()
-end
-
-function M:fetchMPArticles(book)
-    if not self:requireLogin(true, false) then
-        return
-    end
-    self:runOnlineTask(_("Loading articles..."), function()
-        self:showBusy(_("Loading articles..."))
-        local book_id = book.book_id or book.bookId
-        local function request_articles()
-            local ticket = self.settings:get("wr_ticket", "")
-            if ticket == "" then ticket = nil end
-            return self.client:get_mp_articles(book_id, 0, 100, ticket)
-        end
-        local ok, result, err_code = pcall(request_articles)
-        if ok and not result and (err_code == -2041 or err_code == -2012) then
-            logger.info("MP credentials rejected; renewing before retry")
-            local renew_ok = pcall(function()
-                return self.client:renew_cookie()
-            end)
-            if renew_ok then
-                ok, result, err_code = pcall(request_articles)
-            end
-        end
-        self:closeBusy()
-        if not ok then
-            logger.err("load MP articles failed:", log_error(result))
-            self:showInfo(T(_("Load articles failed:\n%1"), display_error(result)))
-            return
-        end
-        if not result and (err_code == -2041 or err_code == -2012) then
-            logger.warn("load MP articles rejected, error_code:", tostring(err_code))
-            self:showInfo(_("WeRead could not refresh the public-account credential. Please scan the QR code again."))
-            return
-        end
-        if not result then
-            logger.warn("load MP articles failed, error_code:", tostring(err_code))
-            self:showInfo(T(_("Load articles failed:\n%1"), "errCode " .. tostring(err_code)))
-            return
-        end
-        local articles = Content.parse_mp_articles(result)
-        self:cacheMPArticles(book_id, articles)
-        self:showMPArticleList(book, articles)
-    end)
-end
-
--- Serialize the MP article list for the dedicated sidecar cache file.
--- {version, updated_at, articles} wrapper keeps room for future schema
--- changes without breaking older readers.
-local function encode_mp_articles(articles)
-    if not ok_json or type(articles) ~= "table" then
-        return nil
-    end
-    local ok, encoded = pcall(function()
-        if json.encode then
-            return json.encode({
-                version = 1,
-                updated_at = os.time(),
-                articles = articles,
-            })
-        end
-        return json:encode({
-            version = 1,
-            updated_at = os.time(),
-            articles = articles,
-        })
-    end)
-    if not ok or type(encoded) ~= "string" then
-        logger.warn("encode mp_articles failed:", log_error(encoded))
-        return nil
-    end
-    return encoded
-end
-
-local function decode_mp_articles(encoded)
-    if not ok_json or type(encoded) ~= "string" or encoded == "" then
-        return nil
-    end
-    local ok, decoded = pcall(function()
-        if json.decode then
-            return json.decode(encoded)
-        end
-        return json:decode(encoded)
-    end)
-    if not ok or type(decoded) ~= "table" then
-        return nil
-    end
-    local articles = decoded.articles
-    if type(articles) ~= "table" then
-        -- Tolerate a bare list written by an intermediate build.
-        articles = decoded
-    end
-    return articles
-end
-
-function M:getCachedMPArticles(book_id)
-    local books = self.settings:get("books", {})
-    local record = books[book_id]
-    if not record then
-        return nil
-    end
-    -- New format: dedicated sidecar file keeps the settings JSON small.
-    local file_path = record.mp_articles_file
-    if type(file_path) == "string" and file_path ~= "" then
-        local file = io.open(file_path, "rb")
-        if file then
-            local encoded = file:read("*a")
-            file:close()
-            local decoded = decode_mp_articles(encoded)
-            if type(decoded) == "table" then
-                return decoded
-            end
-        end
-    end
-    -- Legacy format: inline list in the settings record (pre-v1.0.10).
-    if type(record.mp_articles) == "table" then
-        return record.mp_articles
-    end
-    return nil
-end
-
-function M:cacheMPArticles(book_id, articles)
-    local books = self.settings:get("books", {})
-    local record = books[book_id] or {}
-    -- Dedicated sidecar file: keeps the settings JSON thin, so the sync
-    -- flush on document close stops rewriting a huge inline article list.
-    local dir = Content.ensure_book_meta_dir(self.settings, book_id)
-    local path = dir .. "/mp_articles.json"
-    local encoded = encode_mp_articles(articles)
-    local file_ok = false
-    if encoded then
-        local tmp_path = path .. ".tmp"
-        local file, err = io.open(tmp_path, "wb")
-        if file then
-            local write_ok, write_err = file:write(encoded)
-            file:close()
-            if write_ok then
-                file_ok = os.rename(tmp_path, path) == true
-                if not file_ok then
-                    os.remove(tmp_path)
-                end
-            else
-                os.remove(tmp_path)
-                logger.warn("write mp_articles cache failed:", tostring(write_err))
-            end
-        else
-            logger.warn("open mp_articles cache failed:", tostring(err))
-        end
-    end
-    if file_ok then
-        record.mp_articles = nil -- drop any legacy inline copy
-        record.mp_articles_file = path
-    else
-        -- Fallback: keep the inline list so caching never loses data.
-        record.mp_articles = articles
-        record.mp_articles_file = nil
-    end
-    record.mp_articles_time = os.time()
-    books[book_id] = record
-    self.settings:set("books", books)
-    self.settings:flush()
-end
-
-function M:showMPArticleList(book, articles)
-    local items = {}
-    for _i, article in ipairs(articles) do
-        local cached_path = Content.mp_article_cached_path(self.settings, book, article)
-        local is_cached = cached_path ~= nil
-        local date_str = ""
-        if article.createTime and article.createTime > 0 then
-            date_str = os.date("%Y-%m-%d", article.createTime)
-        end
-        table.insert(items, {
-            text = article.title or _("Article"),
-            post_text = date_str,
-            mandatory = is_cached and _("Cached") or "",
-            callback = self:safeCallback(article.title or _("Article"), function()
-                if is_cached then
-                    self:openFile(cached_path)
-                else
-                    self:downloadMPArticleAndRead(book, article)
-                end
-            end),
-        })
-    end
-    table.insert(items, {
-        text = _("Refresh article list"),
-        callback = self:safeCallback(_("Refresh article list"), function()
-            self:fetchMPArticles(book)
-        end),
-    })
-    self:showList(book.title or _("Public Account"), items, _("No articles."))
-end
-
-function M:downloadMPArticleAndRead(book, article)
-    if not self:requireLogin(true, false) then
-        return
-    end
-    self:runOnlineTask(_("Download article and read"), function()
-        self:showBusy(T(_("Downloading article: %1"), article.title or ""))
-        local progress_dialog
-        local ok, path_or_err = pcall(function()
-            return Content.fetch_mp_article_html(self.client, self.settings, book, article, {
-                progress = function(current, total)
-                    if not progress_dialog then
-                        self:closeBusy()
-                        progress_dialog = ProgressbarDialog:new{
-                            title = T(_("Downloading images: %1"), article.title or ""),
-                            progress_max = total,
-                        }
-                        progress_dialog:show()
-                        self:refreshUI()
-                    end
-                    progress_dialog:reportProgress(current)
-                end,
-            })
-        end)
-        if progress_dialog then
-            progress_dialog:close()
-        else
-            self:closeBusy()
-        end
-        if not ok then
-            logger.err("download MP article failed:", log_error(path_or_err))
-            self:showInfo(T(_("Download failed:\n%1"), display_error(path_or_err)))
-            return
-        end
-        logger.info(
-            "MP article downloaded:",
-            "images=", self.settings:get("cache").download_mp_images and "embedded" or "removed"
-        )
-        -- Persist the resolved cache directory (set by save_mp_article_html) so the
-        -- article files can still be located after the download directory changes.
-        local book_id = book.book_id or book.bookId
-        if book_id and book.cache_dir then
-            local books = self.settings:get("books", {})
-            local record = books[book_id] or {}
-            record.cache_dir = book.cache_dir
-            books[book_id] = record
-            self.settings:set("books", books)
-            self.settings:flush()
         end
         self:openFile(path_or_err)
     end)

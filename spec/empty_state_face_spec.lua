@@ -151,6 +151,10 @@ end)
 expect(ok, "empty favorites shelf failed to build: " .. tostring(error_message))
 expect(ok and #favorites_view._tab_buttons == 3,
     "books/favorites/floating must share the same shelf tab bar")
+expect(ok and favorites_view._tab_buttons[1].width == 200
+    and favorites_view._tab_buttons[2].width == 200
+    and favorites_view._tab_buttons[3].width == 200,
+    "the third shelf tab must not extend beyond screen width")
 expect(ok and #favorites_view._action_secondary == 1,
     "article shelf refresh button missing")
 
