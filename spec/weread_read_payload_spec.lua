@@ -1,46 +1,37 @@
--- Focused tests for Web Reader enter/report payload shape.
+-- Native POST /book/read payload shape.
 -- Run from the repo root with:
 --   lua spec/weread_read_payload_spec.lua
 
 package.path = "./?.lua;" .. package.path
-local has_bit = pcall(require, "bit")
-if not has_bit then
-    local function binary_op(a, b, xor)
-        local result = 0
-        local place = 1
-        while a > 0 or b > 0 do
-            local a_bit = a % 2
-            local b_bit = b % 2
-            if (xor and a_bit ~= b_bit)
-                or (not xor and a_bit == 1 and b_bit == 1) then
-                result = result + place
-            end
-            a = math.floor(a / 2)
-            b = math.floor(b / 2)
-            place = place * 2
-        end
-        return result
-    end
-    package.preload["bit"] = function()
-        return {
-            band = function(a, b) return binary_op(a, b, false) end,
-            bxor = function(a, b) return binary_op(a, b, true) end,
-            lshift = function(a, b) return (a * 2 ^ b) % 2 ^ 32 end,
-        }
-    end
+
+package.preload["weread.lib.content"] = function()
+    return {}
 end
-package.preload["weread.lib.crypto"] = function()
+package.preload["weread.lib.protocol"] = function()
     return {
-        md5_hex = function()
-            return "0123456789abcdef0123456789abcdef"
-        end,
-        sha256_hex = function(value)
-            return "sha256:" .. tostring(value)
+        reader_url = function(book_id)
+            return "https://weread.qq.com/web/reader/" .. tostring(book_id)
         end,
     }
 end
+package.preload["weread.lib.logger"] = function()
+    return {
+        scoped = function()
+            return { info = function() end, warn = function() end, err = function() end }
+        end,
+    }
+end
+package.preload["weread.lib.plugin_util"] = function()
+    return { perf = function() end }
+end
+package.preload["ui/time"] = function()
+    return { now = function() return 0 end }
+end
+package.preload["ffi/util"] = function()
+    return {}
+end
 
-local WeRead = require("weread.lib.protocol")
+local ReadReport = require("weread.lib.read_report")
 local failures, checks = 0, 0
 
 local function eq(got, want, label)
@@ -52,37 +43,38 @@ local function eq(got, want, label)
     end
 end
 
-local common = {
+local report = ReadReport:new{
+    settings = {
+        get = function() return {} end,
+        is_eink_configured = function() return true end,
+    },
+    client = {},
+    scheduler = { scheduleIn = function() end, unschedule = function() end },
+    get_document = function() return { file = "/book.epub" } end,
+    detect_book = function() return "22691208" end,
+    subprocess = false,
+    now = function() return 100 end,
+}
+
+local book = {
     book_id = "22691208",
     chapter_uid = 57,
     chapter_idx = 2,
-    chapter_offset = 389,
+    chapter_offset = 389.7,
     progress = 74.9,
     summary = "摄影笔记",
-    psvts = "ps",
-    pclts = "pc",
-    token = "token",
-    now = 100,
-    ts = 100001,
-    rn = 7,
 }
+local payload = report:build_payload("22691208", 12, book)
 
-local enter = WeRead.make_enter_read_payload(common)
-eq(enter.pr, 74, "enter progress is integer")
-eq(enter.co, 389, "enter offset")
-eq(enter.rt, nil, "enter omits rt")
-eq(enter.ts, nil, "enter omits ts")
-eq(enter.rn, nil, "enter omits rn")
-eq(enter.sg, nil, "enter omits sg")
-eq(type(enter.s), "string", "enter has web signature")
-
-local report = WeRead.make_read_payload(common)
-eq(report.pr, 74, "report progress is integer")
-eq(report.rt, 0, "report defaults rt to zero")
-eq(report.ts, 100001, "report ts")
-eq(report.rn, 7, "report rn")
-eq(report.sg, "sha256:1000017token", "report token signature")
-eq(type(report.s), "string", "report has web signature")
+eq(payload.bookId, "22691208", "native bookId")
+eq(payload.chapterUid, 57, "native chapterUid")
+eq(payload.chapterOffset, 389, "native chapterOffset is integer")
+eq(payload.progress, 74.9, "native progress")
+eq(payload.readingTime, 12, "native readingTime")
+eq(payload.psvts, nil, "web psvts is omitted")
+eq(payload.sg, nil, "web sg is omitted")
+eq(payload.appId, nil, "web appId is omitted")
+eq(payload.s, nil, "web signature is omitted")
 
 print(string.format(
     "weread_read_payload_spec: %d checks, %d failure(s)",

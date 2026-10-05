@@ -1,6 +1,5 @@
 local DataStorage = require("datastorage")
 local BookStore = require("weread.lib.book_store")
-local Cookie = require("weread.lib.cookie")
 local LuaSettings = require("luasettings")
 local PathIndex = require("weread.lib.path_index")
 local lfs = require("libs/libkoreader-lfs")
@@ -26,6 +25,8 @@ local defaults = {
         device_id = "",
         skey = "",
     },
+    eink_device_id = "",
+    eink_install_id = "",
     wr_ticket = "",
     wr_wrpa = "",
     account = {
@@ -45,7 +46,6 @@ local defaults = {
     cache = {
         download_book_images = true,
         download_article_images = false,
-        book_footnotes_in_popup = false,
         download_underlines_and_thoughts = false,
         prefetch_annotations = false,
         chapter_concurrency = 2,
@@ -131,6 +131,31 @@ local function clear_auth_store(store)
     store:saveSetting("account", deepcopy(defaults.account))
 end
 
+local function wipe_legacy_web_auth(store)
+    local changed = false
+    local api_key = store:readSetting("api_key", "")
+    if type(api_key) == "string" and api_key ~= "" then
+        store:saveSetting("api_key", "")
+        changed = true
+    end
+    local cookies = store:readSetting("cookies", {})
+    if type(cookies) == "table" and next(cookies) ~= nil then
+        store:saveSetting("cookies", {})
+        changed = true
+    elseif cookies ~= nil and type(cookies) ~= "table" then
+        store:saveSetting("cookies", {})
+        changed = true
+    end
+    for _, key in ipairs({ "wr_ticket", "wr_wrpa" }) do
+        local value = store:readSetting(key, "")
+        if type(value) == "string" and value ~= "" then
+            store:saveSetting(key, "")
+            changed = true
+        end
+    end
+    return changed
+end
+
 function Settings:new()
     local data_dir = DataStorage:getFullDataDir() .. "/weread"
     ensure_dir(data_dir)
@@ -169,8 +194,8 @@ function Settings:new()
         cache.download_mp_images = nil
         cache_changed = true
     end
-    if cache.book_footnotes_in_popup == nil then
-        cache.book_footnotes_in_popup = false
+    if cache.book_footnotes_in_popup ~= nil then
+        cache.book_footnotes_in_popup = nil
         cache_changed = true
     end
     if cache.download_underlines_and_thoughts == nil then
@@ -240,6 +265,9 @@ function Settings:new()
         -- remain intact and the UI will guide the user through a fresh QR login.
         clear_auth_store(obj.store)
         obj.store:saveSetting("auth_schema_version", Settings.AUTH_SCHEMA_VERSION)
+        legacy_changed = true
+    elseif wipe_legacy_web_auth(obj.store) then
+        -- Eink-only: leftover web Cookie / Skill keys are never credentials.
         legacy_changed = true
     end
     if legacy_changed then
@@ -447,29 +475,68 @@ function Settings:flush()
     self.store:flush()
 end
 
+local EINK_DEVICE_ID_PREFIX = "eink334691225"
+local EINK_DEVICE_ID_DIGITS = 19
+local EINK_INSTALL_ID_PREFIX = "eink31"
+local EINK_INSTALL_ID_DIGITS = 26
+
+local function random_decimal_digits(count)
+    local source = io.open("/dev/urandom", "rb")
+    if not source then
+        error("Could not generate WeRead device identity")
+    end
+    local bytes = source:read(count)
+    source:close()
+    if not bytes or #bytes ~= count then
+        error("Could not generate WeRead device identity")
+    end
+    local digits = {}
+    for i = 1, count do
+        digits[i] = tostring(bytes:byte(i) % 10)
+    end
+    return table.concat(digits)
+end
+
+local function is_prefixed_id(value, prefix, digits)
+    return type(value) == "string"
+        and #value == #prefix + digits
+        and value:sub(1, #prefix) == prefix
+        and value:sub(#prefix + 1):match("^%d+$") ~= nil
+end
+
+function Settings:get_eink_device_id()
+    local id = self:get("eink_device_id", "")
+    if is_prefixed_id(id, EINK_DEVICE_ID_PREFIX, EINK_DEVICE_ID_DIGITS) then
+        return id
+    end
+    local eink = self:get("eink", {}) or {}
+    local existing = tostring(eink.device_id or "")
+    if is_prefixed_id(existing, EINK_DEVICE_ID_PREFIX, EINK_DEVICE_ID_DIGITS) then
+        id = existing
+    else
+        id = EINK_DEVICE_ID_PREFIX .. random_decimal_digits(EINK_DEVICE_ID_DIGITS)
+    end
+    self:set("eink_device_id", id)
+    self:flush()
+    return id
+end
+
+function Settings:get_eink_install_id()
+    local id = self:get("eink_install_id", "")
+    if is_prefixed_id(id, EINK_INSTALL_ID_PREFIX, EINK_INSTALL_ID_DIGITS) then
+        return id
+    end
+    id = EINK_INSTALL_ID_PREFIX .. random_decimal_digits(EINK_INSTALL_ID_DIGITS)
+    self:set("eink_install_id", id)
+    self:flush()
+    return id
+end
+
 function Settings:update_auth(credentials, options)
     credentials = credentials or {}
     options = options or {}
     local changed = false
 
-    if type(credentials.cookies) == "table" then
-        local cookies = credentials.cookies
-        if options.replace_cookies ~= true then
-            cookies = Cookie.merge(self:get("cookies", {}), cookies)
-        else
-            cookies = deepcopy(cookies)
-        end
-        self:set("cookies", cookies)
-        changed = true
-    end
-
-    for _, key in ipairs({ "api_key", "wr_ticket", "wr_wrpa" }) do
-        local value = credentials[key]
-        if type(value) == "string" then
-            self:set(key, value)
-            changed = true
-        end
-    end
     if type(credentials.eink) == "table" then
         local eink = deepcopy(self:get("eink", deepcopy(defaults.eink)))
         for key, value in pairs(credentials.eink) do
@@ -493,17 +560,6 @@ function Settings:update_auth(credentials, options)
         self:flush()
     end
     return changed
-end
-
-function Settings:merge_set_cookie(set_cookie, options)
-    if not set_cookie or set_cookie == "" then
-        return false
-    end
-    local cookies = Cookie.merge_set_cookie(self:get("cookies", {}), set_cookie)
-    return self:update_auth({ cookies = cookies }, {
-        replace_cookies = true,
-        flush = not options or options.flush ~= false,
-    })
 end
 
 function Settings:get_all()
@@ -564,45 +620,15 @@ function Settings:reset_account()
     self:flush()
 end
 
-function Settings:clear_web_auth()
-    self:set("api_key", "")
-    self:set("cookies", {})
-    self:set("wr_ticket", "")
-    self:set("wr_wrpa", "")
-    local account = deepcopy(self:get("account", {}) or {})
-    if account.login_method == "qr" then
-        account.login_method = self:is_eink_configured() and "eink_qr" or ""
-        if not self:is_eink_configured() then
-            account.name = ""
-            account.user_vid = ""
-            account.login_time = 0
-        end
-    end
-    self:set("account", account)
-    self:flush()
-end
-
 function Settings:clear_eink_auth()
     self:set("eink", deepcopy(defaults.eink))
     local account = deepcopy(self:get("account", {}) or {})
-    if account.login_method == "eink_qr" then
-        account.login_method = self:is_cookie_configured() and "qr" or ""
-        if not self:is_cookie_configured() then
-            account.name = ""
-            account.user_vid = ""
-            account.login_time = 0
-        end
-    end
+    account.login_method = ""
+    account.name = ""
+    account.user_vid = ""
+    account.login_time = 0
     self:set("account", account)
     self:flush()
-end
-
-function Settings:is_cookie_configured()
-    return Cookie.has_login_cookie(self:get("cookies", {})) == true
-end
-
-function Settings:is_api_configured()
-    return self:get("api_key", "") ~= ""
 end
 
 function Settings:is_eink_configured()

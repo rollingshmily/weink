@@ -201,9 +201,9 @@ expect(#cover_requests == 6,
         .. " page=" .. tostring(shown[9] and shown[9].data.page))
 expect(subprocess_runs == 6,
     "cover network and thumbnail work did not run in background subprocesses")
-expect(cover_requests[1].options.skip_cookie == true
-        and cover_requests[1].options.persist_response_cookies == false,
-    "public cover request did not suppress account credentials")
+expect(cover_requests[1].options.skip_cookie == nil
+        and cover_requests[1].options.persist_response_cookies == nil,
+    "public cover request must not attach leftover cookie flags")
 expect(#shown == 10 and shown[10].data.cover_paths[shelf[1]] ~= nil,
     "cover batch did not refresh the page once with cached paths")
 expect(shown[10].data.cover_loading[shelf[1]] ~= true,

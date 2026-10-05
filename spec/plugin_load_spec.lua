@@ -95,9 +95,6 @@ package.preload["weread.lib.plugin_util"] = function()
         tr = function(text) return text end,
     }
 end
-package.preload["weread.lib.qr_login"] = function()
-    return { new = function() return { kind = "qr_login" } end }
-end
 package.preload["weread.lib.eink_qr_login"] = function()
     return { new = function() return { kind = "eink_qr_login" } end }
 end
@@ -198,7 +195,7 @@ expect(plugin.settings == fake_settings, "settings service was not initialized")
 expect(plugin.client.settings == fake_settings, "client did not receive settings")
 expect(plugin.downloader.settings == fake_settings,
     "downloader did not receive settings")
-expect(plugin.qr_login.kind == "qr_login", "QR login service was not initialized")
+expect(plugin.eink_qr_login.kind == "eink_qr_login", "Eink QR login service was not initialized")
 expect(migrations_ran, "migrations did not run during initialization")
 expect(dispatcher_registered, "dispatcher actions were not registered")
 expect(menu_registered, "plugin was not registered in KOReader's main menu")

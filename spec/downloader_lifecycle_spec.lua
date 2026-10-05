@@ -52,7 +52,6 @@ package.preload["ffi/util"] = function()
 end
 package.preload["weread.lib.content"] = function()
     return {
-        ensure_reader_state = function() end,
         fetch_single_chapter_source = function()
             error("injected transient timeout")
         end,

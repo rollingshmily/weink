@@ -1,6 +1,5 @@
 -- WeRead eink/native download helpers.
 -- ZIP decrypt uses response header encryptKey + AES-128-CBC(vid||vid).
--- Existing web cookie/gateway paths stay untouched.
 
 local Aes = require("weread.lib.aes")
 local EpubPath = require("weread.lib.epub_path")

@@ -22,26 +22,8 @@ end
 package.preload["weread.lib.protocol"] = function()
     return {
         e = function(value) return "e:" .. tostring(value) end,
-        web_app_id = function() return "app" end,
         reader_url = function(book_id)
             return "https://reader/" .. tostring(book_id)
-        end,
-        make_enter_read_payload = function(options)
-            return {
-                kind = "enter",
-                chapter_uid = options.chapter_uid,
-                chapter_offset = options.chapter_offset,
-                progress = options.progress,
-            }
-        end,
-        make_read_payload = function(options)
-            return {
-                kind = "report",
-                chapter_uid = options.chapter_uid,
-                chapter_offset = options.chapter_offset,
-                progress = options.progress,
-                elapsed_seconds = options.elapsed_seconds,
-            }
         end,
         is_success_response = function(value)
             return type(value) == "table" and value.succ == 1
@@ -84,7 +66,6 @@ local function fixture(provider)
             end
             return {}
         end,
-        is_cookie_configured = function() return true end,
         is_eink_configured = function() return true end,
     }
     local client = {

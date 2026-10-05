@@ -16,7 +16,6 @@ local Migrations = require("weread.lib.migrations")
 local PluginUtil = require("weread.lib.plugin_util")
 local ProgressSync = require("weread.lib.progress_sync")
 local ProgressSyncDialog = require("weread.ui.progress_sync_dialog")
-local QRLogin = require("weread.lib.qr_login")
 local EinkQRLogin = require("weread.lib.eink_qr_login")
 local ReadReport = require("weread.lib.read_report")
 local Settings = require("weread.lib.settings")
@@ -65,7 +64,7 @@ local function bind_session_services(plugin, options)
         refresh_shelf   = function() plugin:refreshShelfCacheIndicators() end,
         open_file       = function(path) plugin:openFile(path) end,
         safe_callback   = function(label, fn) return plugin:safeCallback(label, fn) end,
-        require_login   = function(cookie, api_key) return plugin:requireLogin(cookie, api_key) end,
+        require_login   = function() return plugin:requireLogin() end,
         run_online_task = function(label, fn)
             return plugin:runOnlineTask(label, fn)
         end,
@@ -76,7 +75,6 @@ local function bind_session_services(plugin, options)
     if options.recover ~= false and plugin.downloader.recover then
         plugin.downloader:recover()
     end
-    plugin.qr_login = QRLogin:new(plugin, plugin.client, plugin.settings)
     plugin.eink_qr_login = EinkQRLogin:new(plugin, plugin.client, plugin.settings)
     plugin.read_report = ReadReport:new{
         settings = plugin.settings,

@@ -18,11 +18,10 @@ weread/lib/mixin.lua          Collision-safe composition of feature methods into
 weread/lib/migrations.lua     Settings and per-book storage migrations
 weread/lib/plugin_util.lua    Shared translation, logging, error, timing, and file helpers
 weread/lib/reader_lifecycle.lua KOReader lifecycle and reader-state orchestration
-weread/lib/client.lua         HTTP client (cookie-auth Web API + Bearer-auth gateway API)
+weread/lib/client.lua         HTTP client (eink APIs on i.weread.qq.com)
 weread/lib/book_store.lua     Per-book metadata, reading-state, and article-list persistence
-weread/lib/content.lua        Content decoding (e_0/e_1/e_2/e_3), EPUB/HTML generation
+weread/lib/content.lua        Eink ZIP download, EPUB/HTML generation
 weread/lib/footnotes.lua      Network-free book-footnote scanning, indexing, conversion, and validation
-weread/lib/cookie.lua         Cookie header parsing and merging
 weread/lib/crypto.lua         SHA-256, MD5 (pure Lua)
 weread/lib/downloader.lua     Book/chapter download engine (state machine + standby guard)
 weread/lib/i18n.lua           Chinese translations (zh table, _() wrapper)
@@ -30,7 +29,6 @@ weread/lib/position_mapper.lua Pure KOReader ↔ WeRead chapter/offset mapping
 weread/lib/external_annotations_db.lua Per-local-book SQLite annotation storage and migration
 weread/lib/progress_sync.lua  Automatic progress-sync state machine and safety gate
 weread/lib/read_report.lua    Reading-report state machine, context refresh, retries
-weread/lib/reader_state.lua   Web Reader session and position extraction
 weread/lib/settings.lua       Settings persistence via KOReader LuaSettings
 weread/lib/protocol.lua       WeRead protocol utilities (encoding, signing, URL helpers)
 weread/ui/menu.lua            Main menu and settings menu composition
@@ -115,27 +113,20 @@ Whenever a menu item is added, removed, renamed, or moved:
 - Keep the menu tree in `README.md` in sync
 - Search all three files for the old and new labels before considering the change complete
 
-## Two API Systems
+## Auth and APIs
 
-1. **Gateway API** (official, `Bearer` auth with `api_key`): shelf, search, progress, book info
-2. **Web API** (cookie auth): chapter content (`e_0`/`e_1`/`e_2`/`e_3`), reading time report, cookie renewal, MP articles
+Login is eink QR only (`weread/lib/eink_qr_login.lua`). Production APIs use `vid` + `accessToken` against `i.weread.qq.com`. Public WeChat article fetch (`get_public_text` / mp.weixin.qq.com) stays. Do not restore web Cookie, Skill `api_key`, or `/web/book/chapter/*` shards.
 
 ## WeRead API Integration Rules
 
-**For any feature that calls WeRead APIs — especially undocumented/non-public Web APIs (anything NOT in the official gateway/skill):**
+**For any feature that calls WeRead APIs:**
 
 1. **Script-first validation**: Write a Python script in `scripts/` to prototype and validate the API interaction
 2. **Verify on real data**: Run the script against actual WeRead responses to confirm correctness
 3. **Then implement in Lua**: Only after the script validates successfully, implement the equivalent logic in the plugin
 
-This applies to: content decoding, chapter downloading, image/resource packaging, reading time report payloads, cookie renewal, MP article fetching, and any new undocumented endpoint.
-
 Existing reference scripts:
-- `scripts/fetch_weread_epub.py` — content decoding + EPUB generation reference
-- `scripts/verify_qr_login.py` — QR login, OTP, Cookie, user-info, API-key, and renewal-header verification
 - `scripts/verify_mp_articles.py` — MP article API verification
-
-Gateway (official skill) APIs can be called directly without script validation since they have stable, documented behavior.
 
 ## Privacy / Security
 

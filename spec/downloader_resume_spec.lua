@@ -68,7 +68,6 @@ package.preload["weread.ui.download_dialog"] = function()
 end
 package.preload["weread.lib.content"] = function()
     return {
-        ensure_reader_state = function() end,
         create_download_workspace = function(_settings, _book)
             local path = root .. "/workspace"
             os.execute("mkdir -p " .. string.format("%q", path))

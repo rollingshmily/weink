@@ -507,19 +507,14 @@ function ReadReport:_renewal_allowed()
 end
 
 function ReadReport:_auth_fingerprint()
-    local cookies = self.settings:get("cookies", {}) or {}
-    local keys = {}
-    for key in pairs(cookies) do
-        keys[#keys + 1] = tostring(key)
-    end
-    table.sort(keys)
-    local parts = {}
-    for _i, key in ipairs(keys) do
-        parts[#parts + 1] = key .. "=" .. tostring(cookies[key])
-    end
-    parts[#parts + 1] = "ticket=" .. tostring(self.settings:get("wr_ticket", ""))
-    parts[#parts + 1] = "wrpa=" .. tostring(self.settings:get("wr_wrpa", ""))
-    return table.concat(parts, ";")
+    local eink = self.settings:get("eink", {}) or {}
+    return table.concat({
+        "vid=" .. tostring(eink.vid or ""),
+        "access_token=" .. tostring(eink.access_token or ""),
+        "refresh_token=" .. tostring(eink.refresh_token or ""),
+        "device_id=" .. tostring(eink.device_id or ""),
+        "skey=" .. tostring(eink.skey or ""),
+    }, ";")
 end
 
 function ReadReport:_context_fingerprint(book_id)
@@ -679,10 +674,8 @@ function ReadReport:_apply_job_outcome(job, outcome)
             else
                 local ok, err = pcall(function()
                     self.settings:update_auth({
-                        cookies = outcome.auth.cookies,
-                        wr_ticket = outcome.auth.wr_ticket,
-                        wr_wrpa = outcome.auth.wr_wrpa,
-                    }, { replace_cookies = true })
+                        eink = outcome.auth.eink,
+                    })
                 end)
                 if not ok then
                     log("warn", "persist renewed auth failed:", tostring(err))
@@ -777,8 +770,7 @@ end
 -- ------------------------------------------------------------------
 
 -- Child entry point. Neuters settings persistence inside the fork and
--- captures auth changes (Set-Cookie merges, cookie renewal) so the parent
--- can persist them from the outcome.
+-- captures eink auth changes so the parent can persist them from the outcome.
 function ReadReport:_child_report(book_id, allow_renewal, position, elapsed_seconds)
     self._no_persist = true
     self.settings.flush = function() end
@@ -808,9 +800,7 @@ function ReadReport:_child_report(book_id, allow_renewal, position, elapsed_seco
     end
     if auth_changed then
         outcome.auth = {
-            cookies = self.settings:get("cookies", {}),
-            wr_ticket = self.settings:get("wr_ticket", ""),
-            wr_wrpa = self.settings:get("wr_wrpa", ""),
+            eink = self.settings:get("eink", {}),
         }
     end
     return outcome
@@ -1148,10 +1138,8 @@ function ReadReport:apply_position_upload_outcome(book_id, outcome)
     if type(outcome.auth) == "table" then
         local ok, err = pcall(function()
             self.settings:update_auth({
-                cookies = outcome.auth.cookies,
-                wr_ticket = outcome.auth.wr_ticket,
-                wr_wrpa = outcome.auth.wr_wrpa,
-            }, { replace_cookies = true })
+                eink = outcome.auth.eink,
+            })
         end)
         if not ok then
             log("warn", "persist progress upload auth failed:", tostring(err))

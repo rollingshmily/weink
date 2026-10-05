@@ -15,6 +15,26 @@ local T = PluginUtil.T
 
 local M = {}
 
+-- Set the default once per module load; KOReader applies user menu orders later.
+for _i, module in ipairs({
+    "ui/elements/filemanager_menu_order",
+    "ui/elements/reader_menu_order",
+}) do
+    local ok, order = pcall(require, module)
+    if ok and type(order) == "table" and type(order.tools) == "table" then
+        local already = false
+        for _j, name in ipairs(order.tools) do
+            if name == "weread" then
+                already = true
+                break
+            end
+        end
+        if not already then
+            table.insert(order.tools, 1, "weread")
+        end
+    end
+end
+
 function M:onDispatcherRegisterActions()
     Dispatcher:registerAction("weread_sync_progress", {
         category = "none",
@@ -472,38 +492,6 @@ function M:getSettingsMenuItems()
                                 cancel_text = _("Cancel"),
                             })
                         end),
-                    },
-                    {
-                        text = _("Hide footnote text"),
-                        keep_menu_open = true,
-                        check_callback_updates_menu = true,
-                        checked_func = function()
-                            return self.settings:get("cache").book_footnotes_in_popup
-                                == true
-                        end,
-                        callback = self:safeCallback(
-                            _("Hide footnote text"),
-                            function(touchmenu_instance)
-                                local cache = self.settings:get("cache")
-                                local function apply(enabled)
-                                    cache.book_footnotes_in_popup = enabled
-                                    self.settings:set("cache", cache)
-                                    self.settings:flush()
-                                    if touchmenu_instance then
-                                        touchmenu_instance:updateItems()
-                                    end
-                                end
-                                if cache.book_footnotes_in_popup == true then
-                                    apply(false)
-                                    return
-                                end
-                                UIManager:show(ConfirmBox:new{
-                                    text = _("To view hidden footnotes, enable \"Show footnotes in popup\" in KOReader Settings → Links. Otherwise footnote content will not be visible. Hide footnote text?"),
-                                    ok_text = _("Enable"),
-                                    cancel_text = _("Cancel"),
-                                    ok_callback = function() apply(true) end,
-                                })
-                            end),
                     },
                     {
                         text = _("Chapter prefetch"),

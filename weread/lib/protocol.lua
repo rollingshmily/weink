@@ -4,8 +4,6 @@ local Crypto = require("weread.lib.crypto")
 local WeRead = {}
 
 WeRead.USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 Edg/135.0.0.0"
-WeRead.DEFAULT_READER_TOKEN = "3c5c8717f3daf09iop3423zafeqoi"
-WeRead.SKILL_VERSION = "1.0.5"
 
 function WeRead.is_success_response(result, field)
     if type(result) ~= "table" then
@@ -112,26 +110,6 @@ function WeRead.e(value)
     return result
 end
 
-function WeRead.web_app_id(user_agent)
-    user_agent = user_agent or WeRead.USER_AGENT
-    local prefix = {}
-    local count = 0
-    for part in user_agent:gmatch("%S+") do
-        count = count + 1
-        if count > 12 then
-            break
-        end
-        table.insert(prefix, tostring(#part % 10))
-    end
-
-    local hash = 0
-    for i = 1, #user_agent do
-        hash = bit.band(0x83 * hash + user_agent:byte(i), 0x7fffffff)
-    end
-
-    return "wb" .. table.concat(prefix) .. "h" .. tostring(hash)
-end
-
 -- Lua string indexes are byte offsets. Return a valid UTF-8 prefix containing
 -- at most max_chars code points so payload fields are never cut mid-character.
 function WeRead.utf8_substr(value, max_chars)
@@ -193,75 +171,6 @@ function WeRead.utf8_substr(value, max_chars)
     return text:sub(1, index - 1)
 end
 
-function WeRead.make_content_params(book_id, chapter_uid, psvts, opts)
-    opts = opts or {}
-    local ct = opts.ct or os.time()
-    if WeRead.e(ct) == psvts then
-        ct = ct + 1
-    end
-
-    local params = {
-        b = WeRead.e(book_id),
-        c = WeRead.e(chapter_uid),
-        r = tostring(math.random(0, 9999) ^ 2),
-        ct = tostring(ct),
-        ps = psvts,
-        pc = WeRead.e(ct),
-        sc = opts.sc or 1,
-        prevChapter = false,
-        st = opts.style and 1 or 0,
-    }
-    params.s = WeRead.sign(WeRead.sorted_query(params))
-    return params
-end
-
-local function read_position_payload(opts)
-    local now = opts.now or os.time()
-    local pc = opts.pclts or opts.pc
-    if pc == nil or pc == "" or tonumber(pc) == 0 then
-        pc = WeRead.e(now)
-    end
-    local progress = math.floor(tonumber(opts.progress) or 0)
-    progress = math.max(0, math.min(100, progress))
-    return {
-        appId = opts.app_id or WeRead.web_app_id(opts.user_agent),
-        b = WeRead.e(opts.book_id),
-        c = WeRead.e(opts.chapter_uid or 0),
-        ci = math.floor(tonumber(opts.chapter_idx) or 0),
-        co = math.max(0, math.floor(tonumber(opts.chapter_offset) or 0)),
-        sm = WeRead.utf8_substr(opts.summary, 20),
-        pr = progress,
-        ct = now,
-        ps = opts.psvts or opts.ps or "",
-        pc = pc,
-    }
-end
-
-function WeRead.make_enter_read_payload(opts)
-    opts = opts or {}
-    local params = read_position_payload(opts)
-    params.s = WeRead.sign(WeRead.sorted_query(params))
-    return params
-end
-
-function WeRead.make_read_payload(opts)
-    opts = opts or {}
-    local params = read_position_payload(opts)
-    local now = params.ct
-    local ts = opts.ts or (now * 1000 + math.random(0, 999))
-    local rn = opts.rn or math.random(0, 999)
-    local token = opts.token
-    if token == nil or token == "" then
-        token = WeRead.DEFAULT_READER_TOKEN
-    end
-    params.rt = math.max(0, math.floor(tonumber(opts.elapsed_seconds) or 0))
-    params.ts = ts
-    params.rn = rn
-    params.sg = Crypto.sha256_hex(tostring(ts) .. tostring(rn) .. token)
-    params.s = WeRead.sign(WeRead.sorted_query(params))
-    return params
-end
-
 function WeRead.is_mp_book(book_id)
     return tostring(book_id or ""):sub(1, 7) == "MP_WXS_"
 end
@@ -274,16 +183,12 @@ function WeRead.reader_url(book_id, chapter_uid)
     return url
 end
 
-function WeRead.mp_reader_url(book_id)
-    return "https://weread.qq.com/web/mp/reader/" .. WeRead.e(book_id)
-end
-
 --- Upgrade WeRead CDN cover URLs to the higher-resolution t9 token.
 function WeRead.normalize_cover_url(url)
     if type(url) ~= "string" or url == "" then
         return url
     end
-    return url:gsub("/t%d+_", "/t9_")
+    return (url:gsub("/t%d+_", "/t9_"):gsub("/s_", "/t9_"))
 end
 
 return WeRead

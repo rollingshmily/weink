@@ -1,18 +1,28 @@
 local M = {}
 
-local function auth_fingerprint(settings)
-    if not settings or type(settings.get) ~= "function" then return "" end
-    local cookies = settings:get("cookies", {}) or {}
-    local keys = {}
-    for key in pairs(cookies) do keys[#keys + 1] = tostring(key) end
-    table.sort(keys)
-    local parts = {}
-    for _, key in ipairs(keys) do
-        parts[#parts + 1] = key .. "=" .. tostring(cookies[key])
+local function eink_fields(settings)
+    local eink = {}
+    if settings and type(settings.get) == "function" then
+        eink = settings:get("eink", {}) or {}
     end
-    parts[#parts + 1] = "ticket=" .. tostring(settings:get("wr_ticket", ""))
-    parts[#parts + 1] = "wrpa=" .. tostring(settings:get("wr_wrpa", ""))
-    return table.concat(parts, ";")
+    return {
+        vid = tostring(eink.vid or ""),
+        access_token = tostring(eink.access_token or ""),
+        refresh_token = tostring(eink.refresh_token or ""),
+        device_id = tostring(eink.device_id or ""),
+        skey = tostring(eink.skey or ""),
+    }
+end
+
+local function auth_fingerprint(settings)
+    local eink = eink_fields(settings)
+    return table.concat({
+        "vid=" .. eink.vid,
+        "access_token=" .. eink.access_token,
+        "refresh_token=" .. eink.refresh_token,
+        "device_id=" .. eink.device_id,
+        "skey=" .. eink.skey,
+    }, ";")
 end
 
 function M.capture(settings)
@@ -30,9 +40,7 @@ function M.capture(settings)
     return function()
         if not changed or type(settings.get) ~= "function" then return nil end
         return {
-            cookies = settings:get("cookies", {}),
-            wr_ticket = settings:get("wr_ticket", ""),
-            wr_wrpa = settings:get("wr_wrpa", ""),
+            eink = settings:get("eink", {}),
         }
     end
 end
@@ -45,7 +53,11 @@ function M.merge(settings, expected_fingerprint, auth)
     if type(auth) ~= "table" then return false end
     if not settings or type(settings.update_auth) ~= "function" then return false end
     if auth_fingerprint(settings) ~= expected_fingerprint then return false end
-    settings:update_auth(auth, { replace_cookies = true })
+    local eink = auth.eink
+    if type(eink) ~= "table" then
+        return false
+    end
+    settings:update_auth({ eink = eink })
     return true
 end
 

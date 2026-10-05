@@ -1,13 +1,11 @@
 package.path = "./?.lua;" .. package.path
 
 package.preload["weread.lib.crypto"] = function() return {} end
-package.preload["weread.lib.reader_state"] = function() return {} end
 package.preload["weread.lib.protocol"] = function()
     return {
         reader_url = function(book_id, chapter_uid)
             return "https://reader/" .. tostring(book_id) .. "/" .. tostring(chapter_uid or "")
         end,
-        make_content_params = function() return {} end,
     }
 end
 package.preload["weread.lib.thoughts"] = function() return {} end
@@ -36,9 +34,6 @@ end
 local Content = require("weread.lib.content")
 Content.ensure_eink_chapter_files = function(_client, _book, chapters)
     return chapters
-end
-Content.ensure_reader_state = function()
-    error("web reader state must not be used")
 end
 
 local client = {

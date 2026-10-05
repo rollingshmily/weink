@@ -38,6 +38,14 @@ end
 package.preload["weread.lib.protocol"] = function()
     return { is_mp_book = function(book_id) return book_id == "mp-book" end }
 end
+for _, module in ipairs({
+    "ui/elements/filemanager_menu_order",
+    "ui/elements/reader_menu_order",
+}) do
+    package.preload[module] = function()
+        return { tools = { "statistics", "more_tools" } }
+    end
+end
 package.preload["weread.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,
@@ -58,7 +66,6 @@ end
 
 local cache = {
     auto_prefetch_next_chapter = false,
-    book_footnotes_in_popup = false,
     download_underlines_and_thoughts = false,
     prefetch_annotations = false,
     show_prefetch_notifications = true,
@@ -203,26 +210,16 @@ for _, item in ipairs(main_items) do
     end
 end
 local download_items = download_settings and download_settings.sub_item_table_func()
-local menu_update_count = 0
 local prefetch
-local footnote_popup
 for _, item in ipairs(download_items or {}) do
     if item.text == "Chapter prefetch" then prefetch = item end
-    if item.text == "Hide footnote text" then footnote_popup = item end
+    expect(item.text ~= "Hide footnote text", "hide-footnote option must be removed")
 end
 expect(prefetch ~= nil, "download settings contain a prefetch submenu")
-expect(footnote_popup and not footnote_popup.checked_func(),
-    "book footnotes default to in-page display")
-footnote_popup.callback({
-    updateItems = function() menu_update_count = menu_update_count + 1 end,
-})
-expect(cache.book_footnotes_in_popup == false
-        and shown_widget
-        and shown_widget.text:find("Settings → Links", 1, true),
-    "enabling hidden footnotes should first explain the KOReader popup setting")
-shown_widget.ok_callback()
-expect(cache.book_footnotes_in_popup == true and footnote_popup.checked_func(),
-    "book footnotes were hidden only after confirmation")
+local fm_order = require("ui/elements/filemanager_menu_order")
+local reader_order = require("ui/elements/reader_menu_order")
+expect(fm_order.tools[1] == "weread", "WeRead is first in the filemanager tools menu")
+expect(reader_order.tools[1] == "weread", "WeRead is first in the reader tools menu")
 
 local prefetch_items = prefetch and prefetch.sub_item_table_func() or {}
 expect(#prefetch_items == 3, "prefetch submenu contains exactly three settings")
@@ -251,7 +248,6 @@ expect(prefetch_items[2].enabled_func(),
 expect(prefetch_items[3].enabled_func(),
     "notification setting is enabled while automatic prefetch is on")
 
-host.settings.is_cookie_configured = function() return false end
 host.settings.is_eink_configured = function() return true end
 local orig_get = host.settings.get
 host.settings.get = function(self, key, default)

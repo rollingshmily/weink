@@ -64,7 +64,6 @@ end
 package.preload["weread.lib.protocol"] = function()
     return {
         USER_AGENT = "WeRead client spec",
-        SKILL_VERSION = "test-skill",
         urlencode = function(value)
             return tostring(value):gsub("([^%w%-_%.~])", function(ch)
                 return string.format("%%%02X", ch:byte())
@@ -74,7 +73,6 @@ package.preload["weread.lib.protocol"] = function()
 end
 
 local Client = require("weread.lib.client")
-local merged_cookies = {}
 local settings = {
     get = function(_self, key, default)
         if key == "cookies" then
@@ -82,8 +80,8 @@ local settings = {
         end
         return default
     end,
-    merge_set_cookie = function(_self, value)
-        merged_cookies[#merged_cookies + 1] = value
+    merge_set_cookie = function()
+        error("cookies must not be persisted")
     end,
 }
 local client = Client:new(settings)
@@ -94,26 +92,24 @@ responses[#responses + 1] = {
     headers = { ["Set-Cookie"] = "wr_ticket=new-ticket; Path=/" },
 }
 local body, code = client:request({
-    url = "https://weread.qq.com/web/test",
+    url = "https://i.weread.qq.com/book/info",
     timeout = { 3, 7 },
 })
 expect(body == "ok" and code == 200, "basic request result was wrong")
-expect(requests[1].headers.Cookie == "wr_skey=XXX-cookie-value",
-    "WeRead cookie was not attached")
+expect(requests[1].headers.Cookie == nil,
+    "WeRead cookie must not be attached")
 expect(timeout_calls[1][1] == 3 and timeout_calls[1][2] == 7,
     "request timeout was not applied")
 expect(reset_count == 1, "timeout was not reset after successful request")
-expect(merged_cookies[1] == "wr_ticket=new-ticket; Path=/",
-    "response cookies were not persisted")
 
 responses[#responses + 1] = { body = "public", code = 200 }
 client:request({ url = "https://example.com/public" })
 expect(requests[2].headers.Cookie == nil,
-    "WeRead cookie leaked to a non-WeRead host")
+    "cookie leaked to a non-WeRead host")
 
 responses[#responses + 1] = { raise = "transport failed" }
 local ok, err = pcall(function()
-    client:request({ url = "https://weread.qq.com/web/fail" })
+    client:request({ url = "https://i.weread.qq.com/book/info" })
 end)
 expect(not ok and tostring(err):find("transport failed", 1, true),
     "transport error was not propagated")
@@ -126,7 +122,7 @@ responses[#responses + 1] = {
 }
 responses[#responses + 1] = { body = "book", code = 200 }
 local redirected, redirected_code, _, _, final_url = client:request_follow({
-    url = "https://weread.qq.com/web/export",
+    url = "https://i.weread.qq.com/book/chapterdownload",
     method = "POST",
     body = "{}",
     headers = {
@@ -161,7 +157,7 @@ responses[#responses + 1] = {
     headers = { location = "/again" },
 }
 ok, err = pcall(function()
-    client:request_follow({ url = "https://weread.qq.com/start" }, 1)
+    client:request_follow({ url = "https://i.weread.qq.com/start" }, 1)
 end)
 expect(not ok and tostring(err):find("Too many redirects", 1, true),
     "redirect limit was not enforced")
@@ -173,7 +169,9 @@ responses[#responses + 1] = {
     headers = { ["content-type"] = "application/json" },
 }
 ok, err = pcall(function()
-    client:get_text("https://weread.qq.com/web/failing-api")
+    client:get_text("https://i.weread.qq.com/book/info", {
+        diagnostic_api = "/book/info",
+    })
 end)
 expect(not ok and tostring(err):find("HTTP 499", 1, true),
     "HTTP error details were not preserved")
@@ -184,33 +182,11 @@ expect(raw_response_log:find(
     true
 ), "HTTP failure log omitted the raw response body")
 
-logs = {}
-local gateway_settings = {
-    get = function(_self, key, default)
-        if key == "api_key" then return "private-api-key" end
-        return default
-    end,
-    merge_set_cookie = function() end,
-}
-local gateway_client = Client:new(gateway_settings)
-gateway_client.json_encode = function() return "{}" end
-gateway_client.json_decode = function()
-    return { errcode = -202, errmsg = "-202" }
-end
-responses[#responses + 1] = {
-    body = '{"errcode":-202,"errmsg":"-202"}',
-    code = 499,
-    headers = { ["content-type"] = "application/json" },
-}
-ok = pcall(function()
-    gateway_client:gateway("/shelf/sync", {})
-end)
-expect(not ok, "gateway HTTP failure was not propagated")
-local gateway_failure_log = table.concat(logs, "\n")
-expect(gateway_failure_log:find("api= /shelf/sync", 1, true),
-    "gateway failure log omitted the logical API name")
-expect(requests[#requests].diagnostic_api == nil,
+local failing_request = requests[#requests]
+expect(failing_request.diagnostic_api == nil,
     "diagnostic API metadata leaked into the HTTP request options")
+expect(raw_response_log:find("api= /book/info", 1, true),
+    "HTTP failure log omitted the logical API name")
 
 logs = {}
 client.json_decode = function(_self, _text)
@@ -220,7 +196,7 @@ local application_result = client:decode_http_json(
     '{"errcode":-300,"errmsg":"application failure"}',
     {
         method = "POST",
-        url = "https://i.weread.qq.com/api/agent/gateway",
+        url = "https://i.weread.qq.com/book/read",
         code = 200,
         headers = { ["content-type"] = "application/json" },
     }
@@ -241,7 +217,7 @@ end
 ok, err = pcall(function()
     client:decode_http_json("<not-json>", {
         method = "GET",
-        url = "https://weread.qq.com/web/invalid-json",
+        url = "https://i.weread.qq.com/book/info",
         code = 200,
     })
 end)
@@ -291,11 +267,9 @@ expect(failure_log:find("shelf sync failed", 1, true),
 
 local review_settings = {
     get = function(_self, key, default)
-        if key == "cookies" then return { wr_skey = "XXX-cookie-value" } end
         if key == "eink" then return { vid = "1", access_token = "t" } end
         return default
     end,
-    merge_set_cookie = function() end,
 }
 local review_client = Client:new(review_settings)
 local ok_review, data_review, err_review

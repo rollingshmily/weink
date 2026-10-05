@@ -100,7 +100,7 @@ expect(values.books["42"].cache_dir == "/cache/42",
 expect(values.config_loaded == nil, "legacy setting was not removed")
 expect(values.cache.download_book_images == false
     and values.cache.download_article_images == false
-    and values.cache.book_footnotes_in_popup == false
+    and values.cache.book_footnotes_in_popup == nil
     and values.cache.auto_prefetch_next_chapter == false
     and values.cache.show_prefetch_notifications == true
     and values.cache.show_annotations == true
@@ -179,14 +179,41 @@ expect(values.books["42"].cache_dir == "/saved/42",
 settings:update_auth({
     cookies = { wr_gid = "12345" },
     api_key = "new-key",
+    wr_ticket = "ticket",
+    wr_wrpa = "wrpa",
+    eink = {
+        vid = "vid-1",
+        access_token = "token-1",
+        refresh_token = "refresh-1",
+        device_id = "dev-1",
+    },
     account = { name = "new-user" },
 })
-expect(values.cookies.wr_gid == "12345" and values.api_key == "new-key",
-    "authentication update did not persist credentials")
-expect(values.account.name == "new-user" and settings:is_api_configured(),
-    "authentication account/API state was wrong")
-expect(settings:is_cookie_configured(),
-    "modern wr_gid login cookie was not recognized")
+expect((not values.cookies or next(values.cookies) == nil) and values.api_key == "",
+    "web credentials must not be stored")
+expect(values.eink.vid == "vid-1" and values.eink.access_token == "token-1"
+        and settings:is_eink_configured(),
+    "eink authentication was not persisted")
+expect(values.account.name == "new-user",
+    "authentication account was not persisted")
+
+values.auth_schema_version = 1
+values.api_key = "leftover-key"
+values.cookies = { wr_skey = "leftover-cookie" }
+values.wr_ticket = "leftover-ticket"
+values.wr_wrpa = "leftover-wrpa"
+values.eink = {
+    vid = "keep-vid",
+    access_token = "keep-token",
+    refresh_token = "keep-refresh",
+    device_id = "keep-device",
+}
+local leftover_settings = Settings:new()
+expect(values.api_key == "" and next(values.cookies) == nil
+        and values.wr_ticket == "" and values.wr_wrpa == "",
+    "leftover web credentials were not wiped")
+expect(values.eink.vid == "keep-vid" and leftover_settings:is_eink_configured(),
+    "eink credentials must survive leftover web-key cleanup")
 
 expect(settings:set_download_dir("/external/books") == "/external/books",
     "custom download directory was not selected")
@@ -199,5 +226,22 @@ settings:reset_account()
 expect(values.api_key == "" and next(values.cookies) == nil
     and values.account.name == "",
     "account reset left credentials behind")
+
+local device_id = settings:get_eink_device_id()
+expect(type(device_id) == "string" and #device_id == 32
+        and device_id:match("^eink334691225%d+$"),
+    "eink device id format is wrong")
+expect(settings:get_eink_device_id() == device_id,
+    "eink device id must be stable")
+settings:reset_account()
+expect(settings:get_eink_device_id() == device_id,
+    "logout must keep the eink device id")
+local install_id = settings:get_eink_install_id()
+expect(type(install_id) == "string" and #install_id == 32
+        and install_id:match("^eink31%d+$"),
+    "eink install id format is wrong")
+settings:reset_account()
+expect(settings:get_eink_install_id() == install_id,
+    "logout must keep the eink install id")
 
 print(("settings_spec: %d checks"):format(checks))

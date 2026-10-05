@@ -3,10 +3,6 @@ package.path = "./?.lua;" .. package.path
 local calls = {}
 package.preload["weread.lib.content"] = function()
     return {
-        ensure_reader_state = function(_client, book)
-            calls[#calls + 1] = "reader"
-            book.reader_url = "https://reader/book"
-        end,
         create_download_workspace = function()
             calls[#calls + 1] = "workspace"
             return { path = "/tmp/work", incoming_dir = "/tmp/work/in",
@@ -14,7 +10,9 @@ package.preload["weread.lib.content"] = function()
         end,
         fetch_single_chapter_source = function(_client, settings)
             calls[#calls + 1] = "source"
-            settings:update_auth({ wr_ticket = "renewed" })
+            settings:update_auth({
+                eink = { vid = "1", access_token = "renewed" },
+            })
             return "<p>body</p>"
         end,
         finalize_single_chapter_content = function()
@@ -48,8 +46,8 @@ end
 
 local flushes = 0
 local values = {
-    cache = { download_book_images = true }, cookies = {}, wr_ticket = "old",
-    wr_wrpa = "",
+    cache = { download_book_images = true },
+    eink = { vid = "1", access_token = "old" },
 }
 local settings = {
     get = function(_self, key, default)
@@ -59,7 +57,7 @@ local settings = {
     flush = function() flushes = flushes + 1 end,
 }
 settings.update_auth = function(self, credentials, options)
-    if credentials.wr_ticket then self:set("wr_ticket", credentials.wr_ticket) end
+    if type(credentials.eink) == "table" then self:set("eink", credentials.eink) end
     if not options or options.flush ~= false then self:flush() end
 end
 
@@ -76,7 +74,7 @@ local result = Worker.run(settings, {}, { book_id = "book" },
 assert(result.path == "/tmp/book-chapter.epub")
 assert(result.chapter_uid == "2" and result.cache_dir == "/tmp/cache/book")
 assert(result.annotation_document and result.annotation_document.clean)
-assert(result.auth and result.auth.wr_ticket == "renewed")
+assert(result.auth and result.auth.eink and result.auth.eink.access_token == "renewed")
 assert(flushes == 0, "child worker must not flush parent LuaSettings")
 assert(table.concat(calls, ",")
     == "workspace,source,images,epub,cleanup")

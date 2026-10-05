@@ -87,8 +87,6 @@ local function fixture(remote, options)
             values[key] = value
         end,
         flush = function() end,
-        is_api_configured = function() return true end,
-        is_cookie_configured = function() return true end,
         is_eink_configured = function() return true end,
     }
     local queue = {}
@@ -120,12 +118,6 @@ local function fixture(remote, options)
                 value = options.remote_provider()
             end
             return { book = value }
-        end,
-        get_web_progress = function()
-            if options.remote_provider then
-                return options.remote_provider()
-            end
-            return remote
         end,
         json_encode = function(_self, value)
             encoded_payload = value

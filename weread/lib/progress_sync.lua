@@ -253,9 +253,7 @@ function ProgressSync:_child_fetch_remote(book_id, chapters)
     }
     if auth_changed then
         outcome.auth = {
-            cookies = self.settings:get("cookies", {}),
-            wr_ticket = self.settings:get("wr_ticket", ""),
-            wr_wrpa = self.settings:get("wr_wrpa", ""),
+            eink = self.settings:get("eink", {}),
         }
     end
     self.settings.flush = original_flush
@@ -269,10 +267,8 @@ function ProgressSync:_apply_job_auth(outcome)
     end
     local ok, err = pcall(function()
         self.settings:update_auth({
-            cookies = outcome.auth.cookies,
-            wr_ticket = outcome.auth.wr_ticket,
-            wr_wrpa = outcome.auth.wr_wrpa,
-        }, { replace_cookies = true })
+            eink = outcome.auth.eink,
+        })
     end)
     if not ok then
         log("warn", "persist progress job auth failed:", tostring(err))

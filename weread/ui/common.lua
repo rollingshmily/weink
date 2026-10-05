@@ -169,7 +169,7 @@ function M:showList(title, items, empty_text, options)
     return menu
 end
 
-function M:requireLogin(_require_cookie, _require_api_key)
+function M:requireLogin()
     if self.settings:is_eink_configured() then
         return true
     end
@@ -212,17 +212,6 @@ function M:renewEinkWithUI()
     end)
 end
 
-function M:renewCookieWithUI()
-    if not self:requireLogin(true, false) then
-        return
-    end
-    self:runNetworkAction(_("Renew cookie"), function()
-        self.client:renew_cookie()
-        logger.info("cookie renewed")
-        return _("WeRead cookie renewed.")
-    end)
-end
-
 function M:showAccountStatus()
     local account = self.settings:get("account", {})
     local account_name = type(account.name) == "string" and account.name or ""
@@ -254,7 +243,6 @@ function M:confirmClearAccount()
         text = _("Clear all WeRead logins? Cached books will remain."),
         ok_text = _("Clear"),
         ok_callback = self:safeCallback(_("Clear"), function()
-            self.qr_login:cancel()
             if self.eink_qr_login then self.eink_qr_login:cancel() end
             self.read_report:stop("account_cleared")
             self.settings:reset_account()
@@ -267,26 +255,9 @@ function M:confirmClearAccount()
     })
 end
 
-function M:confirmClearWebAccount()
-    UIManager:show(ConfirmBox:new{
-        text = _("Sign out WeChat login? Shelf and progress will need WeChat login again."),
-        ok_text = _("Sign out"),
-        ok_callback = self:safeCallback(_("Sign out"), function()
-            self.qr_login:cancel()
-            self.read_report:stop("web_signed_out")
-            self.settings:clear_web_auth()
-            if self.onWeReadAccountChanged then
-                self:onWeReadAccountChanged()
-            end
-            self:refreshLoginMenu()
-            self:showInfo(_("WeChat login signed out."))
-        end),
-    })
-end
-
 function M:confirmClearEinkAccount()
     UIManager:show(ConfirmBox:new{
-        text = _("Sign out eink login? Full-book fast download will fall back to web. Local highlights will stop uploading."),
+        text = _("Sign out eink login? You will need to scan the QR code again. Local highlights will stop uploading."),
         ok_text = _("Sign out"),
         ok_callback = self:safeCallback(_("Sign out"), function()
             if self.eink_qr_login then self.eink_qr_login:cancel() end

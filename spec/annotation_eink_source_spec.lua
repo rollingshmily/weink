@@ -28,5 +28,15 @@ assert(not downloader:find("fetch_chapter_xhtml_parallel", 1, true),
 local runtime = read("weread/lib/plugin_runtime.lua")
 assert(not runtime:find("ensure_reader_state", 1, true),
     "catalog refresh still opens the web reader")
+assert(not runtime:find('require("weread.lib.qr_login")', 1, true),
+    "plugin runtime still requires web QR login")
+assert(not runtime:find("plugin.qr_login", 1, true),
+    "plugin runtime still constructs web QR login")
+
+local client = read("weread/lib/client.lua")
+assert(not client:find("function Client:gateway", 1, true),
+    "client still exposes Skill gateway")
+assert(not client:find("function Client:renew_cookie", 1, true),
+    "client still exposes cookie renewal")
 
 print("annotation_eink_source_spec: passed")

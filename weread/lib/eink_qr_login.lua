@@ -1,5 +1,5 @@
 -- WeRead eink native QR login.
--- Stores vid/accessToken in settings.eink and does not replace web cookies.
+-- Stores vid/accessToken in settings.eink.
 
 local Crypto = require("weread.lib.crypto")
 local Device = require("device")
@@ -32,22 +32,6 @@ local function error_text(err)
         return text:sub(1, 300) .. "..."
     end
     return text
-end
-
-local function rand_digits(n)
-    local out = {}
-    for i = 1, n do
-        out[i] = tostring(math.random(0, 9))
-    end
-    return table.concat(out)
-end
-
-local function new_device_id()
-    return "eink334691225" .. rand_digits(19)
-end
-
-local function new_install_id()
-    return "eink31" .. rand_digits(26)
 end
 
 local function now_ms()
@@ -148,7 +132,7 @@ function EinkQRLogin:_begin_protocol()
     if errcode ~= 0 or type(uuid) ~= "string" or uuid == "" then
         error("eink QR create failed: " .. tostring(errcode))
     end
-    return uuid, new_device_id()
+    return uuid, self.settings:get_eink_device_id()
 end
 
 function EinkQRLogin:_parse_poll(text)
@@ -174,7 +158,7 @@ function EinkQRLogin:_exchange(wx_code, device_id)
         code = wx_code,
         deviceId = device_id,
         deviceName = "BOOX",
-        installId = new_install_id(),
+        installId = self.settings:get_eink_install_id(),
         isAutoLogout = 0,
         isFromQrcode = 1,
         random = random_value,

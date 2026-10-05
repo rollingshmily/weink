@@ -1,18 +1,11 @@
 local Crypto = require("weread.lib.crypto")
 local Eink = require("weread.lib.eink")
-local ReaderState = require("weread.lib.reader_state")
 local WeRead = require("weread.lib.protocol")
 local Thoughts = require("weread.lib.thoughts")
 local logger = require("weread.lib.logger")
 local Checkpoint = require("weread.lib.download_checkpoint")
-local ok_ffiutil, ffiutil = pcall(require, "ffi/util")
-if not ok_ffiutil then ffiutil = nil end
-local ok_socket, socket = pcall(require, "socket")
-if not ok_socket then socket = nil end
 
 local Content = {}
-
-local b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 
 local function basename_safe(value)
     value = tostring(value or ""):gsub("[^%w%._-]", "_")
@@ -637,125 +630,6 @@ local function body_fragment(xhtml)
     xhtml = xhtml:gsub("<%?xml.-%?>", "")
     xhtml = xhtml:gsub("<!DOCTYPE.-%>", "")
     return xhtml
-end
-
-local function checked_body(response_text)
-    if not response_text or #response_text <= 32 then
-        return ""
-    end
-    local expected = response_text:sub(1, 32)
-    local body = response_text:sub(33)
-    local actual = Crypto.md5_hex(body):upper()
-    if actual ~= expected then
-        error("Shard MD5 mismatch")
-    end
-    return body
-end
-
-local function base64_decode(data)
-    data = data:gsub("-", "+"):gsub("_", "/")
-    local pad = #data % 4
-    if pad > 0 then
-        data = data .. string.rep("=", 4 - pad)
-    end
-    data = data:gsub("[^" .. b64chars .. "=]", "")
-    return (data:gsub(".", function(char)
-        if char == "=" then
-            return ""
-        end
-        local bits = ""
-        local index = b64chars:find(char, 1, true) - 1
-        for bit = 6, 1, -1 do
-            bits = bits .. (index % 2 ^ bit - index % 2 ^ (bit - 1) > 0 and "1" or "0")
-        end
-        return bits
-    end):gsub("%d%d%d?%d?%d?%d?%d?%d?", function(bits)
-        if #bits ~= 8 then
-            return ""
-        end
-        local byte = 0
-        for i = 1, 8 do
-            if bits:sub(i, i) == "1" then
-                byte = byte + 2 ^ (8 - i)
-            end
-        end
-        return string.char(byte)
-    end))
-end
-
-local function swap_positions(encoded)
-    local length = #encoded
-    if length < 4 then
-        return {}
-    end
-    if length < 11 then
-        return {0, 2}
-    end
-
-    local n = math.min(4, math.floor((length + 9) / 10))
-    local tmp = {}
-    for i = length, length - n + 1, -1 do
-        local byte = encoded:byte(i)
-        local bin = {}
-        repeat
-            table.insert(bin, 1, tostring(byte % 2))
-            byte = math.floor(byte / 2)
-        until byte == 0
-        local value = tonumber(table.concat(bin), 4) or 0
-        table.insert(tmp, tostring(value))
-    end
-    tmp = table.concat(tmp)
-
-    local result = {}
-    local m = length - n - 2
-    local step = #tostring(m)
-    local i = 1
-    while #result < 10 and i + step - 1 < #tmp do
-        table.insert(result, (tonumber(tmp:sub(i, i + step - 1)) or 0) % m)
-        local end2 = math.min(i + step, #tmp)
-        if i + 1 <= #tmp then
-            table.insert(result, (tonumber(tmp:sub(i + 1, end2)) or 0) % m)
-        end
-        i = i + step
-    end
-    return result
-end
-
-local function reverse_swaps(encoded, positions)
-    local chars = {}
-    for i = 1, #encoded do
-        chars[i] = encoded:sub(i, i)
-    end
-    for i = #positions, 1, -2 do
-        for k = 1, 0, -1 do
-            local left = positions[i] + k + 1
-            local right = positions[i - 1] + k + 1
-            chars[left], chars[right] = chars[right], chars[left]
-        end
-    end
-    return table.concat(chars)
-end
-
-local function decode_encoded_body(body)
-    if #body == 0 then
-        return ""
-    end
-    local encoded = body:sub(2)
-    local restored = reverse_swaps(encoded, swap_positions(encoded))
-    return base64_decode(restored)
-end
-
-function Content.decode_content_shards(e0, e1, e3)
-    local body = checked_body(e0) .. checked_body(e1) .. checked_body(e3)
-    return decode_encoded_body(body)
-end
-
-function Content.decode_content_shard(e0)
-    return decode_encoded_body(checked_body(e0))
-end
-
-function Content.extract_reader_state(html, json_decode)
-    return ReaderState.extract(html, json_decode)
 end
 
 function Content.normalize_chapters(payload, book_id)
@@ -1525,22 +1399,6 @@ function Content.download_remote_images_to_files(client, xhtml, used_names, work
     return body, assets
 end
 
-function Content.ensure_reader_state(_client, _book)
-    error("web reader state is disabled")
-end
-
---- Refresh psvts before downloading a chapter (matches per-chapter reader page fetch).
-function Content.refresh_reader_state(client, book, chapter)
-    book.psvts = nil
-    local book_id = book.book_id or book.bookId
-    if chapter and chapter.chapterUid then
-        book.reader_url = WeRead.reader_url(book_id, chapter.chapterUid)
-    else
-        book.reader_url = book.reader_url or WeRead.reader_url(book_id)
-    end
-    Content.ensure_reader_state(client, book)
-end
-
 function Content.fetch_catalog(client, book)
     local book_id = book.book_id or book.bookId
     local catalog = client:eink_chapterinfo(book_id)
@@ -1549,183 +1407,8 @@ function Content.fetch_catalog(client, book)
     return chapters
 end
 
-function Content.fetch_chapter_shard(client, _settings, book, chapter, endpoint)
-    if not book.psvts then
-        Content.ensure_reader_state(client, book)
-    end
-    local book_id = book.book_id or book.bookId
-    if not chapter then
-        error("chapter is required")
-    end
-
-    local chapter_url = WeRead.reader_url(book_id, chapter.chapterUid)
-    local is_style_shard = endpoint:find("/e_2", 1, true) ~= nil
-    local params = WeRead.make_content_params(book_id, chapter.chapterUid, book.psvts, {
-        sc = 1,
-        style = is_style_shard,
-    })
-    local text, code = client:request({
-        url = "https://weread.qq.com" .. endpoint,
-        method = "POST",
-        headers = {
-            ["Content-Type"] = "application/json;charset=UTF-8",
-            ["Origin"] = "https://weread.qq.com",
-            ["Referer"] = chapter_url,
-        },
-        body = client:json_encode(params),
-    })
-    if not code or code < 200 or code >= 300 then
-        error(endpoint .. " failed: HTTP " .. tostring(code or "unknown"))
-    end
-    if text == "{}" then
-        error(endpoint .. " returned empty object")
-    end
-    return text
-end
-
--- Fetch the three body shards concurrently when KOReader exposes its
--- subprocess primitive. Large responses stay on disk; only a tiny JSON status
--- crosses the pipe. The sequential path remains the compatibility fallback.
-function Content.fetch_chapter_xhtml_parallel(client, settings, book, chapter, state)
-    if not ffiutil or type(ffiutil.runInSubProcess) ~= "function"
-        or type(ffiutil.isSubProcessDone) ~= "function"
-        or type(ffiutil.writeToFD) ~= "function"
-        or type(ffiutil.readAllFromFD) ~= "function" then
-        return Content.fetch_chapter_xhtml(client, settings, book, chapter, state)
-    end
-    if not (state and state.reader_state_ready and book.psvts) then
-        Content.refresh_reader_state(client, book, chapter)
-        if state then state.reader_state_ready = true end
-    end
-
-    local book_id = book.book_id or book.bookId
-    local root = state and state.workspace and state.workspace.path
-        or Content.book_resolved_dir(settings, book_id, book)
-    local dir = root .. string.format("/.weread-shards-%d-%d", os.time(), math.random(100000, 999999))
-    make_path(dir)
-    local endpoints = { "/web/book/chapter/e_0", "/web/book/chapter/e_1", "/web/book/chapter/e_3" }
-    local jobs = {}
-    local function send_status(fd, status)
-        local ok, encoded = pcall(client.json_encode, client, status)
-        if not ok then encoded = "{}" end
-        ffiutil.writeToFD(fd, encoded, true)
-    end
-    local function read_file(path)
-        local file, err = io.open(path, "rb")
-        if not file then error(err or ("missing shard file: " .. path)) end
-        local data = file:read("*a")
-        file:close()
-        return data
-    end
-
-    local launch_ok, launch_err = pcall(function()
-        for _i, endpoint in ipairs(endpoints) do
-            local shard_path = dir .. "/shard-" .. tostring(_i)
-            local pid, read_fd = ffiutil.runInSubProcess(function(_pid, write_fd)
-                local ok, result = pcall(function()
-                    local text = Content.fetch_chapter_shard(
-                        client, settings, book, chapter, endpoint)
-                    local file, err = io.open(shard_path, "wb")
-                    if not file then error(err or "could not create shard file") end
-                    local write_ok, write_err = file:write(text)
-                    file:close()
-                    if not write_ok then error(write_err or "could not write shard file") end
-                end)
-                if ok then
-                    send_status(write_fd, { ok = true })
-                else
-                    send_status(write_fd, { ok = false, error = tostring(result) })
-                end
-            end, true)
-            if not pid then error(read_fd or "could not start shard worker") end
-            jobs[#jobs + 1] = {
-                endpoint = endpoint,
-                path = shard_path,
-                pid = pid,
-                read_fd = read_fd,
-            }
-        end
-    end)
-    if not launch_ok then
-        for _i, job in ipairs(jobs) do
-            if ffiutil.terminateSubProcess then pcall(ffiutil.terminateSubProcess, job.pid) end
-        end
-        os.execute("rm -rf " .. string.format("%q", dir))
-        error(launch_err, 0)
-    end
-
-    local pending = #jobs
-    local deadline = os.time() + 90
-    while pending > 0 do
-        for _i, job in ipairs(jobs) do
-            if not job.done then
-                local done = ffiutil.isSubProcessDone(job.pid)
-                local readable = type(ffiutil.getNonBlockingReadSize) == "function"
-                    and ffiutil.getNonBlockingReadSize(job.read_fd) or 0
-                if done or readable > 0 then
-                    local payload = ffiutil.readAllFromFD(job.read_fd) or ""
-                    local decoded_ok, status = pcall(
-                        client.json_decode, client, payload)
-                    if not decoded_ok or type(status) ~= "table" or status.ok ~= true then
-                        for _j, other in ipairs(jobs) do
-                            if not other.done and ffiutil.terminateSubProcess then
-                                pcall(ffiutil.terminateSubProcess, other.pid)
-                            end
-                        end
-                        os.execute("rm -rf " .. string.format("%q", dir))
-                        error((type(status) == "table" and status.error)
-                            or "chapter shard worker failed")
-                    end
-                    job.done = true
-                    pending = pending - 1
-                end
-            end
-        end
-        if pending > 0 then
-            if os.time() >= deadline then
-                for _i, job in ipairs(jobs) do
-                    if not job.done and ffiutil.terminateSubProcess then
-                        pcall(ffiutil.terminateSubProcess, job.pid)
-                    end
-                end
-                os.execute("rm -rf " .. string.format("%q", dir))
-                error("chapter shard workers timed out")
-            end
-            if socket and socket.sleep then socket.sleep(0.05) end
-        end
-    end
-
-    local result = {}
-    for _i, job in ipairs(jobs) do
-        result[job.endpoint] = read_file(job.path)
-    end
-    os.execute("rm -rf " .. string.format("%q", dir))
-    local e0 = result["/web/book/chapter/e_0"]
-    if e0:sub(1, 1) == "{" and e0:find('"bookId"', 1, true) then
-        book._content_format = "txt"
-        return Content.fetch_txt_as_xhtml(client, settings, book, chapter)
-    end
-    book._content_format = "epub"
-    return Content.decode_content_shards(
-        e0,
-        result["/web/book/chapter/e_1"],
-        result["/web/book/chapter/e_3"])
-end
-
 function Content.txt_to_xhtml(text)
     return Eink.txt_to_xhtml(text)
-end
-
-function Content.fetch_txt_as_xhtml(client, settings, book, chapter)
-    local t0 = Content.fetch_chapter_shard(client, settings, book, chapter, "/web/book/chapter/t_0")
-    local ok_t1, t1 = pcall(Content.fetch_chapter_shard, client, settings, book, chapter, "/web/book/chapter/t_1")
-    if not ok_t1 then t1 = "" end
-    local plain = Content.decode_content_shards(t0, t1, "")
-    return Content.txt_to_xhtml(plain)
-end
-
-function Content.fetch_chapter_xhtml(_client, _settings, _book, _chapter, _state)
-    error("web chapter shards are disabled")
 end
 
 -- Remove hostile zero-sized root rules from server CSS. Other zero font sizes
@@ -1786,22 +1469,6 @@ function Content.sanitize_book_css(css)
     end
     return sanitized, removed_total
 end
-
-function Content.fetch_chapter_css(client, settings, book, chapter)
-    local ok, css = pcall(function()
-        return Content.decode_content_shard(Content.fetch_chapter_shard(client, settings, book, chapter, "/web/book/chapter/e_2"))
-    end)
-    if ok then
-        local sanitized, removed = Content.sanitize_book_css(css)
-        if removed > 0 then
-            logger.warn("removed ", removed,
-                " hostile font-size:0 declarations from book css")
-        end
-        return sanitized
-    end
-    return nil
-end
-
 
 local function apply_chapter_annotations(client, settings, book, chapter, xhtml, css)
     local cache = settings:get("cache", {})

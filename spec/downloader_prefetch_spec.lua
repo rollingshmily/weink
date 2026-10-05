@@ -37,7 +37,7 @@ package.preload["ffi/util"] = function()
     }
 end
 package.preload["weread.lib.content"] = function()
-    return { ensure_reader_state = function() end }
+    return {}
 end
 package.preload["weread.ui.download_dialog"] = function()
     return {
@@ -70,7 +70,6 @@ local completions = {}
 local function fake_settings()
     local values = { cache = {}, books = {} }
     return {
-        is_cookie_configured = function() return true end,
         is_eink_configured = function() return true end,
         has_download_auth = function() return true end,
         get = function(_self, key, default)

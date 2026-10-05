@@ -1,5 +1,5 @@
 -- Upload local KOReader highlights/thoughts through the eink APIs.
--- Web gateway is not used. Missing login, chapter, or unique range skips upload.
+-- Missing login, chapter, or unique range skips upload.
 
 local Annotations = require("weread.lib.annotations")
 local Chapters = require("weread.lib.annotation_chapters")

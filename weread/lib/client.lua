@@ -2,7 +2,6 @@ local ltn12 = require("ltn12")
 local logger = require("weread.lib.logger")
 local socketutil = require("socketutil")
 local http = require("socket.http")
-local Cookie = require("weread.lib.cookie")
 local WeRead = require("weread.lib.protocol")
 local Eink = require("weread.lib.eink")
 
@@ -24,15 +23,6 @@ local function header_value(headers, name)
         if type(key) == "string" and key:lower() == target then return value end
     end
     return nil
-end
-
-local function scalar_header_value(headers, name)
-    local value = header_value(headers, name)
-    if type(value) == "table" then
-        if value[1] == nil then return nil end
-        return tostring(value[1])
-    end
-    return value
 end
 
 local function http_error(client, code, text, headers)
@@ -135,15 +125,6 @@ local function merge_req_opts(default_opts, user_opts)
     return result
 end
 
-local function is_weread_url(url)
-    local authority = tostring(url or ""):match("^https?://([^/]+)")
-    if not authority then
-        return false
-    end
-    local host = authority:lower():gsub(":%d+$", "")
-    return host == "weread.qq.com" or host:sub(-#".weread.qq.com") == ".weread.qq.com"
-end
-
 local function absolute_url(base_url, location)
     if type(location) ~= "string" or location == "" then
         return nil
@@ -232,15 +213,6 @@ function Client:request(opts)
         ["User-Agent"] = WeRead.USER_AGENT,
         ["Accept"] = "application/json, text/plain, */*"
     }
-    local is_handle_cookie = not opts.skip_cookie and is_weread_url(opts.url)
-
-    if is_handle_cookie then
-        local cookies = self.settings:get("cookies", {})
-        local cookie_header = Cookie.to_header(cookies)
-        if cookie_header ~= "" then
-            headers["Cookie"] = cookie_header
-        end
-    end
 
     if body then
         headers["Content-Length"] = tostring(#body)
@@ -274,6 +246,8 @@ function Client:request(opts)
     req_opts.diagnostic_api = nil
     local log_http_errors = req_opts.log_http_errors
     req_opts.log_http_errors = nil
+    req_opts.skip_cookie = nil
+    req_opts.persist_response_cookies = nil
 
     local results = { pcall(http.request, req_opts) }
     socketutil:reset_timeout()
@@ -293,12 +267,6 @@ function Client:request(opts)
     end
 
     if not opts.sink then response = table.concat(response) end
-    if is_handle_cookie and opts.persist_response_cookies ~= false then
-        local set_cookie = header_value(resp_headers, "set-cookie")
-        if set_cookie then
-            self.settings:merge_set_cookie(set_cookie)
-        end
-    end
 
     local code = tonumber(raw_code)
     if code and code >= 400 and log_http_errors ~= false then
@@ -523,57 +491,6 @@ function Client:get_binary(url, opts)
     error(http_error(self, code, text, resp_headers))
 end
 
-function Client:renew_cookie()
-    local result, code, resp_headers = self:post_json("https://weread.qq.com/web/login/renewal", {
-        rq = "%2Fweb%2Fbook%2Fread",
-        ql = false,
-    }, {
-        -- Do not persist renewal cookies until the response explicitly confirms
-        -- success; failed renewals must leave the current credential set intact.
-        persist_response_cookies = false,
-    })
-    if not WeRead.is_success_response(result) then
-        error("Cookie renewal response did not include succ=1")
-    end
-    local updates = {}
-    local set_cookie = header_value(resp_headers, "set-cookie")
-    if set_cookie then
-        updates.cookies = Cookie.merge_set_cookie(
-            self.settings:get("cookies", {}),
-            set_cookie
-        )
-    end
-    local wr_ticket = scalar_header_value(resp_headers, "x-wr-ticket")
-    if wr_ticket and wr_ticket ~= "" then
-        updates.wr_ticket = wr_ticket
-    end
-    local wr_wrpa = scalar_header_value(resp_headers, "x-wrpa-0")
-    if wr_wrpa and wr_wrpa ~= "" then
-        updates.wr_wrpa = wr_wrpa
-    end
-    self.settings:update_auth(updates, { replace_cookies = true })
-    return result, code, resp_headers
-end
-
-function Client:gateway(api_name, params)
-    local payload = merge_req_opts({
-        api_name = api_name,
-        skill_version = (params and params.skill_version) or WeRead.SKILL_VERSION
-    }, params)
-
-    local api_key = self.settings:get("api_key", "")
-    if api_key == "" then
-        error("WeRead API key is not configured")
-    end
-    return self:post_json("https://i.weread.qq.com/api/agent/gateway", payload, {
-        diagnostic_api = api_name,
-        skip_cookie = true,
-        headers = {
-            ["Authorization"] = "Bearer " .. api_key,
-        },
-    })
-end
-
 function Client:get_shelf()
     logger.info("shelf sync request:", "api=/shelf/sync", "auth=eink")
     local ok, result, code = pcall(self.eink_json, self, "/shelf/sync", {})
@@ -608,10 +525,6 @@ end
 
 function Client:get_progress(book_id)
     return self:eink_json("/book/getProgress", { bookId = tostring(book_id) })
-end
-
-function Client:get_web_progress(book_id)
-    return self:get_progress(book_id)
 end
 
 function Client:search_store(keyword, count)
@@ -653,22 +566,6 @@ local function merge_chapter_underlines(rows, seen, items, chapter_uid)
             rows[#rows + 1] = row
         end
     end
-end
-
-function Client:_web_chapter_underlines(book_id, chapter_uid)
-    local ok, result = pcall(function()
-        return self:gateway("/book/underlines", {
-            bookId = tostring(book_id),
-            chapterUid = chapter_uid,
-        })
-    end)
-    if not ok then
-        return false, nil, tostring(result)
-    end
-    if type(result) ~= "table" then
-        return false, nil, "underlines: gateway returned non-table"
-    end
-    return true, result
 end
 
 local function merge_own_and_popular(popular, own_items, chapter_uid)

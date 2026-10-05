@@ -35,7 +35,6 @@ end
 local fetched_chapters = { { chapterUid = 7, title = "Cached chapter" } }
 package.preload["weread.lib.content"] = function()
     return {
-        ensure_reader_state = function() end,
         fetch_catalog = function() return fetched_chapters end,
         catalog_cache_path = function() return "/cache/42/catalog.json" end,
         save_catalog_cache = function()

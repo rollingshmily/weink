@@ -289,8 +289,6 @@ function M:fetchVisibleShelfCovers(view, books, options)
             if not (ok and path) and online then
                 local downloaded, data = pcall(function()
                     return self.client:get_binary(book.cover, {
-                        skip_cookie = true,
-                        persist_response_cookies = false,
                         timeout = { 8, 12 },
                     })
                 end)
@@ -1604,67 +1602,6 @@ function M:searchWithUI(keyword)
         self:showList(T(_("Search: %1"), keyword), items, _("No search results."))
     end)
 end
-
-function M:showPasteReaderURL()
-    local dialog
-    dialog = InputDialog:new{
-        title = _("Paste WeRead reader URL"),
-        input = "https://weread.qq.com/web/reader/",
-        input_type = "text",
-        buttons = {
-            {
-                {
-                    text = _("Cancel"),
-                    id = "close",
-                    callback = self:safeCallback(_("Cancel"), function()
-                        UIManager:close(dialog)
-                    end),
-                },
-                {
-                    text = _("Parse"),
-                    is_enter_default = true,
-                    callback = self:safeCallback(_("Parse"), function()
-                        local url = dialog:getInputText()
-                        UIManager:close(dialog)
-                        self:parseReaderURLWithUI(url)
-                    end),
-                },
-            },
-        },
-    }
-    self:showInputDialog(dialog)
-end
-
-function M:parseReaderURLWithUI(url)
-    if not self:requireLogin(true, false) then
-        return
-    end
-    self:runNetworkAction(_("Parse reader URL"), function()
-        local html = self.client:get_text(url, { referer = url })
-        local book_id = html:match([["bookId"%s*:%s*"([^"]+)"]]) or html:match([["bookId"%s*:%s*(%d+)]])
-        local title = html:match([["title"%s*:%s*"([^"]+)"]]) or _("Unknown title")
-        local psvts = html:match([["psvts"%s*:%s*"([^"]+)"]])
-        local pclts = html:match([["pclts"%s*:%s*"([^"]+)"]])
-        local token = html:match([["token"%s*:%s*"([^"]+)"]])
-        if not book_id then
-            return _("Reader HTML loaded, but bookId was not found.")
-        end
-        local books = self.settings:get("books", {})
-        local record = books[book_id] or {}
-        record.book_id = book_id
-        record.title = title
-        record.reader_url = url
-        record.psvts = psvts
-        record.pclts = pclts
-        record.token = token
-        record.updated_at = os.time()
-        books[book_id] = record
-        self.settings:set("books", books)
-        self.settings:flush()
-        return T(_("Reader URL parsed.\nBook: %1\nbookId: %2"), title, book_id)
-    end)
-end
-
 
 function M:showCurrentBookDetails()
     local book_id = self:detectWeReadBook()

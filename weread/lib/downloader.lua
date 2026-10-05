@@ -59,7 +59,7 @@ Downloader.__index = Downloader
 --   show_info(text), show_transient(text, timeout),
 --   refresh_ui(), refresh_shelf(),
 --   open_file(path), safe_callback(label, fn),
---   require_login(cookie, api_key), run_online_task(label, fn),  -- host framework
+--   require_login(), run_online_task(label, fn),  -- host framework
 -- }
 function Downloader:new(o)
     o = o or {}
@@ -1421,7 +1421,7 @@ function Downloader:_footnoteStep(dl)
         dl.footnote_job = nil
         if job.css_needed then
             dl.state.css = (dl.state.css or "") .. "\n"
-                .. Footnotes.get_css(job.use_popup)
+                .. Footnotes.get_css()
         end
         self:_saveCheckpoint(dl)
         logger.info("book footnotes processed:",
@@ -1502,12 +1502,10 @@ function Downloader:_startFootnotes(dl)
             scans[uid] = dl.footnote_scans[uid]
         end
     end
-    local cache = self.settings and self.settings:get("cache") or {}
     dl.footnote_job = {
         index = 1,
         index_data = Footnotes.build_book_index(scans, dl.selected),
         css_needed = false,
-        use_popup = cache.book_footnotes_in_popup == true,
     }
     self:_scheduleGuarded(dl, function() self:_footnoteStep(dl) end)
 end

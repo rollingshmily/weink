@@ -28,24 +28,15 @@ end
 
 local Footnotes = require("weread.lib.footnotes")
 
-expect(Footnotes.FOOTNOTES_CSS:find(
-    "aside.wr%-book%-footnote{%-cr%-hint:footnote%-inpage") ~= nil,
-    "generated footnotes must use KOReader's default in-page flow")
 expect(not Footnotes.FOOTNOTES_CSS:find("visibility:hidden", 1, true),
-    "generated in-page footnotes must remain visible to CREngine")
-expect(Footnotes.FOOTNOTES_CSS:find(
-    "wr%-fn%-ref a{%-cr%-hint:noteref") ~= nil,
-    "generated references must be explicit KOReader noterefs")
+    "generated footnotes must remain visible to CREngine")
+expect(not Footnotes.FOOTNOTES_CSS:find("-cr-hint:", 1, true),
+    "footnote display must be left to KOReader native settings")
 expect(Footnotes.FOOTNOTES_CSS:find(
     "div.wr%-footnotes>hr{display:none") ~= nil,
     "the generated footnote container must not leave a visible separator")
-expect(Footnotes.get_css(false) == Footnotes.IN_PAGE_CSS,
-    "in-page footnotes should remain the default")
-expect(Footnotes.get_css(true) == Footnotes.POPUP_CSS
-        and Footnotes.POPUP_CSS:find(
-            "aside.wr%-book%-footnote{%-cr%-hint:footnote;", 1) ~= nil
-        and Footnotes.POPUP_CSS:find("visibility:hidden", 1, true) ~= nil,
-    "popup footnotes should use the previous hidden footnote flow")
+expect(Footnotes.get_css() == Footnotes.FOOTNOTES_CSS,
+    "downloaded books use one footnote stylesheet")
 
 local source = [[
 <p>正文<a epub:type="noteref" href="#note-1"><sup>[1]</sup></a></p>
