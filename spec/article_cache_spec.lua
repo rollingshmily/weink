@@ -1,15 +1,6 @@
 package.path = "./?.lua;./?/init.lua;" .. package.path
 
 package.preload["libs/libkoreader-lfs"] = function() return require("lfs") end
-package.preload["weread.lib.content"] = function()
-    return {
-        book_resolved_dir = function(_settings, _id, book) return book.cache_dir end,
-    }
-end
-package.preload["weread.lib.protocol"] = function()
-    return { is_mp_book = function(id) return tostring(id):match("^MP_WXS_") ~= nil end }
-end
-
 local ArticleCache = require("weread.lib.article_cache")
 local lfs = require("lfs")
 local checks = 0
@@ -25,43 +16,37 @@ end
 
 local root = os.tmpname() .. "-article-cache"
 os.remove(root)
-local settings = { meta_dir = root .. "/meta", cache_dir = root .. "/cache" }
-local mp_dir = settings.meta_dir .. "/MP_WXS_1"
-local asset_dir = mp_dir .. "/.weread-mp-article-assets"
-local standalone = settings.cache_dir .. "/articles/account"
-local legacy = root .. "/legacy/MP_WXS_2"
-for _, dir in ipairs({ asset_dir, standalone, legacy, settings.meta_dir .. "/BOOK_1" }) do
+local settings = { data_dir = root .. "/data", meta_dir = root .. "/meta",
+    cache_dir = root .. "/cache" }
+local standalone = settings.data_dir .. "/articles/account"
+local asset_dir = standalone .. "/.weread-article-assets"
+for _, dir in ipairs({ asset_dir, settings.meta_dir .. "/BOOK_1",
+        settings.cache_dir .. "/articles/old" }) do
     assert(os.execute("mkdir -p " .. string.format("%q", dir)) == 0)
 end
-write(mp_dir .. "/article.html", "article")
-write(mp_dir .. "/mp_articles.json", "[]")
-write(mp_dir .. "/thoughts.db", "notes")
 write(asset_dir .. "/img.jpg", "image")
 write(standalone .. "/new.html", "new")
-write(legacy .. "/old.html", "old")
+write(settings.cache_dir .. "/articles/old/old.html", "old")
 write(settings.meta_dir .. "/BOOK_1/book.html", "keep")
 local outside = root .. "-outside"
 assert(os.execute("mkdir -p " .. string.format("%q", outside)) == 0)
 write(outside .. "/unrelated.html", "private")
 assert(os.execute("ln -s " .. string.format("%q", outside) .. " "
-    .. string.format("%q", settings.meta_dir .. "/MP_WXS_link")) == 0)
+    .. string.format("%q", standalone .. "/external-link")) == 0)
 
-local snapshot = ArticleCache.snapshot(settings, {
-    MP_WXS_2 = { cache_dir = legacy },
-})
-expect(snapshot.count == 5, "new and legacy article files were not all found")
-expect(snapshot.size == 7 + 2 + 5 + 3 + 3, "article cache size mismatch")
+local snapshot = ArticleCache.snapshot(settings, {})
+expect(snapshot.count == 3, "current article files were not found")
+expect(snapshot.size == 5 + 3, "article cache size mismatch")
 local ok, err = ArticleCache.clear(snapshot, lfs)
 expect(ok, "article cache cleanup failed: " .. tostring(err))
-expect(lfs.attributes(mp_dir .. "/article.html") == nil, "MP article remains")
 expect(lfs.attributes(asset_dir) == nil, "article image assets remain")
 expect(lfs.attributes(standalone .. "/new.html") == nil, "standalone article remains")
-expect(lfs.attributes(legacy .. "/old.html") == nil, "legacy article remains")
-expect(lfs.attributes(mp_dir .. "/thoughts.db") ~= nil, "book thoughts were removed")
+expect(lfs.attributes(settings.cache_dir .. "/articles/old/old.html") ~= nil,
+    "article cleanup touched a different storage root")
 expect(lfs.attributes(settings.meta_dir .. "/BOOK_1/book.html") ~= nil,
     "non-article book content was removed")
 expect(lfs.attributes(outside .. "/unrelated.html") ~= nil,
-    "article cache cleanup followed a symlink outside its roots")
+    "article cache cleanup followed a symlink outside its root")
 
 assert(os.execute("rm -rf " .. string.format("%q", root)) == 0)
 assert(os.execute("rm -rf " .. string.format("%q", outside)) == 0)

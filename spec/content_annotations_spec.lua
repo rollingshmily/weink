@@ -109,16 +109,16 @@ expect(rewritten:find('src="../images/a.jpg"', 1, true),
 expect(rewritten:find('xlink:href="b.png"', 1, true),
     "non-src image attribute should be left unchanged")
 
-local body = Content.extract_mp_body(
+local body = Content.extract_article_body(
     '<div id="js_content"><p data-src="x.jpg">article</p>'
         .. '<script>bad()</script></div><script>after()</script>')
 expect(body and body:find('src="x.jpg"', 1, true)
     and not body:find("bad()", 1, true),
     "MP article body extraction did not normalize or sanitize content")
-expect(Content.extract_mp_body("<html>missing</html>") == nil,
+expect(Content.extract_article_body("<html>missing</html>") == nil,
     "missing MP body should return nil")
 
-local stripped = Content.strip_mp_images(
+local stripped = Content.strip_article_images(
     '<p>before<img src="x"/></p><picture><source src="y"/></picture><p>after</p>')
 expect(not stripped:lower():find("<img", 1, true)
     and not stripped:lower():find("<picture", 1, true)

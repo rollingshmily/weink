@@ -16,7 +16,7 @@
 | **国内 GitHub 代理** | 默认 [ghspeedup.com](https://ghspeedup.com/)（worker: `runn.i.ng` 路径模式）；备用 `gh-proxy.com`、`ghfast.top`、直连；失败自动换备用 |
 | **更新通道** | 自动（优先 Release，否则 `main`）/ 仅正式版 / 仅开发分支；可选启动时检查（默认关，12 小时节流） |
 | **自动 Release** | 修改 `_meta.lua` 的 `version` 并推送 `main` 后，GitHub Actions 自动打 tag 并上传 `weread.koplugin-v*.zip` |
-| **扁平书库 + 独立元数据** | 图书目录只放平铺 EPUB；想法/目录/metadata/公众号 HTML 进可配置的元数据目录（按 `bookId` 分夹）。默认元数据在 KOReader 数据目录 `weread/meta/`，不进书库 |
+| **扁平书库 + 独立元数据** | 图书目录只放平铺 EPUB；想法/目录/metadata 进可配置的元数据目录（按 `bookId` 分夹）。收藏与浮窗文章单独存在 KOReader 数据目录 `weread/articles/`，不进书库 |
 | **登录与缓存隔离** | 登录态在 `settings/weread.lua`，下载与元数据默认都不在 `plugins/`；覆盖/在线更新插件不会清掉扫码登录和已下载内容 |
 | **大书下载容错** | 章节 XHTML 和资源索引逐章落盘，支持整本下载断点续传；最终 EPUB 在子进程中构建，主界面轮询进度，默认章节并发数为 2（可调 1–4）；支持下载过程中暂停/继续，遇到风控可先停请求 |
 | **从原作者版平滑迁移** | 与上游共用同一配置文件与字段（`AUTH_SCHEMA_VERSION = 1`）；旧「每书一目录」仍可识别；损坏的空 metadata 路径会在启动时尝试修复 |
@@ -100,7 +100,7 @@
 - 图片及 EPUB 资源通过磁盘流式处理，大书和图片较多书籍下载时不再把全部资源同时压在内存里；完成、失败或取消后自动清理临时文件
 - 缓存管理：查看/清理单本或全部缓存；可分别设置**图书目录**与**元数据目录**；扫描本地缓存时会同时看这两个根（需联网，仅导入与微信读书书架 ID 匹配的目录）
 - 图书目录：新下载的 EPUB **平铺**保存（默认 `<KOReader 数据目录>/weread/cache`，可改到你的书库根目录）
-- 元数据目录：`catalog.json` / `metadata.json` / `reading_state.json` / `articles.json` / `thoughts.db` / 公众号 HTML 按 `<元数据目录>/<书籍 ID>/` 存放（默认 `<KOReader 数据目录>/weread/meta`）
+- 元数据目录：`catalog.json` / `metadata.json` / `reading_state.json` / `thoughts.db` 按 `<元数据目录>/<书籍 ID>/` 存放（默认 `<KOReader 数据目录>/weread/meta`）；微信文章 HTML 与图片保存在 `<KOReader 数据目录>/weread/articles/<账号>/`
 - `weread.lua` 只保留路径索引（`cache_dir`、`cached_file` 等）；打开书时 sidecar 写元数据目录，不再在书库根下冒空的 `bookId` 文件夹
 - 旧版「每书一目录」布局仍兼容；启动时会尝试把指到空壳 metadata 路径的 `cache_dir` 修回有内容的位置
 
@@ -203,7 +203,7 @@ koreader/plugins/weread.koplugin/
 ├── 设置
 │   ├── 缓存管理
 │   │   ├── 扫描并关联本地书籍
-│   │   ├── 缓存清理（含收藏/浮窗文章、旧公众号文章文件）
+│   │   ├── 缓存清理（含收藏/浮窗文章）
 │   │   └── 缓存目录
 │   ├── 进度管理
 │   │   ├── 打开时拉取进度（默认关闭）

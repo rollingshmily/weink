@@ -127,9 +127,8 @@ function LibraryDB:open()
                 PRIMARY KEY (list_type, review_id)
             ) WITHOUT ROWID
         ]])
-        -- v1.2.77 used review_id as the sole primary key. The same article can
-        -- be both a favorite and a floating article, so migrate in place while
-        -- retaining the older list and its cached file paths.
+        -- Discard incompatible article-table layouts; only the current
+        -- favorites/floating model is supported.
         local pragma = db:prepare("PRAGMA table_info(mp_articles)")
         local primary_key = {}
         local column = pragma:step()
@@ -141,10 +140,11 @@ function LibraryDB:open()
         pragma:close()
         if #primary_key > 0
             and (primary_key[1] ~= "list_type" or primary_key[2] ~= "review_id") then
-            local migration_ok, migration_err = pcall(function()
+            local reset_ok, reset_err = pcall(function()
                 db:exec("BEGIN")
+                db:exec("DROP TABLE mp_articles")
                 db:exec([[
-                    CREATE TABLE mp_articles_new (
+                    CREATE TABLE mp_articles (
                         review_id TEXT NOT NULL, list_type INTEGER NOT NULL,
                         idx INTEGER NOT NULL, key TEXT, book_id TEXT,
                         title TEXT NOT NULL, account TEXT, url TEXT,
@@ -155,14 +155,11 @@ function LibraryDB:open()
                         PRIMARY KEY (list_type, review_id)
                     ) WITHOUT ROWID
                 ]])
-                db:exec("INSERT INTO mp_articles_new SELECT * FROM mp_articles")
-                db:exec("DROP TABLE mp_articles")
-                db:exec("ALTER TABLE mp_articles_new RENAME TO mp_articles")
                 db:exec("COMMIT")
             end)
-            if not migration_ok then
+            if not reset_ok then
                 pcall(function() db:exec("ROLLBACK") end)
-                error(migration_err)
+                error(reset_err)
             end
         end
         -- Adds the richer detail snapshot for databases created by an early
@@ -204,8 +201,7 @@ function LibraryDB:cacheShelf(books)
             local book_id = book.book_id or book.bookId
             local payload, encode_err = encode(book)
             if book_id and payload then
-                local kind = tostring(book_id):match("^MP_WXS_") and "mp" or "book"
-                stmt:reset():bind(tostring(book_id), kind, payload, position, now):step()
+                stmt:reset():bind(tostring(book_id), "book", payload, position, now):step()
             elseif encode_err then
                 error(encode_err)
             end
@@ -264,8 +260,7 @@ function LibraryDB:putBook(book)
                 detail_payload=excluded.detail_payload,
                 detail_updated_at=excluded.detail_updated_at
         ]])
-        local kind = tostring(book_id):match("^MP_WXS_") and "mp" or "book"
-        stmt:reset():bind(tostring(book_id), kind, payload, payload, os.time()):step()
+        stmt:reset():bind(tostring(book_id), "book", payload, payload, os.time()):step()
     end)
     close_statement(stmt)
     pcall(function() db:close() end)
@@ -359,16 +354,6 @@ function LibraryDB:cacheMpArticles(list_type, articles)
     local ok, err = pcall(function()
         db:exec("BEGIN")
         transaction_open = true
-        local old_paths = {}
-        local old_stmt = db:prepare("SELECT review_id, cached_path FROM mp_articles WHERE list_type=?")
-        local old_row = old_stmt:reset():bind(list_type):step()
-        while old_row do
-            if old_row[2] and old_row[2] ~= "" then
-                old_paths[tostring(old_row[1])] = old_row[2]
-            end
-            old_row = old_stmt:step()
-        end
-        old_stmt:close()
         local del_stmt = db:prepare("DELETE FROM mp_articles WHERE list_type=?")
         del_stmt:reset():bind(list_type):step()
         del_stmt:close()
@@ -389,12 +374,13 @@ function LibraryDB:cacheMpArticles(list_type, articles)
                 local book_id = item.bookId or item.book_id or ""
                 local title = item.title or "Untitled"
                 local account = item.account or item.mpName or ""
-                local url = item.url or ""
+                local url = (item.url and item.url ~= "" and item.url)
+                    or item.sourceUrl or ""
                 local thumb_url = item.thumbUrl or item.thumb_url or ""
                 local mpavatar = item.mpavatar or item.avatar or ""
                 local update_time = tonumber(item.updateTime or item.update_time) or now
                 local from_wechat = (item.fromWechat == 1 or item.from_wechat == 1) and 1 or 0
-                local cached_path = item.cached_path or item.cachedPath or old_paths[review_id] or ""
+                local cached_path = ""
                 local is_read = (item.is_read == 1 or item.isRead == 1) and 1 or 0
                 stmt:reset():bind(
                     review_id, list_type, idx, tostring(item.key or ""),

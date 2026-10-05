@@ -1,8 +1,4 @@
--- Inventory and remove plugin-owned standalone WeChat article files.
--- Keep book catalogs, thoughts and other sidecars in MP_WXS_ directories.
-
-local Content = require("weread.lib.content")
-local WeRead = require("weread.lib.protocol")
+-- Inventory and remove only files owned by the current WeChat article cache.
 
 local ArticleCache = {}
 
@@ -34,7 +30,7 @@ local function children(fs, path)
     end
 end
 
-function ArticleCache.snapshot(settings, books, fs)
+function ArticleCache.snapshot(settings, _books, fs)
     fs = fs or filesystem()
     local roots, seen_roots = {}, {}
     local function add_root(path)
@@ -46,23 +42,8 @@ function ArticleCache.snapshot(settings, books, fs)
         end
     end
 
-    local meta_root = normalized(settings.meta_dir)
-    if meta_root then
-        for name in children(fs, meta_root) do
-            if name:match("^MP_WXS_") then add_root(meta_root .. "/" .. name) end
-        end
-    end
-    if type(settings.cache_dir) == "string" then
-        add_root(settings.cache_dir .. "/articles")
-    end
-    if type(settings.data_dir) == "string" then
-        add_root(settings.data_dir .. "/articles")
-    end
-    for book_id, book in pairs(books or {}) do
-        if WeRead.is_mp_book(book_id) then
-            add_root(Content.book_resolved_dir(settings, book_id, book))
-        end
-    end
+    local root = settings.data_dir or settings.cache_dir
+    if type(root) == "string" then add_root(root .. "/articles") end
 
     local files, dirs, seen_files = {}, {}, {}
     local total_size = 0
@@ -72,23 +53,21 @@ function ArticleCache.snapshot(settings, books, fs)
         files[#files + 1] = path
         total_size = total_size + (attr.size or 0)
     end
-    local function walk(path, in_assets)
+    local function walk(path)
         for name in children(fs, path) do
             local child = path .. "/" .. name
             local attr = attributes(fs, child)
             if attr and attr.mode == "directory" then
-                local assets = in_assets or name:match("^%.weread%-mp%-.*%-assets$") ~= nil
-                walk(child, assets)
-                if assets then dirs[#dirs + 1] = child end
+                walk(child)
+                dirs[#dirs + 1] = child
             elseif attr and attr.mode == "file" then
-                if in_assets or name:match("%.html$") or name:match("%.epub$")
-                    or name == "mp_articles.json" then
-                    add_file(child, attr)
-                end
+                add_file(child, attr)
+            elseif attr and attr.mode == "link" then
+                add_file(child, { size = 0 })
             end
         end
     end
-    for _, root in ipairs(roots) do walk(root, false) end
+    for _, path in ipairs(roots) do walk(path) end
     table.sort(dirs, function(a, b) return #a > #b end)
     return { files = files, dirs = dirs, size = total_size, count = #files }
 end

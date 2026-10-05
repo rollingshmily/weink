@@ -83,8 +83,8 @@ do
         end,
     }
     local article = {
-        bookId = "MP_WXS_12345",
-        reviewId = "MP_WXS_12345_abc",
+        bookId = "article-source-12345",
+        reviewId = "article-review-abc",
         url = "https://mp.weixin.qq.com/s/test",
         title = "Test Article",
         thumbUrl = "https://mmbiz.qpic.cn/thumb.jpg",
@@ -92,8 +92,8 @@ do
     }
     local res = client:eink_report_mp_read(article, false)
     expect(posted_path == "/mp/read", "report_mp_read path mismatch")
-    expect(posted_payload.bookId == "MP_WXS_12345", "bookId payload mismatch")
-    expect(posted_payload.reviewId == "MP_WXS_12345_abc", "reviewId payload mismatch")
+    expect(posted_payload.bookId == "article-source-12345", "bookId payload mismatch")
+    expect(posted_payload.reviewId == "article-review-abc", "reviewId payload mismatch")
     expect(posted_payload.url == "https://mp.weixin.qq.com/s/test", "url payload mismatch")
     expect(posted_payload.title == "Test Article", "title payload mismatch")
     expect(posted_payload.account == "Test MP", "account payload mismatch")
@@ -103,22 +103,6 @@ do
     -- delete action
     client:eink_report_mp_read(article, true)
     expect(posted_payload.isDelete == 1, "isDelete true mismatch")
-end
-
--- 3. eink_mp_notifications query format
-do
-    local notif_path, notif_params
-    local client = make_client {
-        eink_json = function(_self, path, params)
-            notif_path = path
-            notif_params = params
-            return { todayNew = 1, favourite = 2, floating = 3 }
-        end,
-    }
-    local res = client:eink_mp_notifications(1, 2, 3)
-    expect(notif_path == "/mp/notifications", "notifications path mismatch")
-    expect(notif_params.todayNew == 1 and notif_params.favourite == 2 and notif_params.floating == 3, "params mismatch")
-    expect(res.floating == 3, "response mismatch")
 end
 
 if failures > 0 then

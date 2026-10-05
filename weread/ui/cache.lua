@@ -7,7 +7,6 @@ local logger = require("weread.lib.logger")
 local PathChooser = require("ui/widget/pathchooser")
 local Scan = require("weread.lib.scan")
 local UIManager = require("ui/uimanager")
-local WeRead = require("weread.lib.protocol")
 
 local PluginUtil = require("weread.lib.plugin_util")
 local _ = PluginUtil.tr
@@ -20,13 +19,13 @@ local M = {}
 
 function M:setArticleImageDownload(enabled)
     local cache = self.settings:get("cache")
-    cache.download_mp_images = enabled == true
+    cache.download_article_images = enabled == true
     self.settings:set("cache", cache)
     self.settings:flush()
     logger.info(
         "image download setting changed:",
         "target=wechat_articles",
-        "enabled=", tostring(cache.download_mp_images)
+        "enabled=", tostring(cache.download_article_images)
     )
 end
 
@@ -593,7 +592,6 @@ function M:showCacheManagement()
     end
 
     local function add_cache_entry(book_id, book)
-        if WeRead.is_mp_book(book_id) then return end
         local book_dir = Content.book_resolved_dir(self.settings, book_id, book)
         local key = book_dir or book_id
         if seen_dirs[key] then
@@ -730,7 +728,6 @@ function M:scanLocalCache(root, allowed, dry_run)
         fs = lfs,
         books = books,
         allowed = allowed,
-        is_mp = WeRead.is_mp_book,
         dry_run = dry_run,
         now = os.time(),
     })
@@ -865,15 +862,6 @@ function M:clearAllArticleCache()
     if self.library_db and not self.library_db:clearMpArticles() then
         return false, _("Could not clear cached WeChat article lists")
     end
-    for book_id, book in pairs(books) do
-        if WeRead.is_mp_book(book_id) then
-            book.mp_articles = nil
-            book.mp_articles_file = nil
-            book.mp_articles_time = nil
-        end
-    end
-    self.settings:set("books", books)
-    self.settings:flush()
     self:refreshShelfCacheIndicators()
     return true
 end

@@ -30,12 +30,6 @@ end
 package.preload["weread.lib.logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
-package.preload["weread.lib.protocol"] = function()
-    return {
-        is_mp_book = function() return false end,
-        mp_reader_url = function() return "https://weread.qq.com" end,
-    }
-end
 package.preload["weread.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,
@@ -49,17 +43,17 @@ package.preload["weread.lib.plugin_util"] = function()
 end
 package.preload["weread.lib.content"] = function()
     return {
-        is_valid_mp_article_cache = function(path)
+        is_valid_article_cache = function(path)
             return path and path:find("/cache/", 1, true) ~= nil
         end,
-        mp_article_cached_path = function(_settings, _book, article)
+        article_cached_path = function(_settings, _book, article)
             if article.reviewId == "cached_1" then return "/cache/cached_1.html" end
             return nil
         end,
-        fetch_mp_article_html = function(_client, _settings, _book, article)
+        fetch_article_html = function(_client, _settings, _book, article)
             return "/cache/" .. article.reviewId .. ".html"
         end,
-        save_mp_article_html = function()
+        save_article_html = function()
             error("fetched file path must not be saved as article body")
         end,
     }
@@ -116,7 +110,6 @@ local host = {
         end,
     },
     shelf_regular = { { bookId = "b1" }, { bookId = "b2" } },
-    shelf_mp = {},
     safeCallback = function(_self, _name, fn) return fn end,
     runOnlineTask = function(_self, _label, fn) fn() end,
     showBusy = function() end,

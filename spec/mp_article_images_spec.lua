@@ -9,7 +9,9 @@ end
 package.preload["weread.lib.logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
-package.preload["weread.lib.crypto"] = function() return {} end
+package.preload["weread.lib.crypto"] = function()
+    return { sha256_hex = function(value) return string.rep("a", 64) end }
+end
 package.preload["weread.lib.reader_state"] = function() return {} end
 package.preload["weread.lib.protocol"] = function()
     return {
@@ -46,8 +48,8 @@ function client:download_to_file(url, path, opts)
 end
 
 local progress = {}
-local settings = { cache_dir = root }
-local book = { book_id = "mp-book", cache_dir = root }
+local settings = { data_dir = root }
+local book = nil
 local article = { reviewId = "review/1", title = "Disk images",
     url = "https://mp.weixin.qq.com/s/article" }
 local body = [[
@@ -59,7 +61,7 @@ local body = [[
 
 collectgarbage("collect")
 local before_kb = collectgarbage("count")
-local rewritten = Content.download_mp_images_to_files(
+local rewritten = Content.download_article_images_to_files(
     client, settings, book, article, body, function(index, total)
         progress[#progress + 1] = { index, total }
     end)
@@ -78,7 +80,7 @@ expect(#progress == 2 and progress[1][1] == 1 and progress[1][2] == 2
         and progress[2][1] == 2 and progress[2][2] == 2,
     "MP image progress did not count unique URLs")
 
-local relative = ".weread-mp-review_1-assets/img-0001.png"
+local relative = ".weread-article-" .. string.rep("a", 24) .. "-assets/img-0001.png"
 local first_reference = rewritten:find(relative, 1, true)
 local second_reference = first_reference
     and rewritten:find(relative, first_reference + #relative, true)
@@ -94,11 +96,13 @@ expect(rewritten:match("https://mmbiz%.qlogo%.cn/avatar/fail"),
 expect(rewritten:match("https://example%.test/untouched%.png"),
     "non-MP image source was unexpectedly rewritten")
 
-local image = assert(io.open(root .. "/" .. relative, "rb"))
+local article_dir = Content.article_path(settings, book, article):match("^(.*)/[^/]+$")
+local image = assert(io.open(article_dir .. "/" .. relative, "rb"))
 expect(image:read(8) == "\137PNG\r\n\026\n",
     "streamed MP image bytes were corrupted")
 image:close()
-expect(io.open(root .. "/.weread-mp-review_1-assets/img-0001.download", "rb")
+expect(io.open(article_dir .. "/.weread-article-" .. string.rep("a", 24)
+        .. "-assets/img-0001.download", "rb")
         == nil,
     "successful MP image download left an incoming file")
 expect(after_kb - before_kb < 1024,

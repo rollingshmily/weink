@@ -7,7 +7,6 @@ local InfoMessage = require("ui/widget/infomessage")
 local logger = require("weread.lib.logger")
 local UIManager = require("ui/uimanager")
 local ThoughtPopup = require("weread.ui.thought_popup")
-local WeRead = require("weread.lib.protocol")
 
 local PluginUtil = require("weread.lib.plugin_util")
 local _ = PluginUtil.tr
@@ -260,15 +259,13 @@ function M:getMainMenuItems()
         local book_id = self:detectWeReadBook()
         local reader_items = {}
         if book_id ~= nil then
-            if not WeRead.is_mp_book(book_id) then
-                reader_items[#reader_items + 1] = {
-                    text = _("Sync progress now"),
-                    keep_menu_open = true,
-                    callback = self:safeCallback(_("Sync progress now"), function()
-                        self:onWeReadSyncProgress()
-                    end),
-                }
-            end
+            reader_items[#reader_items + 1] = {
+                text = _("Sync progress now"),
+                keep_menu_open = true,
+                callback = self:safeCallback(_("Sync progress now"), function()
+                    self:onWeReadSyncProgress()
+                end),
+            }
             reader_items[#reader_items + 1] = {
                 text = _("Book details"),
                 keep_menu_open = true,
@@ -499,12 +496,12 @@ function M:getSettingsMenuItems()
                         text = _("WeChat article images (favorites and floating)"),
                         keep_menu_open = true,
                         checked_func = function()
-                            return self.settings:get("cache").download_mp_images
+                            return self.settings:get("cache").download_article_images
                         end,
                         check_callback_updates_menu = true,
                         callback = self:safeCallback(_("WeChat article images (favorites and floating)"), function(touchmenu_instance)
                             local cache = self.settings:get("cache")
-                            if cache.download_mp_images then
+                            if cache.download_article_images then
                                 self:setArticleImageDownload(false)
                                 touchmenu_instance:updateItems()
                                 return

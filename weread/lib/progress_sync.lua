@@ -70,10 +70,6 @@ local function make_subprocess_runner()
     }
 end
 
-local function is_mp_book(book_id)
-    return tostring(book_id or ""):sub(1, 7) == "MP_WXS_"
-end
-
 local function document_path(document)
     if not document then return nil end
     return document.file
@@ -346,7 +342,7 @@ end
 
 function ProgressSync:capture_local()
     local book_id = self.detect_book()
-    if not book_id or is_mp_book(book_id) then
+    if not book_id then
         return nil, "document_not_weread"
     end
     book_id = tostring(book_id)
@@ -1049,7 +1045,7 @@ function ProgressSync:on_reader_ready()
     self.scheduler:scheduleIn(OPEN_DELAY_SECONDS, function()
         if generation ~= self.generation then return end
         local book_id = self.detect_book()
-        if not book_id or is_mp_book(book_id) then
+        if not book_id then
             self.state = "unsupported"
             return
         end
@@ -1231,8 +1227,7 @@ end
 
 function ProgressSync:position_for_report(book_id)
     local current = self.detect_book()
-    if not current or tostring(current) ~= tostring(book_id)
-        or is_mp_book(book_id) then
+    if not current or tostring(current) ~= tostring(book_id) then
         return nil, nil, false
     end
     if not self.verified then

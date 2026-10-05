@@ -65,9 +65,6 @@ end
 package.preload["weread.lib.logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
-package.preload["weread.lib.protocol"] = function()
-    return { is_mp_book = function() return false end }
-end
 package.preload["weread.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,
@@ -105,7 +102,6 @@ end
 local shelf_settings = { sort_order = "time_desc", paginated = true, view_mode = "list" }
 local host = {
     shelf_regular = shelf,
-    shelf_mp = {},
     settings = {
         get = function(_self, key, default)
             if key == "books" then return {} end

@@ -1,6 +1,6 @@
 -- WeChat (公众号) article HTML cleanup specs.
 -- Verifies strip_mp_reader_font_styles + strip_blank_mp_blocks through
--- Content.save_mp_article_html against a WeChat-editor-style raw article.
+-- Content.save_article_html against a WeChat-editor-style raw article.
 -- Run with: luajit spec/content_mp_cleanup_spec.lua
 
 package.path = "./?.lua;./?/init.lua;" .. package.path
@@ -14,11 +14,10 @@ end
 package.preload["logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
-package.preload["weread.lib.crypto"] = function() return {} end
-package.preload["weread.lib.reader_state"] = function() return {} end
-package.preload["weread.lib.protocol"] = function()
-    return { mp_reader_url = function() return "https://weread.qq.com/" end }
+package.preload["weread.lib.crypto"] = function()
+    return { sha256_hex = function(value) return string.rep("a", 64) end }
 end
+package.preload["weread.lib.reader_state"] = function() return {} end
 package.preload["weread.lib.thoughts"] = function() return {} end
 
 local Content = require("weread.lib.content")
@@ -51,16 +50,16 @@ local raw = [[
 <font face="宋体">宋体字</font><o:p></o:p><span mpa-font->裸属性span</span>
 ]]
 
-local settings = { meta_dir = "/tmp/weread-mp-spec-meta" }
-local book = { book_id = "MP_X", title = "测试公众号" }
-local article = { title = "测试文章" }
+local settings = { data_dir = "/tmp/weread-article-spec" }
+local book = nil
+local article = { reviewId = "article-1", title = "测试文章" }
 
-local path = Content.save_mp_article_html(settings, book, article, raw)
+local path = Content.save_article_html(settings, book, article, raw)
 local f = assert(io.open(path, "rb"), "saved article not found")
 local out = f:read("*a")
 f:close()
-expect(Content.is_valid_mp_article_cache(path), "new article cache marker missing")
-expect(Content.mp_article_cached_path(settings, book, article) == path,
+expect(Content.is_valid_article_cache(path), "new article cache marker missing")
+expect(Content.article_cached_path(settings, book, article) == path,
     "new article cache was not reused")
 
 local body = out:match("<body>(.*)</body>") or out
@@ -148,8 +147,34 @@ expect(count(body, "宋体段落") == 1 and count(body, "仿宋段落") == 1
 local legacy = assert(io.open(path, "wb"))
 legacy:write("<html><body><h1>测试文章</h1>/cache/测试文章.html</body></html>")
 legacy:close()
-expect(not Content.is_valid_mp_article_cache(path), "old title-only cache must be rejected")
-expect(Content.mp_article_cached_path(settings, book, article) == nil,
+expect(not Content.is_valid_article_cache(path), "old title-only cache must be rejected")
+expect(Content.article_cached_path(settings, book, article) == nil,
     "old title-only cache must trigger a fresh download")
+
+local source_reads = 0
+local source_client = {
+    get_public_text = function(_self, url)
+        source_reads = source_reads + 1
+        expect(url == "https://mp.weixin.qq.com/s/test", "wrong article source URL")
+        return '<div id="js_content"><p>直连正文</p></div><script></script>',
+            { content_type = "text/html", length = 66 }
+    end,
+}
+article.url = "https://mp.weixin.qq.com/s/test"
+local direct_path = Content.fetch_article_html(source_client, settings, book, article)
+expect(direct_path == path and source_reads == 1,
+    "article download did not use the source URL directly")
+expect(Content.is_valid_article_cache(direct_path),
+    "direct article download did not create current cache")
+article.url = ""
+article.sourceUrl = "https://mp.weixin.qq.com/s/test"
+Content.fetch_article_html(source_client, settings, book, article)
+expect(source_reads == 2, "sourceUrl fallback was not used")
+article.url = "https://example.com/article"
+article.sourceUrl = nil
+local invalid_ok = pcall(Content.fetch_article_html,
+    source_client, settings, book, article)
+expect(not invalid_ok and source_reads == 2,
+    "invalid source URL was accepted or fetched")
 
 print(string.format("content_mp_cleanup_spec: %d checks, 0 failure(s)", checks))

@@ -18,7 +18,7 @@ end
 local mock_tables = {
     mp_articles = {
         { review_id = "fav_1", list_type = 1, idx = 1,
-          cached_path = "/legacy/fav1.html", title = "Old favorite" },
+          cached_path = "/old/fav1.html", title = "Old favorite" },
     },
 }
 local schema_old, migrations = true, 0
@@ -28,9 +28,10 @@ package.preload["lua-ljsqlite3/init"] = function()
         open = function(_path)
             local db = {}
             db.exec = function(_db, sql)
-                if sql:find("ALTER TABLE mp_articles_new RENAME TO mp_articles", 1, true) then
+                if sql == "DROP TABLE mp_articles" then
                     schema_old = false
                     migrations = migrations + 1
+                    mock_tables.mp_articles = {}
                 end
             end
             db.close = function() end
@@ -58,15 +59,6 @@ package.preload["lua-ljsqlite3/init"] = function()
                             { 0, "review_id", "TEXT", 1, nil, 2 },
                             { 1, "list_type", "INTEGER", 1, nil, 1 },
                         })[self.row_idx]
-                    elseif self.sql:find("SELECT review_id, cached_path FROM mp_articles", 1, true) then
-                        self.row_idx = (self.row_idx or 0) + 1
-                        local matched = {}
-                        for _, row in ipairs(mock_tables.mp_articles) do
-                            if row.list_type == self.args[1] then
-                                matched[#matched + 1] = { row.review_id, row.cached_path }
-                            end
-                        end
-                        return matched[self.row_idx]
                     elseif self.sql:find("DELETE FROM mp_articles WHERE list_type=?", 1, true) then
                         local lt = self.args[1]
                         local filtered = {}
@@ -166,7 +158,7 @@ local db = LibraryDB:new(settings)
 -- Test 1: cacheMpArticles and getMpArticles for listType 1 (favorites) and 2 (floating)
 local fav_articles = {
     { reviewId = "fav_1", title = "Favorite 1", account = "Account A", url = "https://mp.weixin.qq.com/1" },
-    { reviewId = "fav_2", title = "Favorite 2", account = "Account B", url = "https://mp.weixin.qq.com/2" },
+    { reviewId = "fav_2", title = "Favorite 2", account = "Account B", sourceUrl = "https://mp.weixin.qq.com/2" },
     { reviewId = "fav_1", title = "Duplicate favorite" },
 }
 local float_articles = {
@@ -175,15 +167,17 @@ local float_articles = {
 }
 
 expect(db:cacheMpArticles(1, fav_articles) == true, "cache favorites failed")
-expect(migrations == 1, "legacy review_id primary key was not migrated exactly once")
+expect(migrations == 1, "incompatible article table was not reset exactly once")
 expect(db:cacheMpArticles(2, float_articles) == true, "cache floating failed")
 
 local fetched_favs = db:getMpArticles(1)
 expect(type(fetched_favs) == "table" and #fetched_favs == 2, "getMpArticles(1) length mismatch")
 expect(fetched_favs[1].title == "Favorite 1", "fav 1 title mismatch")
-expect(fetched_favs[1].cached_path == "/legacy/fav1.html",
-    "migration or list refresh lost the existing article cache path")
+expect(fetched_favs[1].cached_path == nil,
+    "incompatible article cache path survived table reset")
 expect(fetched_favs[2].account == "Account B", "fav 2 account mismatch")
+expect(fetched_favs[2].url == "https://mp.weixin.qq.com/2",
+    "offline article lost its WeChat source URL")
 
 local fetched_floats = db:getMpArticles(2)
 expect(type(fetched_floats) == "table" and #fetched_floats == 2, "getMpArticles(2) length mismatch")
@@ -191,12 +185,12 @@ expect(fetched_floats[1].title == "Float 1", "float 1 title mismatch")
 expect(fetched_floats[2].reviewId == "fav_1", "same article should coexist in both lists")
 
 -- Test 2: updateMpArticleCachePath
-expect(db:updateMpArticleCachePath("fav_1", "/path/to/fav1.epub") == true, "update cache path failed")
+expect(db:updateMpArticleCachePath("fav_1", "/path/to/fav1.html") == true, "update cache path failed")
 local updated_favs = db:getMpArticles(1)
-expect(updated_favs[1].cached_path == "/path/to/fav1.epub", "cached_path not updated")
+expect(updated_favs[1].cached_path == "/path/to/fav1.html", "cached_path not updated")
 expect(db:cacheMpArticles(1, fav_articles), "refresh favorites failed")
-expect(db:getMpArticles(1)[1].cached_path == "/path/to/fav1.epub",
-    "list refresh discarded the downloaded article path")
+expect(db:getMpArticles(1)[1].cached_path == nil,
+    "list refresh retained a stale article path")
 
 -- Test 3: removeMpArticle
 expect(db:removeMpArticle("fav_1") == true, "remove article failed")

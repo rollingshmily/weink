@@ -30,9 +30,6 @@ package.preload["weread.lib.logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
 package.preload["weread.lib.scan"] = function() return {} end
-package.preload["weread.lib.protocol"] = function()
-    return { is_mp_book = function(id) return tostring(id):match("^MP_WXS_") ~= nil end }
-end
 package.preload["weread.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,
@@ -73,6 +70,6 @@ host_items[1].callback()
 expect(shown_dialog and shown_dialog.ok_callback, "article cleanup confirmation missing")
 shown_dialog.ok_callback()
 expect(cleared_lists == 1, "favorites/floating list cache was not cleared")
-expect(saved == 1, "legacy article pointers were not saved after cleanup")
+expect(saved == 0, "article cleanup changed book records")
 
 print(("cache_articles_ui_spec: %d checks"):format(checks))

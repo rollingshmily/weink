@@ -74,14 +74,6 @@ expect(menu_refreshes == 4,
 host:showReadReportBookPicker()
 expect(picker_options and picker_options.mode == "books",
     "report picker did not open on the books tab")
-expect(picker_options.wp_enable == false,
-    "report picker did not disable the public-accounts tab")
-
-picker_options.on_select(
-    { bookId = "mp_1", title = "Account" }, "public_account", {}
-)
-expect(config.book_id == "", "disabled public-account selection changed the target")
-
 local view = {}
 host.shelf_view = view
 picker_options.on_select({ bookId = "book_1", title = "Book One" }, "books", view)

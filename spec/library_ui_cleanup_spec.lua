@@ -36,9 +36,6 @@ package.preload["weread.ui.book_reviews_view"] = function() return {} end
 package.preload["weread.lib.content"] = function()
     return { load_catalog_cache = function() return nil end }
 end
-package.preload["weread.lib.protocol"] = function()
-    return { is_mp_book = function() return false end }
-end
 package.preload["weread.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,

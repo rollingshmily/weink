@@ -31,11 +31,6 @@ local reading_fields = {
     verified_source = true,
 }
 
-local article_fields = {
-    mp_articles = true,
-    mp_articles_time = true,
-}
-
 local function basename_safe(value)
     value = tostring(value or ""):gsub("[^%w%._-]", "_")
     return value ~= "" and value or "weread"
@@ -80,7 +75,6 @@ local function dir_has_sidecar(dir)
         or file_exists(dir .. "/thoughts.db")
         or file_exists(dir .. "/metadata.json")
         or file_exists(dir .. "/reading_state.json")
-        or file_exists(dir .. "/articles.json")
 end
 
 -- Sidecar directory only. Never derive from flat EPUB parent directory.
@@ -176,7 +170,6 @@ function BookStore.load(settings, book_id, index)
     local dir = resolved_dir(settings, book_id, index)
     merge(book, read_json(dir .. "/metadata.json"))
     merge(book, read_json(dir .. "/reading_state.json"))
-    merge(book, read_json(dir .. "/articles.json"))
     book.book_id = book.book_id or book.bookId or tostring(book_id)
     book.cache_dir = dir
     return book
@@ -189,11 +182,8 @@ function BookStore.save(settings, book_id, book)
 
     local metadata = { book_id = book.book_id or book.bookId or tostring(book_id) }
     local reading_state = {}
-    local articles = {}
     for key, value in pairs(book) do
-        if article_fields[key] then
-            articles[key] = value
-        elseif reading_fields[key] then
+        if reading_fields[key] then
             reading_state[key] = value
         elseif key ~= "chapters" and key ~= "cache_dir" and key ~= "bookId" then
             metadata[key] = value
@@ -207,12 +197,6 @@ function BookStore.save(settings, book_id, book)
         if not ok then return false, err end
     else
         os.remove(dir .. "/reading_state.json")
-    end
-    if has_values(articles) then
-        ok, err = write_json(dir .. "/articles.json", articles)
-        if not ok then return false, err end
-    else
-        os.remove(dir .. "/articles.json")
     end
     local index = { cache_dir = dir }
     if type(book.cached_file) == "string" and book.cached_file ~= "" then

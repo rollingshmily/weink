@@ -10,7 +10,6 @@ local logger = require("weread.lib.logger")
 local ProgressbarDialog = require("ui/widget/progressbardialog")
 local TextViewer = require("ui/widget/textviewer")
 local UIManager = require("ui/uimanager")
-local WeRead = require("weread.lib.protocol")
 
 local PluginUtil = require("weread.lib.plugin_util")
 local _ = PluginUtil.tr
@@ -109,7 +108,6 @@ function M:onWeReadAccountChanged()
     end
     self:closeWeReadUI()
     self.shelf_regular = nil
-    self.shelf_mp = nil
     self.shelf_books = nil
     self.shelf_search_keyword = nil
     self.shelf_view_pages = nil
@@ -127,13 +125,8 @@ function M:applyShelfSnapshot(all_books)
     local shelf = self.settings:get("shelf")
     self.shelf_filters = { reading = shelf.filter_reading, download = shelf.filter_download }
     self.shelf_regular = {}
-    self.shelf_mp = {}
     for _i, book in ipairs(all_books or {}) do
-        if WeRead.is_mp_book(book.book_id or book.bookId) then
-            table.insert(self.shelf_mp, book)
-        else
-            table.insert(self.shelf_regular, book)
-        end
+        table.insert(self.shelf_regular, book)
     end
     self.shelf_books = self.shelf_regular
 end
@@ -161,14 +154,6 @@ function M:refreshBookshelf(old_view, view_options)
         local shelf = self.settings:get("shelf")
         self.shelf_filters = { reading = shelf.filter_reading, download = shelf.filter_download }
         self.shelf_regular = {}
-        self.shelf_mp = {}
-        for _i, book in ipairs(all_books) do
-            if WeRead.is_mp_book(book.bookId) then
-                table.insert(self.shelf_mp, book)
-            else
-                table.insert(self.shelf_regular, book)
-            end
-        end
         if self.library_db then
             self.library_db:cacheShelf(all_books)
         end
@@ -976,11 +961,8 @@ function M:renderWeChatArticleList(list_type, title, articles, old_view)
     local mode = list_type == 1 and "favorites" or "floating"
     local rows = {}
     for _, article in ipairs(articles or {}) do
-        local cached_path = article.cached_path
-        if not Content.is_valid_mp_article_cache(cached_path) then
-            cached_path = Content.mp_article_cached_path(self.settings, nil, article)
-        end
-        if not Content.is_valid_mp_article_cache(cached_path) then
+        local cached_path = Content.article_cached_path(self.settings, nil, article)
+        if not Content.is_valid_article_cache(cached_path) then
             cached_path = nil
         end
         article._cached_path = cached_path
@@ -1010,7 +992,7 @@ function M:renderWeChatArticleList(list_type, title, articles, old_view)
         end,
         on_select = function(article)
             local path = article._cached_path
-            if path and Content.is_valid_mp_article_cache(path) and file_exists(path) then
+            if path and Content.is_valid_article_cache(path) and file_exists(path) then
                 self:openFile(path)
             else
                 self:downloadWeChatArticleAndRead(article, list_type)
@@ -1034,7 +1016,7 @@ function M:downloadWeChatArticleAndRead(article, list_type, on_complete)
         self:showBusy(T(_("Downloading article: %1"), article.title or ""))
         local progress_dialog
         local ok, path_or_err = pcall(function()
-            local saved_path = Content.fetch_mp_article_html(self.client, self.settings, nil, article, {
+            local saved_path = Content.fetch_article_html(self.client, self.settings, nil, article, {
                 progress = function(current, total)
                     if not progress_dialog then
                         self:closeBusy()
@@ -1048,7 +1030,7 @@ function M:downloadWeChatArticleAndRead(article, list_type, on_complete)
                     progress_dialog:reportProgress(current)
                 end,
             })
-            if not saved_path or not Content.is_valid_mp_article_cache(saved_path) then
+            if not saved_path or not Content.is_valid_article_cache(saved_path) then
                 error("article cache is invalid")
             end
             if self.library_db and article.reviewId then

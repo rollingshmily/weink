@@ -606,8 +606,7 @@ function Client:get_shelf()
         "response=", table_summary(result),
         "books=", table_summary(type(result) == "table" and result.books or nil),
         "archive=", table_summary(type(result) == "table" and result.archive or nil),
-        "albums=", table_summary(type(result) == "table" and result.albums or nil),
-        "mp=", table_summary(type(result) == "table" and result.mp or nil)
+        "albums=", table_summary(type(result) == "table" and result.albums or nil)
     )
     return result, code, headers
 end
@@ -654,40 +653,6 @@ function Client:get_read_stats(mode, base_time)
         params.baseTime = tonumber(base_time)
     end
     return self:gateway("/readdata/detail", params)
-end
-
-function Client:get_mp_content(review_id, opts)
-    opts = opts or {}
-    local url = "https://weread.qq.com/web/mp/content?reviewId=" .. WeRead.urlencode(review_id)
-
-    local custom_headers = {
-        ["Accept"] = "text/html,application/xhtml+xml,*/*",
-        ["Referer"] = opts.referer or "https://weread.qq.com/",
-    }
-    if not opts.skip_mp_auth_headers then
-        local wr_ticket = self.settings:get("wr_ticket", "")
-        if wr_ticket ~= "" then custom_headers["x-wr-ticket"] = wr_ticket end
-
-        local wrpa = self.settings:get("wr_wrpa", "")
-        if wrpa ~= "" then custom_headers["x-wrpa-0"] = wrpa end
-    end
-
-    local text, code, resp_headers = self:request({
-        url = url,
-        method = "GET",
-        headers = custom_headers,
-        timeout = opts.timeout,
-    })
-
-    if code and code >= 200 and code < 300 then
-        return text, {
-            code = code,
-            content_type = header_value(resp_headers, "content-type"),
-            length = #(text or ""),
-            url = url,
-        }
-    end
-    error(http_error(self, code, text, resp_headers))
 end
 
 function Client:report_read(payload, referer)
@@ -1491,21 +1456,14 @@ function Client:eink_report_mp_read(article, is_delete)
     local payload = {
         bookId = tostring(article.bookId or article.book_id or ""),
         reviewId = tostring(article.reviewId or article.review_id or ""),
-        url = tostring(article.url or article.sourceUrl or ""),
+        url = tostring((article.url and article.url ~= "" and article.url)
+            or article.sourceUrl or ""),
         title = tostring(article.title or ""),
         thumbUrl = tostring(article.thumbUrl or article.thumb_url or ""),
         account = tostring(article.account or article.mpName or ""),
         isDelete = is_delete and 1 or 0,
     }
     return self:eink_post_json("/mp/read", payload)
-end
-
-function Client:eink_mp_notifications(today_new, favourite, floating)
-    return self:eink_json("/mp/notifications", {
-        todayNew = tonumber(today_new) or 0,
-        favourite = tonumber(favourite) or 0,
-        floating = tonumber(floating) or 0,
-    })
 end
 
 return Client

@@ -3,7 +3,6 @@ local Eink = require("weread.lib.eink")
 local ReaderState = require("weread.lib.reader_state")
 local WeRead = require("weread.lib.protocol")
 local Thoughts = require("weread.lib.thoughts")
-local bit = require("bit")
 local logger = require("weread.lib.logger")
 local Checkpoint = require("weread.lib.download_checkpoint")
 local ok_ffiutil, ffiutil = pcall(require, "ffi/util")
@@ -14,30 +13,6 @@ if not ok_socket then socket = nil end
 local Content = {}
 
 local b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-
-local function base64_encode(data)
-    local out = {}
-    local len = #data
-    for i = 1, len, 3 do
-        local a = data:byte(i)
-        local b = i + 1 <= len and data:byte(i + 1) or 0
-        local c = i + 2 <= len and data:byte(i + 2) or 0
-        local n = a * 65536 + b * 256 + c
-        table.insert(out, b64chars:sub(bit.rshift(n, 18) % 64 + 1, bit.rshift(n, 18) % 64 + 1))
-        table.insert(out, b64chars:sub(bit.rshift(n, 12) % 64 + 1, bit.rshift(n, 12) % 64 + 1))
-        if i + 1 <= len then
-            table.insert(out, b64chars:sub(bit.rshift(n, 6) % 64 + 1, bit.rshift(n, 6) % 64 + 1))
-        else
-            table.insert(out, "=")
-        end
-        if i + 2 <= len then
-            table.insert(out, b64chars:sub(n % 64 + 1, n % 64 + 1))
-        else
-            table.insert(out, "=")
-        end
-    end
-    return table.concat(out)
-end
 
 local function basename_safe(value)
     value = tostring(value or ""):gsub("[^%w%._-]", "_")
@@ -93,7 +68,7 @@ function Content.book_content_dir(settings)
     return settings.cache_dir
 end
 
--- Canonical per-book sidecar root: catalog/thoughts/metadata/MP html.
+-- Canonical per-book sidecar root: catalog/thoughts/metadata.
 -- Always keyed by bookId under settings.meta_dir so content and metadata stay
 -- linked even when EPUBs are flat title-named files in the book library.
 function Content.book_meta_dir(settings, book_id)
@@ -125,10 +100,9 @@ local function dir_has_sidecar(dir)
         or path_exists(dir .. "/thoughts.db")
         or path_exists(dir .. "/metadata.json")
         or path_exists(dir .. "/reading_state.json")
-        or path_exists(dir .. "/articles.json")
 end
 
--- Resolve sidecar directory for thoughts/catalog/metadata/MP articles.
+-- Resolve sidecar directory for thoughts/catalog/metadata.
 -- Priority:
 --   1) explicit book.cache_dir when it still holds sidecars (or is the canonical meta path)
 --   2) legacy combined layout: parent of cached_file/chapter when parent is <bookId>
@@ -2130,7 +2104,7 @@ function Content.fetch_first_chapter(client, settings, book)
     return Content.fetch_chapter_epub(client, settings, book, chapter)
 end
 
-function Content.extract_mp_body(html)
+function Content.extract_article_body(html)
     html = tostring(html or "")
     local body = html:match('<div[^>]*id="js_content"[^>]*>(.-)</div>%s*<script')
     if not body then
@@ -2302,7 +2276,7 @@ local function strip_mp_reader_font_styles(html)
 end
 
 
-function Content.strip_mp_images(html)
+function Content.strip_article_images(html)
     html = tostring(html or "")
     html = html:gsub(
         "<[pP][iI][cC][tT][uU][rR][eE][^>]*>.-</[pP][iI][cC][tT][uU][rR][eE]%s*>",
@@ -2475,57 +2449,12 @@ local function strip_blank_mp_blocks(html)
     return html
 end
 
-function Content.download_mp_images(client, body_html, progress, embed_base64)
-    local assets = {}
-    local used_names = {}
-    local img_total = 0
-    body_html:gsub('src=(["\'])(.-)%1', function(quote, src)
-        if src:match("mmbiz%.qpic%.cn") or src:match("mmbiz%.qlogo%.cn") then
-            img_total = img_total + 1
-        end
-    end)
-    local index = 0
-    local body = body_html:gsub('src=(["\'])(.-)%1', function(quote, src)
-        if not src:match("mmbiz%.qpic%.cn") and not src:match("mmbiz%.qlogo%.cn") then
-            return "src=" .. quote .. src .. quote
-        end
-        index = index + 1
-        if progress then
-            progress(index, img_total)
-        end
-        local url = src
-        if url:match("^//") then
-            url = "https:" .. url
-        end
-        local ok, data = pcall(function()
-            return client:get_binary(url, { referer = "https://weread.qq.com/" })
-        end)
-        if not ok or not data or #data == 0 then
-            return "src=" .. quote .. src .. quote
-        end
-        local ext, mt = media_type_for(data)
-        if embed_base64 then
-            local b64 = base64_encode(data)
-            return "src=" .. quote .. "data:" .. mt .. ";base64," .. b64 .. quote
-        end
-        local fname = unique_asset_name(used_names, "img" .. tostring(index), ext)
-        local href = image_href(nil, fname)
-        table.insert(assets, {
-            href = href,
-            media_type = mt,
-            data = data,
-        })
-        return "src=" .. quote .. "../" .. href .. quote
-    end)
-    return body, assets
-end
-
-function Content.download_mp_images_to_files(
+function Content.download_article_images_to_files(
         client, settings, book, article, body_html, progress)
     body_html = tostring(body_html or "")
-    local html_path = Content.mp_article_path(settings, book, article)
+    local html_path = Content.article_path(settings, book, article)
     local article_dir = html_path:match("^(.*)/[^/]+$")
-    if not article_dir then error("Could not resolve public-account article directory") end
+    if not article_dir then error("Could not resolve WeChat article directory") end
 
     local function normalize_url(src)
         local url = tostring(src or ""):gsub("&amp;", "&")
@@ -2537,12 +2466,13 @@ function Content.download_mp_images_to_files(
         return url
     end
 
-    local book_identifier = article.reviewId or article.originalId or article.bookId
-        or (book and (book.book_id or book.bookId)) or article.title or "article"
-    local asset_name = ".weread-mp-" .. basename_safe(book_identifier) .. "-assets"
+    local asset_name = ".weread-article-"
+        .. tostring(html_path:match("([^/]+)%.html$")) .. "-assets"
     local asset_dir = article_dir .. "/" .. asset_name
     ensure_directory(asset_dir)
-    local source_url = tostring(article.url or article.sourceUrl or "")
+    local source_url = tostring(
+        (article.url and article.url ~= "" and article.url)
+        or article.sourceUrl or "")
     local image_referer = source_url:match("^https://mp%.weixin%.qq%.com/")
         and source_url or "https://mp.weixin.qq.com/"
 
@@ -2615,45 +2545,43 @@ function Content.download_mp_images_to_files(
     return body
 end
 
-function Content.mp_article_path(settings, book, article)
-    local book_id = book and (book.book_id or book.bookId) or (article and article.bookId)
-    local dir
-    if book_id and book_id ~= "" then
-        dir = Content.book_resolved_dir(settings, book_id, book)
-    else
-        local root = settings and (settings.cache_dir or settings.data_dir) or "/tmp/weread-articles"
-        local sub = article and (article.account or article.mpName) or "wechat"
-        dir = root .. "/articles/" .. filename_safe(sub)
-        pcall(function() os.execute("mkdir -p " .. string.format("%q", dir)) end)
+function Content.article_path(settings, book, article)
+    local root = settings and (settings.data_dir or settings.cache_dir) or "/tmp/weread"
+    local account = settings and type(settings.get) == "function"
+        and settings:get("account", {}) or {}
+    local vid = type(account) == "table" and account.user_vid or nil
+    if not vid or tostring(vid) == "" then
+        local eink = settings and type(settings.get) == "function"
+            and settings:get("eink", {}) or {}
+        vid = type(eink) == "table" and eink.vid or nil
     end
-    local title = filename_safe(article and article.title or "article")
-    return dir .. "/" .. title .. ".html"
+    local account_key = vid and tostring(vid) ~= ""
+        and Crypto.sha256_hex("weread-articles:" .. tostring(vid)):sub(1, 20)
+        or "anonymous"
+    local dir = root .. "/articles/" .. account_key
+    local review_id = article and (article.reviewId or article.review_id or article.key)
+    if not review_id or tostring(review_id) == "" then
+        error("Article review ID is missing", 0)
+    end
+    local key = Crypto.sha256_hex(tostring(review_id)):sub(1, 24)
+    return dir .. "/" .. key .. ".html"
 end
 
-function Content.mp_article_cached_path(settings, book, article)
-    local html_path = Content.mp_article_path(settings, book, article)
-    if Content.is_valid_mp_article_cache(html_path) then
+function Content.article_cached_path(settings, book, article)
+    local html_path = Content.article_path(settings, book, article)
+    if Content.is_valid_article_cache(html_path) then
         return html_path
-    end
-    local f
-    local epub_path = html_path:gsub("%.html$", ".epub")
-    f = io.open(epub_path, "r")
-    if f then
-        f:close()
-        return epub_path
     end
     return nil
 end
 
-function Content.is_valid_mp_article_cache(path)
+function Content.is_valid_article_cache(path)
     if type(path) ~= "string" or not path:match("%.html$") then return false end
     local f = io.open(path, "rb")
     if not f then return false end
     local header = f:read(1024) or ""
     f:close()
-    -- Older builds overwrote the fetched body with its local filename. Force
-    -- one fresh download rather than opening that title-only cached page.
-    return header:find('name="weread-mp-cache-version" content="2"', 1, true) ~= nil
+    return header:find('name="weread-article-cache-version" content="3"', 1, true) ~= nil
 end
 
 -- CREngine's standalone-HTML mode ignores inline style attributes (only EPUB
@@ -2783,18 +2711,14 @@ local function mp_typography_to_legacy(html)
     return html, css_defs
 end
 
-function Content.save_mp_article_html(settings, book, article, body_html)
+function Content.save_article_html(settings, book, article, body_html)
     if not body_html or body_html:match("^%s*$") then
         error("article body content is empty", 0)
     end
     local mp_css
-    local book_id = book and (book.book_id or book.bookId) or (article and article.bookId)
-    -- MP articles stay in the sidecar tree so the flat library only holds EPUBs.
-    if book_id and book_id ~= "" then
-        Content.ensure_book_meta_dir(settings, book_id, book)
-    end
     local title = article.title or "Article"
-    local path = Content.mp_article_path(settings, book, article)
+    local path = Content.article_path(settings, book, article)
+    ensure_directory(path_dirname(path))
     body_html = strip_mp_reader_font_styles(body_html)
     body_html = strip_blank_mp_blocks(body_html)
     body_html, mp_css = mp_typography_to_legacy(body_html)
@@ -2803,7 +2727,7 @@ function Content.save_mp_article_html(settings, book, article, body_html)
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<meta name="weread-mp-cache-version" content="2"/>
+<meta name="weread-article-cache-version" content="3"/>
 <title>]] .. xml_escape(title) .. [[</title>
 <style>
 html, body {
@@ -2868,95 +2792,24 @@ section, div {
     return path
 end
 
-function Content.fetch_mp_article_html(client, settings, book, article, opts)
+function Content.fetch_article_html(client, settings, book, article, opts)
     opts = opts or {}
-    local book_id = article.bookId
-    if not book_id or book_id == "" then
-        book_id = book and (book.book_id or book.bookId) or nil
+    local source_url = tostring(
+        (article.url and article.url ~= "" and article.url)
+        or article.sourceUrl or "")
+    if not source_url:match("^https?://mp%.weixin%.qq%.com/") then
+        error("WeChat article source URL is missing or invalid", 0)
     end
-    local referer = book_id and book_id ~= "" and WeRead.mp_reader_url(book_id) or "https://weread.qq.com/"
-    local candidate_ids = {}
-    local seen_ids = {}
-    local function add_candidate(review_id)
-        review_id = tostring(review_id or "")
-        if review_id ~= "" and not seen_ids[review_id] then
-            seen_ids[review_id] = true
-            table.insert(candidate_ids, review_id)
-        end
-    end
-    add_candidate(article.reviewId)
-    for _, review_id in ipairs(article.reviewIds or {}) do
-        add_candidate(review_id)
-    end
-    add_candidate(article.originalId)
-    add_candidate(tostring(article.reviewId or ""):match("^MP_WXS_%d+_(.+)$"))
-
-    local html, meta, used_review_id
-    local attempts = {}
-    local function fetch_candidates(prefix, request_opts)
-        for candidate_index, review_id in ipairs(candidate_ids) do
-            local ok, candidate_html, candidate_meta = pcall(function()
-                return client:get_mp_content(review_id, {
-                    referer = referer,
-                    skip_mp_auth_headers = request_opts and request_opts.skip_mp_auth_headers,
-                })
-            end)
-            if ok then
-                table.insert(
-                    attempts,
-                    prefix .. tostring(candidate_index) .. ":" .. tostring(candidate_meta and candidate_meta.length or #(candidate_html or ""))
-                )
-                if candidate_html and not candidate_html:match("^%s*$") then
-                    html = candidate_html
-                    meta = candidate_meta
-                    used_review_id = review_id
-                    return true
-                end
-                meta = meta or candidate_meta
-            else
-                table.insert(attempts, prefix .. tostring(candidate_index) .. ":error")
-            end
-        end
-        return false
-    end
-
-    fetch_candidates("")
-    if not html or html:match("^%s*$") then
-        logger.info("MP content empty, renewing cookie before retry")
-        local renew_ok = pcall(function()
-            return client:renew_cookie()
-        end)
-        table.insert(attempts, renew_ok and "renew:ok" or "renew:error")
-        if renew_ok then
-            fetch_candidates("renewed:", { skip_mp_auth_headers = true })
-        end
-    end
-
-    local source_url = tostring(article.url or article.sourceUrl or "")
-    if (not html or html:match("^%s*$")) and source_url:match("^https?://mp%.weixin%.qq%.com/") then
-        local ok, source_html, source_meta = pcall(function()
-            return client:get_public_text(source_url)
-        end)
-        if ok and source_html and not source_html:match("^%s*$") then
-            html = source_html
-            meta = source_meta
-            used_review_id = "source_url"
-        else
-            table.insert(attempts, "source_url:error")
-        end
-    end
-    local body = Content.extract_mp_body(html)
+    local html, meta = client:get_public_text(source_url)
+    local body = Content.extract_article_body(html)
     if not body then
         local empty_response = not html or html:match("^%s*$") ~= nil
         logger.warn(
             "could not extract MP article body:",
             "reason=", empty_response and "empty_response" or "missing_body",
-            "candidate_count=", tostring(#candidate_ids),
-            "used_candidate=", used_review_id and "yes" or "no",
             "html_length=", tostring(meta and meta.length or #(html or "")),
             "content_type=", tostring(meta and meta.content_type or ""),
-            "attempts=", table.concat(attempts, ","),
-            "has_source_url=", source_url ~= "" and "yes" or "no"
+            "has_source_url=", "yes"
         )
         if empty_response then
             error("Article content response is empty. See KOReader log for details.", 0)
@@ -2965,13 +2818,13 @@ function Content.fetch_mp_article_html(client, settings, book, article, opts)
     end
     local cache = (settings and type(settings.get) == "function" and settings:get("cache", {}))
         or (settings and settings.cache) or {}
-    if cache.download_mp_images then
-        body = Content.download_mp_images_to_files(
+    if cache.download_article_images then
+        body = Content.download_article_images_to_files(
             client, settings, book, article, body, opts.progress)
     else
-        body = Content.strip_mp_images(body)
+        body = Content.strip_article_images(body)
     end
-    return Content.save_mp_article_html(settings, book, article, body)
+    return Content.save_article_html(settings, book, article, body)
 end
 
 return Content

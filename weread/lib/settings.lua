@@ -44,7 +44,7 @@ local defaults = {
     },
     cache = {
         download_book_images = true,
-        download_mp_images = false,
+        download_article_images = false,
         book_footnotes_in_popup = false,
         download_underlines_and_thoughts = false,
         prefetch_annotations = false,
@@ -99,7 +99,7 @@ local defaults = {
         view_mode = "list",
     },
     download_dir = "",
-    -- Sidecar root for thoughts.db / catalog / metadata / MP articles.
+    -- Sidecar root for thoughts.db, catalogs and book metadata.
     -- Kept separate from download_dir so EPUB files can sit flat in the library.
     meta_dir = "",
 }
@@ -146,7 +146,7 @@ function Settings:new()
     local download_dir = obj.store:readSetting("download_dir", "")
     obj.cache_dir = (type(download_dir) == "string" and download_dir ~= "") and download_dir or obj.default_cache_dir
     ensure_dir(obj.cache_dir)
-    -- meta_dir: per-bookId sidecar folders (thoughts/catalog/metadata/MP html)
+    -- meta_dir: per-bookId sidecar folders (thoughts/catalog/metadata)
     local meta_dir = obj.store:readSetting("meta_dir", "")
     obj.meta_dir = (type(meta_dir) == "string" and meta_dir ~= "") and meta_dir or obj.default_meta_dir
     -- Guard: never default metadata into the book library root.
@@ -161,8 +161,12 @@ function Settings:new()
         cache.download_book_images = cache.download_images ~= false
         cache_changed = true
     end
-    if cache.download_mp_images == nil then
-        cache.download_mp_images = false
+    if cache.download_article_images == nil then
+        cache.download_article_images = false
+        cache_changed = true
+    end
+    if cache.download_mp_images ~= nil then
+        cache.download_mp_images = nil
         cache_changed = true
     end
     if cache.book_footnotes_in_popup == nil then
