@@ -59,6 +59,9 @@ local path = Content.save_mp_article_html(settings, book, article, raw)
 local f = assert(io.open(path, "rb"), "saved article not found")
 local out = f:read("*a")
 f:close()
+expect(Content.is_valid_mp_article_cache(path), "new article cache marker missing")
+expect(Content.mp_article_cached_path(settings, book, article) == path,
+    "new article cache was not reused")
 
 local body = out:match("<body>(.*)</body>") or out
 
@@ -141,5 +144,12 @@ expect(count(body, "mp%-quote") == 0, "mp-quote noise must be dropped")
 expect(count(body, 'style="font%-family:%s*"Fang Song') == 0, "quoted family must not break the style attribute")
 expect(count(body, "宋体段落") == 1 and count(body, "仿宋段落") == 1
     and count(body, "默认正文") == 1 and count(body, "引用字体段落") == 1, "font-family test text lost")
+
+local legacy = assert(io.open(path, "wb"))
+legacy:write("<html><body><h1>测试文章</h1>/cache/测试文章.html</body></html>")
+legacy:close()
+expect(not Content.is_valid_mp_article_cache(path), "old title-only cache must be rejected")
+expect(Content.mp_article_cached_path(settings, book, article) == nil,
+    "old title-only cache must trigger a fresh download")
 
 print(string.format("content_mp_cleanup_spec: %d checks, 0 failure(s)", checks))

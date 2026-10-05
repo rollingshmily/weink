@@ -1,4 +1,4 @@
--- Full-screen, e-ink-friendly bookshelf with direct Books/Public Accounts tabs.
+-- Full-screen, e-ink-friendly bookshelf with Books/Favorites/Floating tabs.
 
 local Blitbuffer = require("ffi/blitbuffer")
 local Button = require("ui/widget/button")
@@ -61,7 +61,11 @@ function ShelfRow:init()
     local padding = Size.padding.large
     local inner_width = self.width - 2 * padding
     local face = Font:getFace("cfont", self.font_size)
-    local status_widget = TextWidget:new{ text = self.status or "", face = face }
+    local status_widget = TextWidget:new{
+        text = self.status or "",
+        face = face,
+        max_width = math.floor(inner_width * 0.35),
+    }
     local status_width = status_widget:getSize().w
     local gap = Size.padding.large
     local title_widget = TextWidget:new{
@@ -255,6 +259,7 @@ local LibraryView = FocusManager:extend{
     wp_enable = true,
     books = nil,
     accounts = nil,
+    articles = nil,
     keyword = nil,
     sort_label = nil,
     filter_label = nil,
@@ -279,14 +284,15 @@ local LibraryView = FocusManager:extend{
 function LibraryView:tabBar()
     local tabs = {
         { mode = "books", text = T(_("Books (%1)"), #(self.books or {})) },
-        { mode = "articles", text = _("WeChat Articles") },
+        { mode = "favorites", text = _("Favorites") },
+        { mode = "floating", text = _("Floating") },
     }
     local cell_w = math.floor(self.screen_w / #tabs)
     local row = HorizontalGroup:new{}
     self._tab_buttons = {}
     for index, tab in ipairs(tabs) do
         local active = tab.mode == self.mode
-        local enabled = tab.mode ~= "articles" or self.wp_enable ~= false
+        local enabled = tab.mode == "books" or self.wp_enable ~= false
         local width = index == #tabs and self.screen_w - cell_w or cell_w
         local button = Button:new{
             text = tab.text,
@@ -319,6 +325,21 @@ function LibraryView:tabBar()
 end
 
 function LibraryView:actionBar()
+    if self.mode == "favorites" or self.mode == "floating" then
+        local refresh_button = Button:new{
+            text = _("↻ Get latest"),
+            width = self.screen_w,
+            radius = 0, margin = 0, bordersize = 0,
+            show_parent = self,
+            callback = function() if self.on_refresh then self.on_refresh() end end,
+        }
+        self._action_secondary = { refresh_button }
+        self._action_primary = {}
+        return FrameContainer:new{
+            bordersize = 0, padding = 0, margin = 0,
+            HorizontalGroup:new{ refresh_button },
+        }
+    end
     local cell_w = math.floor(self.screen_w / 2)
     local search_label = self.keyword and self.keyword ~= ""
         and T(_("⌕ Search: %1"), self.keyword) or _("⌕ Search shelf")
@@ -374,6 +395,10 @@ function LibraryView:actionBar()
 end
 
 function LibraryView:itemStatus(book)
+    if self.mode == "favorites" or self.mode == "floating" then
+        local account = book.account or book.mpName or ""
+        return book._cached and (account ~= "" and "✓  " .. account or "✓") or account
+    end
     if self.mode == "public_account" then return book.author or "" end
     local status = ""
     if book.readUpdateTime and book.readUpdateTime > 0 then
@@ -388,8 +413,9 @@ function LibraryView:itemStatus(book)
 end
 
 function LibraryView:preparePagination()
-    local source = self.mode == "public_account"
-        and (self.accounts or {}) or (self.books or {})
+    local source = (self.mode == "favorites" or self.mode == "floating")
+        and (self.articles or {})
+        or (self.mode == "public_account" and (self.accounts or {}) or (self.books or {}))
     self.page_size = math.max(1, math.floor(tonumber(self.page_size) or 10))
     if self.cover_mode and self.mode == "books" then
         local columns = math.max(1, math.floor(tonumber(self.cover_columns) or 3))
@@ -406,8 +432,9 @@ function LibraryView:preparePagination()
 end
 
 function LibraryView:content()
-    local source = self.mode == "public_account"
-        and (self.accounts or {}) or (self.books or {})
+    local source = (self.mode == "favorites" or self.mode == "floating")
+        and (self.articles or {})
+        or (self.mode == "public_account" and (self.accounts or {}) or (self.books or {}))
     local content = VerticalGroup:new{
         align = "left",
         HorizontalSpan:new{ width = self.list_width },
@@ -417,7 +444,9 @@ function LibraryView:content()
     if #source == 0 then
         table.insert(content, VerticalSpan:new{ width = Size.padding.large })
         table.insert(content, TextWidget:new{
-            text = self.keyword and self.keyword ~= "" and _("No shelf matches.") or _("No items."),
+            text = (self.mode == "favorites" or self.mode == "floating")
+                and _("No WeChat articles.")
+                or (self.keyword and self.keyword ~= "" and _("No shelf matches.") or _("No items.")),
             face = Font:getFace("cfont", 20),
             max_width = self.content_width,
         })
@@ -570,11 +599,10 @@ function LibraryView:init()
         show_parent = self,
         VerticalGroup:new{ align = "left", content },
     }
-    local rows = {
-        self._tab_buttons,
-        self._action_secondary,
-        self._action_primary,
-    }
+    local rows = { self._tab_buttons }
+    if #self._action_secondary > 0 then rows[#rows + 1] = self._action_secondary end
+    if #self._action_primary > 0 then rows[#rows + 1] = self._action_primary end
+    local fixed_rows = #rows
     for _i, item_row in ipairs(self._focus_item_rows) do
         rows[#rows + 1] = item_row
     end
@@ -587,8 +615,7 @@ function LibraryView:init()
         for _i, button in ipairs(self._page_buttons) do outside_scroll[button] = true end
     end
     FocusNav.apply(self, rows, { scroll = scroll, outside_scroll = outside_scroll })
-    -- Items follow the three fixed rows (tabs, secondary, primary actions).
-    FocusNav.initialFocus(self, 1, #rows > 3 and 4 or 1)
+    FocusNav.initialFocus(self, 1, #rows > fixed_rows and fixed_rows + 1 or 1)
     self[1] = FrameContainer:new{
         background = Blitbuffer.COLOR_WHITE,
         bordersize = 0, padding = 0, margin = 0,
@@ -637,6 +664,7 @@ function M.show(data, callbacks)
         wp_enable = data.wp_enable ~= false,
         books = data.books,
         accounts = data.accounts,
+        articles = data.articles,
         keyword = data.keyword,
         sort_label = data.sort_label,
         filter_label = data.filter_label,

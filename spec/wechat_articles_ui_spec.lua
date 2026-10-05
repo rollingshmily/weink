@@ -49,22 +49,35 @@ package.preload["weread.lib.plugin_util"] = function()
 end
 package.preload["weread.lib.content"] = function()
     return {
+        is_valid_mp_article_cache = function(path)
+            return path and path:find("/cache/", 1, true) ~= nil
+        end,
         mp_article_cached_path = function(_settings, _book, article)
             if article.reviewId == "cached_1" then return "/cache/cached_1.html" end
             return nil
         end,
         fetch_mp_article_html = function(_client, _settings, _book, article)
-            return "<html><body>" .. article.title .. "</body></html>"
-        end,
-        save_mp_article_html = function(_settings, _book, article)
             return "/cache/" .. article.reviewId .. ".html"
+        end,
+        save_mp_article_html = function()
+            error("fetched file path must not be saved as article body")
+        end,
+    }
+end
+
+local shown_views = {}
+package.preload["weread.ui.library_view"] = function()
+    return {
+        show = function(data, callbacks)
+            local view = { data = data, callbacks = callbacks, page = data.page or 1 }
+            shown_views[#shown_views + 1] = view
+            return view
         end,
     }
 end
 
 local Library = require("weread.ui.library")
 
-local shown_lists = {}
 local opened_files = {}
 local mp_articles_store = { [1] = {}, [2] = {} }
 local updated_cache_paths = {}
@@ -104,10 +117,6 @@ local host = {
     },
     shelf_regular = { { bookId = "b1" }, { bookId = "b2" } },
     shelf_mp = {},
-    showList = function(_self, title, items, empty_text)
-        shown_lists[#shown_lists + 1] = { title = title, items = items, empty = empty_text }
-        return { switchItemTable = function() end }
-    end,
     safeCallback = function(_self, _name, fn) return fn end,
     runOnlineTask = function(_self, _label, fn) fn() end,
     showBusy = function() end,
@@ -120,39 +129,29 @@ for k, v in pairs(Library) do
     if host[k] == nil then host[k] = v end
 end
 
--- 1. showShelfTabs shows Books and WeChat Articles
-host:showShelfTabs()
-expect(#shown_lists == 1, "showShelfTabs list count mismatch")
-local tab_items = shown_lists[1].items
-expect(#tab_items == 2, "shelf tab count mismatch")
-expect(tab_items[1].text == "Books", "tab 1 mismatch")
-expect(tab_items[2].text == "WeChat Articles", "tab 2 mismatch")
-
--- 2. showWeChatArticlesTab shows Floating and Favorites
-shown_lists = {}
-host:showWeChatArticlesTab()
-expect(#shown_lists == 1, "showWeChatArticlesTab list count mismatch")
-local wx_tabs = shown_lists[1].items
-expect(#wx_tabs == 2, "wx tabs count mismatch")
-expect(wx_tabs[1].text == "WeChat Floating Articles", "floating tab mismatch")
-expect(wx_tabs[2].text == "WeChat Favorites", "favorites tab mismatch")
-
--- 3. showWeChatArticlesPage fetches remote if cache empty
-shown_lists = {}
+-- The article tab renders the list directly on the full-screen shelf view.
 host:showWeChatArticlesPage(2)
-expect(#shown_lists == 1, "article list page count mismatch")
-local art_items = shown_lists[1].items
-expect(#art_items == 3, "article items count mismatch (2 articles + 1 refresh item)")
-expect(art_items[1].text == "Article 1", "article 1 title mismatch")
-expect(art_items[2].text == "Cached Article", "cached article title mismatch")
-expect(art_items[2].mandatory == "Cached", "cached badge mismatch")
+expect(#shown_views == 1, "article view count mismatch")
+local view = shown_views[1]
+expect(view.data.mode == "floating", "floating shelf mode mismatch")
+expect(#view.data.articles == 2, "article list count mismatch")
+expect(view.data.articles[2]._cached == true, "cached article badge mismatch")
 
--- 4. Clicking cached article opens directly
-art_items[2].callback()
+view.callbacks.on_switch("favorites")
+expect(shown_views[2].data.mode == "favorites", "favorites tab did not open directly")
+expect(#shown_views[2].data.articles == 2, "favorites list missing")
+
+view = shown_views[2]
+view.callbacks.on_refresh()
+expect(#shown_views == 3 and shown_views[3].data.mode == "favorites",
+    "refresh button did not reload the current article list")
+view = shown_views[3]
+
+-- Cached article opens directly; uncached article fetches exactly once.
+view.callbacks.on_select(view.data.articles[2])
 expect(#opened_files == 1 and opened_files[1] == "/cache/cached_1.html", "cached article open mismatch")
 
--- 5. Clicking uncached article downloads and opens
-art_items[1].callback()
+view.callbacks.on_select(view.data.articles[1])
 expect(#opened_files == 2 and opened_files[2] == "/cache/art_1.html", "uncached article download & open mismatch")
 expect(updated_cache_paths["art_1"] == "/cache/art_1.html", "db cache path not updated")
 expect(#reported_reads == 1 and reported_reads[1].article.reviewId == "art_1", "read status not reported")

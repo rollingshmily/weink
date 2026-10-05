@@ -144,6 +144,16 @@ local ok, error_message = pcall(function()
 end)
 expect(ok, "empty bookshelf failed to build: " .. tostring(error_message))
 
+local favorites_view
+ok, error_message = pcall(function()
+    favorites_view = LibraryView.show({ mode = "favorites", books = {}, articles = {}, paged = true }, {})
+end)
+expect(ok, "empty favorites shelf failed to build: " .. tostring(error_message))
+expect(ok and #favorites_view._tab_buttons == 3,
+    "books/favorites/floating must share the same shelf tab bar")
+expect(ok and #favorites_view._action_secondary == 1,
+    "article shelf refresh button missing")
+
 local BookReviewsView = require("weread.ui.book_reviews_view")
 ok, error_message = pcall(function()
     BookReviewsView.show({
@@ -182,6 +192,6 @@ expect(cover_view._item_rows[1].height == cover_view.cover_cell_height
 local cover_image_frame = cover_view._item_rows[1].frame[1][1][1][1][1]
 expect(cover_image_frame.bordersize == 0,
     "cover image retained the outer black border")
-expect(#shown == 3, "empty-state and cover bookshelf views should be shown")
+expect(#shown == 4, "empty-state, article, and cover bookshelf views should be shown")
 
 print(("empty_state_face_spec: %d checks"):format(checks))

@@ -2660,11 +2660,10 @@ end
 
 function Content.mp_article_cached_path(settings, book, article)
     local html_path = Content.mp_article_path(settings, book, article)
-    local f = io.open(html_path, "r")
-    if f then
-        f:close()
+    if Content.is_valid_mp_article_cache(html_path) then
         return html_path
     end
+    local f
     local epub_path = html_path:gsub("%.html$", ".epub")
     f = io.open(epub_path, "r")
     if f then
@@ -2672,6 +2671,17 @@ function Content.mp_article_cached_path(settings, book, article)
         return epub_path
     end
     return nil
+end
+
+function Content.is_valid_mp_article_cache(path)
+    if type(path) ~= "string" or not path:match("%.html$") then return false end
+    local f = io.open(path, "rb")
+    if not f then return false end
+    local header = f:read(1024) or ""
+    f:close()
+    -- Older builds overwrote the fetched body with its local filename. Force
+    -- one fresh download rather than opening that title-only cached page.
+    return header:find('name="weread-mp-cache-version" content="2"', 1, true) ~= nil
 end
 
 -- CREngine's standalone-HTML mode ignores inline style attributes (only EPUB
@@ -2821,6 +2831,7 @@ function Content.save_mp_article_html(settings, book, article, body_html)
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
+<meta name="weread-mp-cache-version" content="2"/>
 <title>]] .. xml_escape(title) .. [[</title>
 <style>
 html, body {

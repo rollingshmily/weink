@@ -351,7 +351,7 @@ function M:showShelfView(mode, keyword, old_view, options)
     self.shelf_cover_generation = (self.shelf_cover_generation or 0) + 1
     self.shelf_view_mode = mode
     self.shelf_search_keyword = keyword
-    self.shelf_view_pages = self.shelf_view_pages or { books = 1, public_account = 1 }
+    self.shelf_view_pages = self.shelf_view_pages or { books = 1, favorites = 1, floating = 1 }
     local saved_books = self.settings:get("books", {})
     local downloaded_cache = {}
     local function filtered(source, with_download_state)
@@ -427,8 +427,8 @@ function M:showShelfView(mode, keyword, old_view, options)
         cover_loading = cover_loading,
     }, {
         on_switch = function(new_mode)
-            if new_mode == "articles" or new_mode == "public_account" then
-                self:showWeChatArticlesTab()
+            if new_mode == "favorites" or new_mode == "floating" then
+                self:showWeChatArticlesPage(new_mode == "favorites" and 1 or 2, nil, view)
                 return
             end
             local next_options = {}
@@ -942,55 +942,25 @@ function M:showBookReviews(book)
 end
 
 function M:showShelfTabs()
-    local items = {
-        {
-            text = _("Books"),
-            post_text = T(_("%1 books"), tostring(#self.shelf_regular)),
-            callback = self:safeCallback(_("Books"), function()
-                self.shelf_books = self.shelf_regular
-                self:showShelfPage()
-            end),
-        },
-        {
-            text = _("WeChat Articles"),
-            callback = self:safeCallback(_("WeChat Articles"), function()
-                self:showWeChatArticlesTab()
-            end),
-        },
-    }
-    self:showList(_("WeRead Bookshelf"), items, _("Your WeRead shelf is empty."))
+    self:showShelfView("books")
 end
 
 function M:showWeChatArticlesTab()
-    local items = {
-        {
-            text = _("WeChat Floating Articles"),
-            callback = self:safeCallback(_("WeChat Floating Articles"), function()
-                self:showWeChatArticlesPage(2, _("WeChat Floating Articles"))
-            end),
-        },
-        {
-            text = _("WeChat Favorites"),
-            callback = self:safeCallback(_("WeChat Favorites"), function()
-                self:showWeChatArticlesPage(1, _("WeChat Favorites"))
-            end),
-        },
-    }
-    self:showList(_("WeChat Articles"), items, _("No WeChat articles."))
+    self:showWeChatArticlesPage(2)
 end
 
-function M:showWeChatArticlesPage(list_type, title)
+function M:showWeChatArticlesPage(list_type, title, old_view)
     list_type = tonumber(list_type) or 2
     title = title or (list_type == 2 and _("WeChat Floating Articles") or _("WeChat Favorites"))
     local cached = self.library_db and self.library_db:getMpArticles(list_type) or nil
     if cached and #cached > 0 then
-        self:renderWeChatArticleList(list_type, title, cached)
+        self:renderWeChatArticleList(list_type, title, cached, old_view)
         return
     end
-    self:fetchWeChatArticles(list_type, title)
+    self:fetchWeChatArticles(list_type, title, old_view)
 end
 
-function M:fetchWeChatArticles(list_type, title)
+function M:fetchWeChatArticles(list_type, title, old_view)
     list_type = tonumber(list_type) or 2
     title = title or (list_type == 2 and _("WeChat Floating Articles") or _("WeChat Favorites"))
     self:runOnlineTask(_("Sync WeChat articles..."), function()
@@ -1008,42 +978,66 @@ function M:fetchWeChatArticles(list_type, title)
         if self.library_db then
             self.library_db:cacheMpArticles(list_type, articles)
         end
-        self:renderWeChatArticleList(list_type, title, articles)
+        self:renderWeChatArticleList(list_type, title, articles, old_view)
     end)
 end
 
-function M:renderWeChatArticleList(list_type, title, articles)
-    local items = {}
-    local refresh_fn
-    for _i, article in ipairs(articles or {}) do
-        local cached_path = article.cached_path or Content.mp_article_cached_path(self.settings, nil, article)
-        local is_cached = cached_path ~= nil and file_exists(cached_path)
-        local post_text = article.account or article.mpName or ""
-        table.insert(items, {
-            text = article.title or _("Article"),
-            post_text = post_text,
-            mandatory = is_cached and _("Cached") or "",
-            callback = self:safeCallback(article.title or _("Article"), function()
-                if is_cached then
-                    self:openFile(cached_path)
-                else
-                    self:downloadWeChatArticleAndRead(article, list_type, refresh_fn)
-                end
-            end),
-        })
+function M:renderWeChatArticleList(list_type, title, articles, old_view)
+    local LibraryView = require("weread.ui.library_view")
+    local mode = list_type == 1 and "favorites" or "floating"
+    local rows = {}
+    for _, article in ipairs(articles or {}) do
+        local cached_path = article.cached_path
+        if not Content.is_valid_mp_article_cache(cached_path) then
+            cached_path = Content.mp_article_cached_path(self.settings, nil, article)
+        end
+        if not Content.is_valid_mp_article_cache(cached_path) then
+            cached_path = nil
+        end
+        article._cached_path = cached_path
+        article._cached = cached_path ~= nil and file_exists(cached_path)
+        rows[#rows + 1] = article
     end
-    table.insert(items, {
-        text = _("↻ Refresh WeChat articles"),
-        callback = self:safeCallback(_("↻ Refresh WeChat articles"), function()
-            self:fetchWeChatArticles(list_type, title)
-        end),
+    if old_view then UIManager:close(old_view) end
+    local view
+    view = LibraryView.show({
+        mode = mode,
+        title = _("WeRead Bookshelf"),
+        books = self.shelf_regular or {},
+        articles = rows,
+        paged = true,
+        page = self.shelf_view_pages and self.shelf_view_pages[mode] or 1,
+        page_size = math.max(4, list_items_per_page() - 4),
+    }, {
+        on_switch = function(new_mode)
+            if new_mode == "books" then
+                self:showShelfView("books", nil, view)
+            else
+                self:showWeChatArticlesPage(new_mode == "favorites" and 1 or 2, nil, view)
+            end
+        end,
+        on_refresh = function()
+            self:fetchWeChatArticles(list_type, title, view)
+        end,
+        on_select = function(article)
+            local path = article._cached_path
+            if path and Content.is_valid_mp_article_cache(path) and file_exists(path) then
+                self:openFile(path)
+            else
+                self:downloadWeChatArticleAndRead(article, list_type)
+            end
+        end,
+        on_page_changed = function(new_page)
+            self.shelf_view_pages = self.shelf_view_pages or {}
+            self.shelf_view_pages[mode] = new_page
+            self:renderWeChatArticleList(list_type, title, articles, view)
+        end,
     })
-    local menu = self:showList(title, items, _("No WeChat articles."))
-    refresh_fn = function()
-        local latest = self.library_db and self.library_db:getMpArticles(list_type) or articles
-        self:renderWeChatArticleList(list_type, title, latest)
-    end
-    return menu
+    self.shelf_view_mode = mode
+    self.shelf_view = view
+    self.shelf_view_pages = self.shelf_view_pages or {}
+    self.shelf_view_pages[mode] = view.page
+    return view
 end
 
 function M:downloadWeChatArticleAndRead(article, list_type, on_complete)
@@ -1051,7 +1045,7 @@ function M:downloadWeChatArticleAndRead(article, list_type, on_complete)
         self:showBusy(T(_("Downloading article: %1"), article.title or ""))
         local progress_dialog
         local ok, path_or_err = pcall(function()
-            local html = Content.fetch_mp_article_html(self.client, self.settings, nil, article, {
+            local saved_path = Content.fetch_mp_article_html(self.client, self.settings, nil, article, {
                 progress = function(current, total)
                     if not progress_dialog then
                         self:closeBusy()
@@ -1065,10 +1059,9 @@ function M:downloadWeChatArticleAndRead(article, list_type, on_complete)
                     progress_dialog:reportProgress(current)
                 end,
             })
-            if not html or html == "" then
-                error("article HTML is empty")
+            if not saved_path or not Content.is_valid_mp_article_cache(saved_path) then
+                error("article cache is invalid")
             end
-            local saved_path = Content.save_mp_article_html(self.settings, nil, article, html)
             if self.library_db and article.reviewId then
                 self.library_db:updateMpArticleCachePath(article.reviewId, saved_path)
             end
