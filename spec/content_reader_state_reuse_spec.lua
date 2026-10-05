@@ -16,59 +16,55 @@ package.preload["logger"] = function()
 end
 package.preload["bit"] = function() return { rshift = function(value, bits) return math.floor(value / 2 ^ bits) end } end
 package.preload["socket"] = function() return { sleep = function() end } end
-local process_jobs = {}
-local process_runs = 0
-package.preload["ffi/util"] = function()
+package.preload["ffi/util"] = function() return {} end
+
+local zip_calls = 0
+package.preload["weread.lib.eink"] = function()
     return {
-        runInSubProcess = function(callback)
-            process_runs = process_runs + 1
-            local pid = process_runs
-            local job = {}
-            process_jobs[pid] = job
-            callback(pid, pid)
-            return pid, pid
+        build_chapters_param = function(uids) return table.concat(uids, "-") end,
+        files_to_chapter_bodies = function(files, chapters)
+            local bodies = {}
+            for _, chapter in ipairs(chapters or {}) do
+                local uid = tostring(chapter.chapterUid)
+                bodies[uid] = files[uid]
+            end
+            return bodies, {}
         end,
-        writeToFD = function(fd, data) process_jobs[fd].data = data return true end,
-        isSubProcessDone = function() return true end,
-        getNonBlockingReadSize = function(fd) return #(process_jobs[fd].data or "") end,
-        readAllFromFD = function(fd) return process_jobs[fd].data end,
-        terminateSubProcess = function() end,
     }
 end
 
 local Content = require("weread.lib.content")
-local ensure_calls = 0
-Content.ensure_reader_state = function(_client, book)
-    ensure_calls = ensure_calls + 1
-    book.psvts = "reused-session-token"
+Content.ensure_eink_chapter_files = function(_client, _book, chapters)
+    return chapters
 end
-Content.fetch_chapter_shard = function(_client, _settings, _book, _chapter, endpoint)
-    return endpoint == "/web/book/chapter/e_2" and "css" or "shard"
+Content.ensure_reader_state = function()
+    error("web reader state must not be used")
 end
-Content.decode_content_shards = function() return "<p>body</p>" end
-Content.decode_content_shard = function() return "body{}" end
 
 local client = {
-    json_encode = function(_self, value)
-        return value.ok and "ok" or "error"
-    end,
-    json_decode = function(_self, value)
-        return { ok = value == "ok" }
+    can_eink_download = function() return true end,
+    eink_download_zip = function(_self, _book_id, param)
+        zip_calls = zip_calls + 1
+        if param == "1" then return { ["1"] = "<p>one</p>" } end
+        if param == "2" then return { ["2"] = "<p>two</p>" } end
+        error("unexpected chapters param " .. tostring(param))
     end,
 }
 local settings = {
-    meta_dir = "/tmp/weread-reader-state-spec-meta",
     get = function() return { download_book_images = false } end,
 }
 local book = { book_id = "book" }
-local state = { parallel_shards = true }
+
 assert(Content.fetch_single_chapter_source(client, settings, book,
-    { chapterUid = 1 }, state) == "<p>body</p>", "first chapter failed")
+    { chapterUid = 1 }, {}) == "<p>one</p>", "first chapter failed")
 assert(Content.fetch_single_chapter_source(client, settings, book,
-    { chapterUid = 2 }, state) == "<p>body</p>", "second chapter failed")
-assert(ensure_calls == 1,
-    "reader state was refreshed once per chapter instead of reused")
-assert(process_runs == 6,
-    "parallel shard mode did not dispatch three shards per chapter")
+    { chapterUid = 2 }, {}) == "<p>two</p>", "second chapter failed")
+assert(zip_calls == 2, "each missing chapter uses eink zip")
+
+local ok, err = pcall(Content.fetch_single_chapter_source, {
+    can_eink_download = function() return false end,
+}, settings, book, { chapterUid = 1 }, {})
+assert(not ok and tostring(err):find("eink download is not available", 1, true),
+    "missing eink login does not fall back to web shards")
 
 print("content_reader_state_reuse_spec: passed")

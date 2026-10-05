@@ -26,7 +26,6 @@ local PULL_MAX_RETRIES = 3
 local BUSY_RETRY_SECONDS = 2
 local BUSY_RETRY_LIMIT = 10
 local SAME_THRESHOLD_PERCENT = 2
-local SOURCE_CONFLICT_THRESHOLD_PERCENT = 2
 local JOB_POLL_INITIAL_SECONDS = 0.25
 local JOB_POLL_MAX_SECONDS = 2
 local JOB_TIMEOUT_SECONDS = 180
@@ -445,38 +444,16 @@ function ProgressSync:_clear_verified(reason)
 end
 
 function ProgressSync:_fetch_remote(book_id, chapters)
-    local gateway
-    local web
-    local gateway_error
-    local web_error
-    if self.settings:is_api_configured() then
-        local ok, result = pcall(self.client.get_progress, self.client, book_id)
-        if ok then
-            gateway, gateway_error = PositionMapper.normalize_remote(
-                result, book_id, "gateway", chapters)
-        else
-            gateway_error = tostring(result)
-        end
+    local ok, result = pcall(self.client.get_progress, self.client, book_id)
+    if not ok then
+        return nil, tostring(result)
     end
-    if self.settings:is_cookie_configured() then
-        local ok, result = pcall(
-            self.client.get_web_progress, self.client, book_id)
-        if ok then
-            web, web_error = PositionMapper.normalize_remote(
-                result, book_id, "web", chapters)
-        else
-            web_error = tostring(result)
-        end
+    local remote, err = PositionMapper.normalize_remote(
+        result, book_id, "eink", chapters)
+    if not remote then
+        return nil, err or "remote_unavailable"
     end
-    local selected = PositionMapper.choose_remote(
-        web,
-        gateway,
-        SOURCE_CONFLICT_THRESHOLD_PERCENT
-    )
-    if not selected then
-        return nil, gateway_error or web_error or "remote_unavailable"
-    end
-    return selected
+    return remote
 end
 
 function ProgressSync:_apply_remote(remote, context, options)
@@ -859,8 +836,7 @@ function ProgressSync:_pull(options)
             return false
         end
     end
-    if not self.settings:is_api_configured()
-        and not self.settings:is_cookie_configured() then
+    if not self.settings:is_eink_configured() then
         if options.manual then self.notify("authentication_required", {}) end
         return false
     end

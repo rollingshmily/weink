@@ -85,6 +85,7 @@ local function fixture(provider)
             return {}
         end,
         is_cookie_configured = function() return true end,
+        is_eink_configured = function() return true end,
     }
     local client = {
         report_read = function(_self, payload)
@@ -149,13 +150,12 @@ test("one reader session enters once and reports live position", function()
     }
     report:_send("book", book, position, 0)
     report:_send("book", book, position, 30)
-    eq(#records, 3, "enter plus two reports")
-    eq(records[1].kind, "enter", "first request enters")
-    eq(records[2].kind, "report", "second request reports")
-    eq(records[2].chapter_uid, 22, "live chapter used")
-    eq(records[2].chapter_offset, 150, "live offset used")
-    eq(records[2].elapsed_seconds, 0, "progress-only report has zero time")
-    eq(records[3].elapsed_seconds, 30, "time report keeps interval")
+    eq(#records, 2, "two native reports")
+    eq(records[1].bookId, "book", "bookId is native")
+    eq(tonumber(records[1].chapterUid), 22, "live chapter used")
+    eq(records[1].chapterOffset, 150, "live offset used")
+    eq(records[1].readingTime, 0, "progress-only report has zero time")
+    eq(records[2].readingTime, 30, "time report keeps interval")
 end)
 
 test("report context restores SQLite catalog and backfills disk", function()
@@ -221,7 +221,7 @@ test("report context persistence updates only the current book", function()
     eq(#updates, 1, "one single-book context update is issued")
     eq(updates[1].book_id, "book", "context update receives the book id")
     eq(updates[1].patch.title, "Updated", "context update preserves present fields")
-    eq(updates[1].patch.psvts, false,
+    eq(updates[1].patch.chapter_offset, false,
         "context update clears fields absent from the child snapshot")
 end)
 

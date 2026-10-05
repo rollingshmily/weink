@@ -1,4 +1,4 @@
--- Eink-first chapter underlines/thoughts, web fallback.
+-- Eink-only chapter underlines/thoughts. No web fallback.
 
 package.path = "./?.lua;./?/init.lua;" .. package.path
 
@@ -83,10 +83,10 @@ do
         end,
     }
     local ok, data = client:get_chapter_underlines("book", 1)
-    expect(ok and data.underlines[1].range == "5-6",
-        "empty eink chapter heat falls back to web underlines")
-    expect(table.concat(calls, ",") == "own,heat,/book/underlines",
-        "web underlines run when eink chapter heat is empty")
+    expect(ok and type(data.underlines) == "table" and #data.underlines == 0,
+        "empty eink chapter heat stays empty without web fallback")
+    expect(table.concat(calls, ",") == "own,heat",
+        "empty eink heat does not call web")
 end
 
 do
@@ -107,10 +107,10 @@ do
         end,
     }
     local ok, data = client:get_chapter_underlines("book", 1)
-    expect(ok and data.underlines[1].range == "5-6",
-        "eink underlines failure falls back to web")
-    expect(table.concat(calls, ",") == "own,heat,/book/underlines",
-        "web underlines run only after eink /book/underlines fails")
+    expect(ok and type(data.underlines) == "table" and #data.underlines == 0,
+        "eink underlines failure does not fall back to web")
+    expect(table.concat(calls, ",") == "own,heat",
+        "failed eink heat does not call web")
 end
 
 do
@@ -122,9 +122,10 @@ do
             return { underlines = { { range = "7-8" } } }
         end,
     }
-    local ok, data = client:get_chapter_underlines("book", 1)
-    expect(ok and data.underlines[1].range == "7-8", "no eink credentials uses web")
-    expect(calls[1] == "/book/underlines", "web underlines without eink login")
+    local ok, data, err = client:get_chapter_underlines("book", 1)
+    expect(not ok and data == nil and tostring(err):find("eink", 1, true),
+        "no eink credentials does not use web")
+    expect(#calls == 0, "web underlines are not called without eink login")
 end
 
 do
@@ -160,13 +161,13 @@ do
             return { reviews = { { range = "1-2", content = "web" } } }
         end,
     }
-    local ok, data = client:get_chapter_reviews_batch("book", 1, {
+    local ok, data, err = client:get_chapter_reviews_batch("book", 1, {
         { range = "1-2", maxIdx = 0, count = 30, synckey = 0 },
     })
-    expect(ok and data.reviews[1].content == "web",
-        "eink thought failure falls back to web")
-    expect(table.concat(calls, ",") == "eink,/book/readreviews",
-        "web thoughts run after eink POST fails")
+    expect(not ok and data == nil and tostring(err):find("eink", 1, true),
+        "eink thought failure does not fall back to web")
+    expect(table.concat(calls, ",") == "eink",
+        "web thoughts are not called after eink POST fails")
 end
 
 do
@@ -213,8 +214,9 @@ do
         end,
     }
     expect(client:can_eink_download(), "stored eink creds start usable")
-    local ok, data = client:get_chapter_underlines("book", 1)
-    expect(ok and data.underlines[1].range == "8-9", "401 falls back to web")
+    local ok, data, err = client:get_chapter_underlines("book", 1)
+    expect(not ok and data == nil and tostring(err or ""):find("401", 1, true),
+        "401 does not fall back to web")
     expect(heat_calls == 0, "expired eink must not hit /book/underlines")
     expect(not client:can_eink_download(), "later thought requests skip eink")
     expect(eink.auth_failed == true, "eink expiry is remembered")

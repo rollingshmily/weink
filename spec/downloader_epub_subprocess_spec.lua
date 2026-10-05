@@ -83,6 +83,17 @@ package.preload["weread.lib.content"] = function()
 end
 
 local fake_client = {
+    can_eink_download = function() return true end,
+    eink_credentials = function() return "vid", "token" end,
+    eink_download_to_file = function(_self, _book_id, _param, path)
+        local src = root .. "/einksrc"
+        os.execute("mkdir -p " .. string.format("%q", src))
+        local handle = io.open(src .. "/1.txt", "wb")
+        handle:write("chapter 1")
+        handle:close()
+        os.execute(string.format("tar -cf %q -C %q .", path, src))
+        return "", 200, {}
+    end,
     json_encode = function(_self, value)
         payload_seq = payload_seq + 1
         local key = "payload-" .. tostring(payload_seq)

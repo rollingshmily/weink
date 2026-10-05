@@ -575,27 +575,10 @@ function Client:gateway(api_name, params)
 end
 
 function Client:get_shelf()
-    logger.info(
-        "shelf sync request:",
-        "api=/shelf/sync",
-        "skill_version=", WeRead.SKILL_VERSION,
-        "auth=api_key",
-        "cookies=skipped",
-        "params=none"
-    )
-    local ok, result, code, headers = pcall(
-        self.gateway,
-        self,
-        "/shelf/sync",
-        {}
-    )
+    logger.info("shelf sync request:", "api=/shelf/sync", "auth=eink")
+    local ok, result, code = pcall(self.eink_json, self, "/shelf/sync", {})
     if not ok then
-        logger.err(
-            "shelf sync failed:",
-            "api=/shelf/sync",
-            "skill_version=", WeRead.SKILL_VERSION,
-            "error=", log_error(result)
-        )
+        logger.err("shelf sync failed:", "api=/shelf/sync", "error=", log_error(result))
         error(result, 0)
     end
 
@@ -609,38 +592,32 @@ function Client:get_shelf()
         "albums=", table_summary(type(result) == "table" and result.albums or nil),
         "mp=", table_summary(type(result) == "table" and result.mp or nil)
     )
-    return result, code, headers
+    return result, code
 end
 
 function Client:get_book_info(book_id)
-    return self:gateway("/book/info", { bookId = book_id })
+    return self:eink_json("/book/info", { bookId = tostring(book_id) })
 end
 
-function Client:get_book_reviews(book_id, review_list_type, count)
-    return self:gateway("/review/list", {
-        bookId = book_id,
-        reviewListType = review_list_type or 1,
-        count = count or 20,
+function Client:get_book_reviews(book_id, review_list_type, _count)
+    return self:eink_json("/review/list", {
+        bookId = tostring(book_id),
+        listType = review_list_type or 1,
     })
 end
 
 function Client:get_progress(book_id)
-    return self:gateway("/book/getprogress", { bookId = book_id })
+    return self:eink_json("/book/getProgress", { bookId = tostring(book_id) })
 end
 
 function Client:get_web_progress(book_id)
-    local url = "https://weread.qq.com/web/book/getProgress?bookId="
-        .. WeRead.urlencode(book_id)
-        .. "&_=" .. tostring(os.time() * 1000)
-    local text, code, headers = self:get_text(url, {
-        accept = "application/json, text/plain, */*",
-        referer = WeRead.reader_url(book_id),
-    })
-    return self:decode_http_json(text, {
-        method = "GET",
-        url = url,
-        code = code,
-        headers = headers,
+    return self:get_progress(book_id)
+end
+
+function Client:search_store(keyword, count)
+    return self:eink_json("/store/search", {
+        keyword = tostring(keyword or ""),
+        count = tonumber(count) or 10,
     })
 end
 
@@ -653,13 +630,11 @@ function Client:get_read_stats(mode, base_time)
     if base_time and tonumber(base_time) and tonumber(base_time) > 0 then
         params.baseTime = tonumber(base_time)
     end
-    return self:gateway("/readdata/detail", params)
+    return self:eink_json("/readdata/detail", params)
 end
 
-function Client:report_read(payload, referer)
-    return self:post_json("https://weread.qq.com/web/book/read", payload, {
-        referer = referer or "https://weread.qq.com/",
-    })
+function Client:report_read(payload, _referer)
+    return self:eink_post_json("/book/read", payload)
 end
 
 local function eink_payload_error(data)
@@ -710,51 +685,38 @@ function Client:get_chapter_underlines(book_id, chapter_uid)
     if not chapter_uid then
         return false, nil, "empty chapter_uid"
     end
+    if not self:can_eink_download() then
+        return false, nil, "eink credentials missing"
+    end
 
     local own_items
-    if self:can_eink_download() then
-        local ok_own, own = pcall(function()
-            return self:eink_bookmarklist(book_id)
-        end)
-        if ok_own and type(own) == "table" and not eink_payload_error(own) then
-            own_items = own.updated
-        end
-        local heat = {}
-        if self:can_eink_download() then
-            local ok_heat, payload = pcall(function()
-                return self:eink_chapter_underlines(book_id, chapter_uid)
-            end)
-            if ok_heat and type(payload) == "table" and not eink_payload_error(payload) then
-                heat = Eink.collect_bookmark_items(payload, chapter_uid)
-            else
-                logger.warn("eink /book/underlines failed, falling back to web:",
-                    tostring(not ok_heat and payload
-                        or eink_payload_error(payload) or "invalid"))
-            end
-        end
-        local rows = merge_own_and_popular(heat, own_items, chapter_uid)
-        if #rows > 0 then
-            logger.info("chapter underlines via eink",
-                "book=", tostring(book_id), "chapter=", tostring(chapter_uid),
-                "count=", tostring(#rows), "source=underlines")
-            return true, { chapterUid = chapter_uid, underlines = rows }
-        end
-        if self:can_eink_download() then
-            logger.warn("eink /book/underlines empty, falling back to web:",
-                "chapter=", tostring(chapter_uid))
-        end
+    local ok_own, own = pcall(function()
+        return self:eink_bookmarklist(book_id)
+    end)
+    if ok_own and type(own) == "table" and not eink_payload_error(own) then
+        own_items = own.updated
+    elseif not self:can_eink_download() then
+        return false, nil, tostring(not ok_own and own or eink_payload_error(own) or "eink bookmarklist failed")
     end
 
-    local ok, result, err = self:_web_chapter_underlines(book_id, chapter_uid)
-    if ok and own_items then
-        result.underlines = result.underlines or {}
-        local seen = {}
-        for _, row in ipairs(result.underlines) do
-            seen[tostring(row.range or "")] = true
+    local heat = {}
+    if self:can_eink_download() then
+        local ok_heat, payload = pcall(function()
+            return self:eink_chapter_underlines(book_id, chapter_uid)
+        end)
+        if ok_heat and type(payload) == "table" and not eink_payload_error(payload) then
+            heat = Eink.collect_bookmark_items(payload, chapter_uid)
+        else
+            logger.warn("eink /book/underlines failed:",
+                tostring(not ok_heat and payload
+                    or eink_payload_error(payload) or "invalid"))
         end
-        merge_chapter_underlines(result.underlines, seen, own_items, chapter_uid)
     end
-    return ok, result, err
+    local rows = merge_own_and_popular(heat, own_items, chapter_uid)
+    logger.info("chapter underlines via eink",
+        "book=", tostring(book_id), "chapter=", tostring(chapter_uid),
+        "count=", tostring(#rows), "source=underlines")
+    return true, { chapterUid = chapter_uid, underlines = rows }
 end
 
 function Client:build_chapter_review_batches(ranges)
@@ -786,27 +748,11 @@ function Client:get_chapter_reviews_batch(book_id, chapter_uid, batch)
         return true, { reviews = {} }
     end
 
-    if self:can_eink_download() then
-        local ok, result = pcall(function()
-            return self:eink_post_json("/book/readreviews", {
-                bookId = tostring(book_id),
-                chapterUid = chapter_uid,
-                reviews = batch,
-            })
-        end)
-        if ok and type(result) == "table" and type(result.reviews) == "table"
-            and not eink_payload_error(result) then
-            logger.info("chapter thoughts via eink",
-                "book=", tostring(book_id), "chapter=", tostring(chapter_uid),
-                "reviews=", tostring(#result.reviews))
-            return true, result
-        end
-        logger.warn("eink readreviews failed, falling back to web:",
-            tostring(not ok and result or eink_payload_error(result) or "invalid"))
+    if not self:can_eink_download() then
+        return false, nil, "eink credentials missing"
     end
-
     local ok, result = pcall(function()
-        return self:gateway("/book/readreviews", {
+        return self:eink_post_json("/book/readreviews", {
             bookId = tostring(book_id),
             chapterUid = chapter_uid,
             reviews = batch,
@@ -815,9 +761,13 @@ function Client:get_chapter_reviews_batch(book_id, chapter_uid, batch)
     if not ok then
         return false, nil, tostring(result)
     end
-    if type(result) ~= "table" or type(result.reviews) ~= "table" then
-        return false, nil, "readreviews: gateway returned invalid data"
+    if type(result) ~= "table" or type(result.reviews) ~= "table"
+        or eink_payload_error(result) then
+        return false, nil, tostring(eink_payload_error(result) or "readreviews: invalid data")
     end
+    logger.info("chapter thoughts via eink",
+        "book=", tostring(book_id), "chapter=", tostring(chapter_uid),
+        "reviews=", tostring(#result.reviews))
     return true, result
 end
 
@@ -853,37 +803,35 @@ function Client:get_review_comments(review_id, count, opts)
     end
 
     local comments_count = count or 20
-    local url = "https://weread.qq.com/web/review/single"
-        .. "?reviewId=" .. WeRead.urlencode(review_id)
-        .. "&commentsCount=" .. tostring(comments_count)
-        .. "&commentsDirection=" .. tostring(opts.comments_direction or 0)
-        .. "&likesCount=" .. tostring(opts.likes_count or 0)
-        .. "&synckey=" .. tostring(opts.synckey or 0)
-
-    local ok, text, code, headers = pcall(function()
-        return self:get_text(url, {
-            accept = "application/json, text/plain, */*",
-            referer = opts.referer or "https://weread.qq.com/",
-            timeout = opts.timeout,
+    local ok, body, code, headers = pcall(function()
+        return self:eink_request("/review/single", {
+            reviewId = review_id,
+            commentsCount = comments_count,
+            commentsDirection = opts.comments_direction or 0,
+            likesCount = opts.likes_count or 0,
+            synckey = opts.synckey or 0,
         })
     end)
     if not ok then
-        return false, nil, tostring(text)
+        return false, nil, tostring(body)
     end
-    if not text or text == "" then
+    if not code or code < 200 or code >= 300 then
+        return false, nil, "eink /review/single failed: HTTP " .. tostring(code or "unknown")
+    end
+    if not body or body == "" then
         return false, nil, "empty response"
     end
 
     local decode_ok, parsed = pcall(function()
-        return self:decode_http_json(text, {
+        return self:decode_http_json(body, {
             method = "GET",
-            url = url,
+            url = "/review/single",
             code = code,
             headers = headers,
         })
     end)
     if not decode_ok or type(parsed) ~= "table" then
-        return false, text, "invalid JSON"
+        return false, body, "invalid JSON"
     end
     return true, parsed, nil
 end
@@ -909,7 +857,7 @@ function Client:mark_eink_auth_failed()
         settings:set("eink", eink)
         if type(settings.flush) == "function" then settings:flush() end
     end
-    logger.warn("eink login expired; falling back to web until you scan again")
+    logger.warn("eink login expired; scan the eink QR code again")
 end
 
 function Client:can_eink_download()

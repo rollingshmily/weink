@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.82]
+
+### 只保留墨水屏登录
+
+- 书架、书详情、搜索、章节目录、进度同步、阅读上报和阅读统计改为 `i.weread.qq.com` 墨水屏接口，不再使用 web Cookie 或 Skill API Key。
+- 账号菜单只保留墨水屏扫码；未登录时弹出墨水屏二维码。
+- 整本下载、划线和想法不再回落 web 分片或 gateway。
+- 阅读上报改为原生 `POST /book/read`（`bookId` / `chapterUid` / `chapterOffset` / `progress` / `readingTime`）。
+
 ## [1.2.81]
 
 ### 书籍路径复核

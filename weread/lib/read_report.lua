@@ -27,7 +27,7 @@ local JOB_COLLECT_INTERVAL_SECONDS = 2
 -- Mirrors the scalar reading-state fields stored by BookStore; the chapter
 -- catalog itself stays in the on-disk catalog cache written by the child.
 local CONTEXT_FIELDS = {
-    "title", "reader_url", "app_id", "psvts", "pclts", "token",
+    "title", "reader_url",
     "chapter_uid", "chapter_idx", "chapter_offset", "progress", "summary",
     "read_context_updated_at", "read_session_entered_at", "read_session_id",
 }
@@ -480,8 +480,8 @@ function ReadReport:_precheck()
     self.current_book_title = title
     self.current_book_source = source
 
-    if not self.settings:is_cookie_configured() then
-        self:_set_error("cookie not configured", "authentication", "read report skipped:")
+    if not self.settings:is_eink_configured() then
+        self:_set_error("eink not configured", "authentication", "read report skipped:")
         return false
     end
     if not self.is_online() then
@@ -885,14 +885,14 @@ function ReadReport:_run_pipeline(book_id, opts)
     outcome.renew_attempted = true
 
     local renew_ok, renew_result = pcall(function()
-        return self.client:renew_cookie()
+        return self.client:eink_refresh_session()
     end)
-    if not renew_ok or not WeRead.is_success_response(renew_result) then
+    if not renew_ok or renew_result ~= true then
         outcome.error = failure .. "; renewal=" .. (renew_ok
-            and response_summary(self.client, renew_result)
+            and "eink refresh failed"
             or tostring(renew_result))
         outcome.error_kind = "authentication"
-        outcome.error_prefix = "read report cookie renewal failed:"
+        outcome.error_prefix = "read report eink renewal failed:"
         return outcome
     end
 
@@ -993,18 +993,13 @@ function ReadReport:_build_context(book_id, force, book)
     end
 
     local age = self.now() - (tonumber(book.read_context_updated_at) or 0)
-    local ready = tostring(book.psvts or "") ~= ""
-        and book.chapter_uid ~= nil
+    local ready = book.chapter_uid ~= nil
         and type(book.chapters) == "table" and #book.chapters > 0
         and book.read_session_id == self.session_id
     if not force and ready and age < CONTEXT_TTL_SECONDS then
         return book
     end
 
-    Content.ensure_reader_state(self.client, book)
-    if book.pclts == nil or book.pclts == "" or tonumber(book.pclts) == 0 then
-        book.pclts = WeRead.e(self.now())
-    end
     book.read_session_entered_at = nil
     book.read_session_id = self.session_id
     if force or type(book.chapters) ~= "table" or #book.chapters == 0 then
@@ -1033,9 +1028,8 @@ function ReadReport:_build_context(book_id, force, book)
     end
     book.chapter_uid = selected.chapterUid or book.chapter_uid
     book.chapter_idx = tonumber(selected.chapterIdx) or tonumber(book.chapter_idx) or 0
-    book.app_id = book.app_id or WeRead.web_app_id()
     book.read_context_updated_at = self.now()
-    if tostring(book.psvts or "") == "" or book.chapter_uid == nil then
+    if book.chapter_uid == nil then
         error("reader context is incomplete")
     end
     return book
@@ -1046,8 +1040,8 @@ function ReadReport:ensure_context(book_id, force)
     if book_id == "" then
         error("missing book id")
     end
-    if not self.settings:is_cookie_configured() then
-        error("cookie not configured")
+    if not self.settings:is_eink_configured() then
+        error("eink not configured")
     end
 
     local books = self.settings:get("books", {})
@@ -1081,46 +1075,22 @@ end
 function ReadReport:build_payload(book_id, elapsed_seconds, book, position)
     book = book or self:ensure_context(book_id, false)
     apply_position(book, position)
-    return WeRead.make_read_payload{
-        book_id = book_id,
-        chapter_uid = book.chapter_uid,
-        chapter_idx = tonumber(book.chapter_idx) or 0,
-        chapter_offset = tonumber(book.chapter_offset) or 0,
+    return {
+        bookId = tostring(book_id),
+        chapterUid = tonumber(book.chapter_uid) or book.chapter_uid,
+        chapterOffset = math.max(0, math.floor(tonumber(book.chapter_offset) or 0)),
         progress = tonumber(book.progress) or 0,
-        summary = book.summary or "",
-        elapsed_seconds = elapsed_seconds,
-        app_id = book.app_id or WeRead.web_app_id(),
-        psvts = book.psvts,
-        pclts = book.pclts,
-        token = book.token,
+        readingTime = math.max(0, math.floor(tonumber(elapsed_seconds) or 0)),
     }
 end
 
 function ReadReport:_send(book_id, book, position, elapsed_seconds)
     apply_position(book, position)
-    if book.pclts == nil or book.pclts == "" or tonumber(book.pclts) == 0 then
-        book.pclts = WeRead.e(self.now())
-    end
     if book.read_session_id ~= self.session_id then
         book.read_session_id = self.session_id
         book.read_session_entered_at = nil
     end
     if not book.read_session_entered_at then
-        local enter_payload = WeRead.make_enter_read_payload{
-            book_id = book_id,
-            chapter_uid = book.chapter_uid,
-            chapter_idx = tonumber(book.chapter_idx) or 0,
-            chapter_offset = tonumber(book.chapter_offset) or 0,
-            progress = tonumber(book.progress) or 0,
-            summary = book.summary or "",
-            app_id = book.app_id or WeRead.web_app_id(),
-            psvts = book.psvts,
-            pclts = book.pclts,
-        }
-        self.client:report_read(
-            enter_payload,
-            book.reader_url or WeRead.reader_url(book_id)
-        )
         book.read_session_entered_at = self.now()
         book.read_session_id = self.session_id
     end
@@ -1130,7 +1100,7 @@ function ReadReport:_send(book_id, book, position, elapsed_seconds)
         book,
         position
     )
-    return self.client:report_read(payload, book.reader_url or WeRead.reader_url(book_id))
+    return self.client:report_read(payload)
 end
 
 function ReadReport:upload_position(book_id, position, elapsed_seconds)

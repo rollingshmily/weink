@@ -244,6 +244,7 @@ function Downloader:_loadEinkBulk(dl)
     end
     dl.eink_tried = true
     if not self.client.can_eink_download or not self.client:can_eink_download() then
+        dl.eink_failed = "eink download is not available"
         return
     end
     local bulk_ok, packed = pcall(function()
@@ -299,8 +300,8 @@ function Downloader:_loadEinkBulk(dl)
         }
     end)
     if not bulk_ok or type(packed) ~= "table" then
-        logger.warn("eink zip download failed, falling back to web chapters:",
-            log_error(packed))
+        dl.eink_failed = log_error(packed)
+        logger.err("eink zip download failed:", dl.eink_failed)
         return
     end
     local function apply_chapter_files(info)
@@ -361,14 +362,12 @@ function Downloader:_loadEinkBulk(dl)
         "kind=", packed.kind)
     if mapped == 0 then
         local sample = Eink.sample_file_names(files, 8)
-        logger.warn("eink zip mapped 0 chapters, falling back to web chapters; sample files:",
-            table.concat(sample, ", "))
-        dl.eink_files = nil
-        dl.eink_uid_index = nil
-        dl.eink_extract_dir = nil
-    else
-        dl.eink_flushing = true
+        dl.eink_failed = "eink zip mapped 0 chapters; sample files: "
+            .. table.concat(sample, ", ")
+        logger.err(dl.eink_failed)
+        return
     end
+    dl.eink_flushing = true
 end
 
 function Downloader:_tryEinkBulkCheckpoint(dl)
@@ -473,6 +472,11 @@ function Downloader:_dispatchStep(dl)
             end
         end
         self:_loadEinkBulk(dl)
+        if dl.eink_failed then
+            self:_abortFullBookDownload(dl, 1, tostring((dl.chapters[1] or {}).chapterUid or ""),
+                dl.eink_failed)
+            return
+        end
     end
     if dl.eink_flushing then
         self:_tryEinkBulkCheckpoint(dl)
@@ -1093,7 +1097,7 @@ function Downloader:start(book, chapters, suffix, options)
         if self.settings.has_download_auth then
             return self.settings:has_download_auth()
         end
-        return self.settings.is_cookie_configured and self.settings:is_cookie_configured()
+        return self.settings.is_eink_configured and self.settings:is_eink_configured()
     end
     if options.prefetch and not has_download_auth() then
         if type(options.on_complete) == "function" then
@@ -1994,11 +1998,18 @@ function Downloader:_step(dl)
             return body
         end)
     else
-        ok, xhtml = pcall(function()
-            return Content.fetch_single_chapter_source(
-                self.client, self.settings, dl.book, chapter, dl.state
-            )
-        end)
+        if dl.eink_extract_dir then
+            xhtml = select(1, Eink.chapter_xhtml_from_dir(
+                dl.eink_extract_dir, chapter, dl.eink_uid_index))
+        elseif type(dl.eink_files) == "table" then
+            xhtml = select(1, Eink.chapter_xhtml(
+                dl.eink_files, chapter, dl.eink_uid_index))
+        end
+        if type(xhtml) == "string" and xhtml ~= "" then
+            ok = true
+        else
+            ok, xhtml = false, dl.eink_failed or ("eink ZIP did not contain chapter " .. uid)
+        end
     end
     self:_perf(dl, "chapter_source", started, "ok=", tostring(ok))
     if not ok then

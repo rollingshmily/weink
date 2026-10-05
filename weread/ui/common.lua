@@ -169,15 +169,15 @@ function M:showList(title, items, empty_text, options)
     return menu
 end
 
-function M:requireLogin(require_cookie, require_api_key)
-    local missing_cookie = require_cookie and not self.settings:is_cookie_configured()
-    local missing_api_key = require_api_key and not self.settings:is_api_configured()
-    if not missing_cookie and not missing_api_key then
+function M:requireLogin(_require_cookie, _require_api_key)
+    if self.settings:is_eink_configured() then
         return true
     end
     self:showTransientInfo(_("Please scan the QR code to log in first."), 2)
     UIManager:scheduleIn(0.2, function()
-        self.qr_login:start()
+        if self.eink_qr_login then
+            self.eink_qr_login:start()
+        end
     end)
     return false
 end
@@ -227,27 +227,23 @@ function M:showAccountStatus()
     local account = self.settings:get("account", {})
     local account_name = type(account.name) == "string" and account.name or ""
     if account_name == "" then
-        account_name = (self.settings:is_cookie_configured() or self.settings:is_api_configured())
-            and _("Unknown account") or _("Not logged in")
+        local eink = self.settings:get("eink", {}) or {}
+        local eink_name = tostring(eink.name or "")
+        if eink_name ~= "" then
+            account_name = eink_name
+        elseif self.settings:is_eink_configured() then
+            account_name = _("Unknown account")
+        else
+            account_name = _("Not logged in")
+        end
     end
-    local login_method
-    if account.login_method == "qr" then
-        login_method = _("QR login")
-    elseif account.login_method == "eink_qr" then
-        login_method = _("Eink QR login")
-    else
-        login_method = _("Unknown")
-    end
-    local cookie_status = self.settings:is_cookie_configured() and _("configured") or _("missing")
-    local api_status = self.settings:is_api_configured() and _("configured") or _("missing")
+    local login_method = self.settings:is_eink_configured() and _("Eink QR login") or _("Unknown")
     local eink_status = self.settings:is_eink_configured() and _("configured") or _("missing")
     self:showInfo(T(
-        _("Account: %1\nLogin method: %2\nCookie: %3\nEink: %4\nOfficial API key: %5\nBook directory:\n%6\nMetadata directory:\n%7"),
+        _("Account: %1\nLogin method: %2\nEink: %3\nBook directory:\n%4\nMetadata directory:\n%5"),
         account_name,
         login_method,
-        cookie_status,
         eink_status,
-        api_status,
         BD.dirpath(self.settings.cache_dir),
         BD.dirpath(self.settings.meta_dir)
     ))

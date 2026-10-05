@@ -1124,7 +1124,6 @@ function M:loadChapters(book, callback, force_refresh)
     self:runOnlineTask(_("Loading chapter list..."), function()
         self:showBusy(_("Loading chapter list..."))
         local ok, chapters_or_err = pcall(function()
-            Content.ensure_reader_state(self.client, book)
             return Content.fetch_catalog(self.client, book)
         end)
         self:closeBusy()
@@ -1581,10 +1580,7 @@ function M:searchWithUI(keyword)
     end
     self:runOnlineTask(_("Search"), function()
         local ok, result = pcall(function()
-            return self.client:gateway("/store/search", {
-                keyword = keyword,
-                count = 10,
-            })
+            return self.client:search_store(keyword, 10)
         end)
         if not ok then
             logger.err("search failed:", log_error(result))

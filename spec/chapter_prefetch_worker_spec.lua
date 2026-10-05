@@ -79,7 +79,7 @@ assert(result.annotation_document and result.annotation_document.clean)
 assert(result.auth and result.auth.wr_ticket == "renewed")
 assert(flushes == 0, "child worker must not flush parent LuaSettings")
 assert(table.concat(calls, ",")
-    == "reader,workspace,source,images,epub,cleanup")
+    == "workspace,source,images,epub,cleanup")
 assert(table.concat(progress, ",")
     == "reader,source,images,footnotes,epub")
 

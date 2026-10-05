@@ -70,7 +70,7 @@ function Thoughts.apply(client, settings, book_id, chapter_uid, xhtml)
     if not Thoughts.is_download_enabled(settings) then
         return xhtml, ""
     end
-    if not settings:is_cookie_configured() and not (client.can_eink_download and client:can_eink_download()) then
+    if not (client.can_eink_download and client:can_eink_download()) then
         return xhtml, ""
     end
     if not book_id or not chapter_uid then

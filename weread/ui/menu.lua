@@ -83,55 +83,12 @@ function M:einkLoginName()
 end
 
 function M:getAccountMenuItems()
-    local web_item = {
-        text_func = function()
-            if self.settings:is_cookie_configured() then
-                return T(_("WeChat login · %1"), self:wechatLoginName())
-            end
-            return _("WeChat login (shelf / progress)")
-        end,
-        keep_menu_open = true,
-    }
-    if self.settings:is_cookie_configured() then
-        web_item.sub_item_table_func = function()
-            return {
-                {
-                    text = _("Scan again"),
-                    keep_menu_open = true,
-                    callback = self:safeCallback(_("QR login"), function(touchmenu_instance)
-                        self._login_menu_instance = touchmenu_instance
-                        self.qr_login:start()
-                    end),
-                },
-                {
-                    text = _("Renew cookie now"),
-                    keep_menu_open = true,
-                    callback = self:safeCallback(_("Renew cookie now"), function()
-                        self:renewCookieWithUI()
-                    end),
-                },
-                {
-                    text = _("Sign out WeChat"),
-                    keep_menu_open = true,
-                    callback = self:safeCallback(_("Sign out WeChat"), function()
-                        self:confirmClearWebAccount()
-                    end),
-                },
-            }
-        end
-    else
-        web_item.callback = self:safeCallback(_("QR login"), function(touchmenu_instance)
-            self._login_menu_instance = touchmenu_instance
-            self.qr_login:start()
-        end)
-    end
-
     local eink_item = {
         text_func = function()
             if self.settings:is_eink_configured() then
                 return T(_("Eink login · %1"), self:einkLoginName())
             end
-            return _("Eink login (fast download / upload highlights)")
+            return _("Eink login")
         end,
         keep_menu_open = true,
     }
@@ -172,7 +129,6 @@ function M:getAccountMenuItems()
     end
 
     return {
-        web_item,
         eink_item,
         {
             text = _("Clear all logins"),
@@ -188,9 +144,6 @@ function M:getMainMenuItems()
     local items = {
         {
             text_func = function()
-                if self.settings:is_cookie_configured() then
-                    return T(_("Account · %1"), self:wechatLoginName())
-                end
                 if self.settings:is_eink_configured() then
                     return T(_("Account · %1"), self:einkLoginName())
                 end

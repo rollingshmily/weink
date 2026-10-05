@@ -14,7 +14,6 @@ function M.run(settings, client, book, chapter, context)
     local workspace
     local ok, result = xpcall(function()
         context.emit { stage = "reader" }
-        Content.ensure_reader_state(client, book)
         context.checkCancelled()
 
         local cache = settings:get("cache", {})

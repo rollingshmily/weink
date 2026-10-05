@@ -1564,10 +1564,7 @@ end
 
 function Content.fetch_catalog(client, book)
     local book_id = book.book_id or book.bookId
-    local reader_url = book.reader_url or WeRead.reader_url(book_id)
-    local catalog = client:post_json("https://weread.qq.com/web/book/chapterInfos", {
-        bookIds = { tostring(book_id) },
-    }, { referer = reader_url })
+    local catalog = client:eink_chapterinfo(book_id)
     local chapters = Content.readable_chapters(Content.normalize_chapters(catalog, book_id))
     book.chapters = chapters
     return chapters
@@ -1864,71 +1861,31 @@ local function apply_chapter_annotations(client, settings, book, chapter, xhtml,
 end
 
 function Content.fetch_chapter_epub(client, settings, book, chapter)
-    local book_id = book.book_id or book.bookId
-    local xhtml = Content.fetch_chapter_xhtml(client, settings, book, chapter)
-    local css = Content.fetch_chapter_css(client, settings, book, chapter)
-    xhtml, css = apply_chapter_annotations(client, settings, book, chapter, xhtml, css)
-    local assets = {}
-    local cache = settings:get("cache", {})
-    if cache.download_book_images then
-        local used_names = {}
-        local src_map
-        assets, src_map = Content.download_chapter_assets(client, book, chapter, used_names)
-        xhtml = Content.rewrite_image_sources(xhtml, src_map)
-        local inline_xhtml, inline_assets = Content.download_remote_images(client, xhtml, used_names)
-        xhtml = inline_xhtml
-        for _, a in ipairs(inline_assets) do
-            table.insert(assets, a)
-        end
-    end
-    local path = Content.save_chapter_epub(settings, book, chapter, xhtml, assets, css)
-    book.cached_chapters = book.cached_chapters or {}
-    book.cached_chapters[tostring(chapter.chapterUid)] = path
-    book.cached_file = path
-    book.chapter_uid = chapter.chapterUid
-    book.chapter_idx = chapter.chapterIdx
-    book.reader_url = book.reader_url or WeRead.reader_url(book_id)
-    return path, chapter
-end
-
-function Content.fetch_single_chapter_content(client, settings, book, chapter, state)
-    state = state or {}
-    local xhtml = Content.fetch_chapter_xhtml(client, settings, book, chapter, state)
-    if not state.css then
-        state.css = Content.fetch_chapter_css(client, settings, book, chapter)
-    end
-    xhtml, state.css = apply_chapter_annotations(client, settings, book, chapter, xhtml, state.css)
-    local chapter_assets = {}
-    local cache = settings:get("cache", {})
-    if cache.download_book_images then
-        state.used_asset_names = state.used_asset_names or {}
-        local tar_assets, src_map = Content.download_chapter_assets(client, book, chapter, state.used_asset_names)
-        for _, asset in ipairs(tar_assets) do
-            table.insert(chapter_assets, asset)
-        end
-        xhtml = Content.rewrite_image_sources(xhtml, src_map)
-        local inline_xhtml, inline_assets = Content.download_remote_images(client, xhtml, state.used_asset_names)
-        xhtml = inline_xhtml
-        for _, a in ipairs(inline_assets) do
-            table.insert(chapter_assets, a)
-        end
-    end
-    return xhtml, chapter_assets
+    local path = Content.fetch_chapters_epub_eink(client, settings, book, { chapter })
+    return path
 end
 
 -- Split chapter downloading around annotation fetching so the UI can request
 -- thought batches cooperatively instead of blocking inside Thoughts.apply().
 function Content.fetch_single_chapter_source(client, settings, book, chapter, state)
     state = state or {}
-    local xhtml
-    if state.parallel_shards then
-        xhtml = Content.fetch_chapter_xhtml_parallel(
-            client, settings, book, chapter, state)
-    else
-        xhtml = Content.fetch_chapter_xhtml(client, settings, book, chapter, state)
+    if not client.can_eink_download or not client:can_eink_download() then
+        error("eink download is not available")
     end
-    if not state.css then
-        state.css = Content.fetch_chapter_css(client, settings, book, chapter)
+    local chapters = Content.ensure_eink_chapter_files(client, book, { chapter })
+    local param = Eink.build_chapters_param({ chapter.chapterUid })
+    if param == "" then
+        error("No readable chapter found")
+    end
+    local files = client:eink_download_zip(book.book_id or book.bookId, param)
+    local bodies, assets = Eink.files_to_chapter_bodies(files, chapters)
+    local uid = tostring(chapter.chapterUid or "")
+    local xhtml = bodies[uid]
+    if type(xhtml) ~= "string" or xhtml == "" then
+        error("eink ZIP contained no matching chapter")
+    end
+    if type(assets) == "table" then
+        state.eink_assets = assets
     end
     return xhtml
 end
@@ -1967,7 +1924,7 @@ function Content.finalize_single_chapter_content(client, settings, book, chapter
     return xhtml, chapter_assets
 end
 
-local function ensure_eink_chapter_files(client, book, chapters)
+function Content.ensure_eink_chapter_files(client, book, chapters)
     local missing = false
     for _, chapter in ipairs(chapters or {}) do
         if type(chapter.files) ~= "table" or not chapter.files[1] then
@@ -1996,7 +1953,7 @@ function Content.fetch_chapters_epub_eink(client, settings, book, chapters, opti
     if not client.can_eink_download or not client:can_eink_download() then
         error("eink download is not available")
     end
-    chapters = ensure_eink_chapter_files(client, book, chapters)
+    chapters = Content.ensure_eink_chapter_files(client, book, chapters)
     local uids = {}
     for _, chapter in ipairs(chapters or {}) do
         uids[#uids + 1] = chapter.chapterUid
@@ -2037,62 +1994,10 @@ end
 
 function Content.fetch_chapters_epub(client, settings, book, chapters, options)
     options = options or {}
-    if client.can_eink_download and client:can_eink_download() then
-        local ok, path, selected = pcall(Content.fetch_chapters_epub_eink, client, settings, book, chapters, options)
-        if ok then
-            return path, selected
-        end
-        logger.warn("eink zip download failed, falling back to web chapters:", tostring(path))
-    end
-    local selected = {}
-    local bodies = {}
-    local assets = {}
-    local used_asset_names = {}
-    local cache = settings:get("cache", {})
-    local css
-    for chapter_index, chapter in ipairs(chapters or {}) do
-        if options.progress then
-            options.progress(chapter_index, #chapters, chapter, "text")
-        end
-        local xhtml = Content.fetch_chapter_xhtml(client, settings, book, chapter)
-        if not css then
-            css = Content.fetch_chapter_css(client, settings, book, chapter)
-        end
-        xhtml, css = apply_chapter_annotations(client, settings, book, chapter, xhtml, css)
-        if cache.download_book_images then
-            if options.progress then
-                options.progress(chapter_index, #chapters, chapter, "images")
-            end
-            local chapter_assets, src_map = Content.download_chapter_assets(client, book, chapter, used_asset_names)
-            for _, asset in ipairs(chapter_assets) do
-                table.insert(assets, asset)
-            end
-            xhtml = Content.rewrite_image_sources(xhtml, src_map)
-            local inline_xhtml, inline_assets = Content.download_remote_images(client, xhtml, used_asset_names)
-            xhtml = inline_xhtml
-            for _, a in ipairs(inline_assets) do
-                table.insert(assets, a)
-            end
-        end
-        local uid = tostring(chapter.chapterUid or chapter_index)
-        table.insert(selected, chapter)
-        bodies[uid] = xhtml
-    end
-    if #selected == 0 then
-        error("No readable chapter found")
-    end
-    local path = Content.save_book_epub(settings, book, selected, bodies, options.suffix or "book", assets, css)
-    book.cached_chapters = book.cached_chapters or {}
-    for chapter_index, chapter in ipairs(selected) do
-        book.cached_chapters[tostring(chapter.chapterUid or chapter_index)] = path
-    end
-    book.cached_file = path
-    book.reader_url = book.reader_url or WeRead.reader_url(book.book_id or book.bookId)
-    return path, selected
+    return Content.fetch_chapters_epub_eink(client, settings, book, chapters, options)
 end
 
 function Content.fetch_first_chapter(client, settings, book)
-    Content.ensure_reader_state(client, book)
     local chapters = book.chapters or Content.load_catalog_cache(client, settings, book)
     if not chapters then
         chapters = Content.fetch_catalog(client, book)

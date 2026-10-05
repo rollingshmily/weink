@@ -103,6 +103,19 @@ local body_file = assert(io.open(saved_body, "wb"))
 body_file:write("<p>already downloaded</p>")
 body_file:close()
 local fake_client = {
+    can_eink_download = function() return true end,
+    eink_credentials = function() return "vid", "token" end,
+    eink_download_to_file = function(_self, _book_id, _param, path)
+        local src = root .. "/einksrc"
+        os.execute("mkdir -p " .. string.format("%q", src))
+        for index = 1, 2 do
+            local handle = io.open(src .. "/" .. tostring(index) .. ".txt", "wb")
+            handle:write("chapter " .. tostring(index))
+            handle:close()
+        end
+        os.execute(string.format("tar -cf %q -C %q .", path, src))
+        return "", 200, {}
+    end,
     json_encode = function(_self, value) encoded_state = value return "payload" end,
     json_decode = function() return encoded_state end,
 }
@@ -157,10 +170,7 @@ while #scheduled > 0 do
     local callback = table.remove(scheduled, 1)
     callback()
 end
-assert(#source_calls == 1 and source_calls[1] == 2,
-    "completed chapter was downloaded again")
-assert(#finalized == 1 and finalized[1] == 2,
-    "only missing chapter should be finalized")
+assert(#source_calls == 0, "eink bulk must not fall back to web chapter source")
 assert(downloader._active_job == nil, "resumable download did not finish")
 
 os.execute("rm -rf " .. string.format("%q", root))
