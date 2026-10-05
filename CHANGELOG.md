@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.2.85]
+
+- 推荐书评改为墨水屏 `listType=8` 且 `type=4`（APK `BOOK_WONDERFUL` 书评）；不再误打 `listType=1` 自己的划线想法。最新书评仍用 `listType=3`。
+
 ## [1.2.84]
 
 - 删除残留的 web 扫码、Cookie 续期、Skill gateway、web 分片正文实现；插件只保留墨水屏登录。

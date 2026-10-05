@@ -100,14 +100,20 @@ function BookReviews.normalize_item(entry)
         create_time = tonumber(review.createTime) or 0,
         is_finish = review.isFinish == true or tonumber(review.isFinish) == 1,
         idx = tonumber(type(entry) == "table" and entry.idx) or 0,
+        review_type = tonumber(review.type),
     }
 end
 
-function BookReviews.normalize_list(data)
+function BookReviews.normalize_list(data, opts)
     data = type(data) == "table" and data or {}
+    opts = opts or {}
+    local only_type = opts.only_type
     local items = {}
     for _i, entry in ipairs(data.reviews or {}) do
-        items[#items + 1] = BookReviews.normalize_item(entry)
+        local item = BookReviews.normalize_item(entry)
+        if only_type == nil or item.review_type == only_type then
+            items[#items + 1] = item
+        end
     end
     return {
         items = items,

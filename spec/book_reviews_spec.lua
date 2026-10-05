@@ -86,6 +86,25 @@ test("formats string and millisecond dates", function()
     )
 end)
 
+test("keeps review type and can drop underlines", function()
+    local mixed = BookReviews.normalize_list({
+        reviews = {
+            { type = 1, content = "我的划线", author = "me" },
+            {
+                review = {
+                    type = 4,
+                    content = "推荐书评",
+                    author = { nick = "读者乙" },
+                    star = 80,
+                },
+            },
+        },
+    }, { only_type = 4 })
+    eq(#mixed.items, 1, "underlines filtered out")
+    eq(mixed.items[1].content, "推荐书评", "kept book review")
+    eq(mixed.items[1].review_type, 4, "review type preserved")
+end)
+
 if failures > 0 then
     error(string.format("%d/%d checks failed", failures, checks))
 end

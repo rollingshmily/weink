@@ -516,11 +516,16 @@ function Client:get_book_info(book_id)
     return self:eink_json("/book/info", { bookId = tostring(book_id) })
 end
 
-function Client:get_book_reviews(book_id, review_list_type, _count)
-    return self:eink_json("/review/list", {
+function Client:get_book_reviews(book_id, review_list_type, count, review_type)
+    local params = {
         bookId = tostring(book_id),
-        listType = review_list_type or 1,
-    })
+        listType = review_list_type or 3,
+        count = tonumber(count) or 20,
+    }
+    if review_type ~= nil then
+        params.type = review_type
+    end
+    return self:eink_json("/review/list", params)
 end
 
 function Client:get_progress(book_id)

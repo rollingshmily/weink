@@ -909,9 +909,19 @@ function M:showBookReviews(book)
         self:showBusy(_("Loading book reviews..."))
         self:runOnlineTask(_("Book reviews"), function()
             local ok, result = pcall(function()
-                local list_type = mode == "latest" and 3 or 1
+                -- APK BaseBookReviewListService:
+                -- latest = ReviewListType.BOOK_TOP (listType=3)
+                -- recommended = ReviewListType.BOOK_WONDERFUL (listType=8) + type=4
+                -- listType=1 is the current user's own underlines/thoughts.
+                local list_type = 8
+                local review_type = 4
+                if mode == "latest" then
+                    list_type = 3
+                    review_type = nil
+                end
                 return BookReviews.normalize_list(
-                    self.client:get_book_reviews(book_id, list_type, 20)
+                    self.client:get_book_reviews(book_id, list_type, 20, review_type),
+                    { only_type = 4 }
                 )
             end)
             self:closeBusy()
