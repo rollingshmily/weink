@@ -2802,6 +2802,9 @@ local function mp_typography_to_legacy(html)
 end
 
 function Content.save_mp_article_html(settings, book, article, body_html)
+    if not body_html or body_html:match("^%s*$") then
+        error("article body content is empty", 0)
+    end
     local mp_css
     local book_id = book and (book.book_id or book.bookId) or (article and article.bookId)
     -- MP articles stay in the sidecar tree so the flat library only holds EPUBs.
