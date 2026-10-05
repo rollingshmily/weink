@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.83]
+
+### 本地书匹配去掉 web 分片
+
+- 本地书划线/想法同步只走墨水屏列表；有 `markText` 或想法 `abstract` 才匹配到本地文档。
+- 没有原文的热力条跳过，不再抓 `/web/book/chapter/*`，也不再用 ZIP 正文切 `range`。
+- 下载和目录刷新不再先打开 web reader 取 `psvts`。
+- 阅读统计继续用墨水屏票打 `/readdata/detail`（已实锤）；不迁 APK `/book/readingStat`。
+
 ## [1.2.82]
 
 ### 只保留墨水屏登录

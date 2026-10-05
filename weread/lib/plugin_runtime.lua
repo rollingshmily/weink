@@ -124,7 +124,6 @@ local function bind_session_services(plugin, options)
                 return nil, "book_not_found"
             end
             local ok, chapters_or_err = pcall(function()
-                Content.ensure_reader_state(plugin.client, book)
                 return Content.fetch_catalog(plugin.client, book)
             end)
             if not ok then

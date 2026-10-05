@@ -90,7 +90,6 @@ function M:_prepareAnnotationContext(online, refresh_catalog)
     if online and (not catalog or refresh_catalog) then
         local remote = { bookId = book_id, book_id = book_id, title = binding.title,
             author = binding.author, format = binding.format }
-        Content.ensure_reader_state(self.client, remote)
         catalog = Content.fetch_catalog(self.client, remote)
         assert(type(catalog) == "table" and #catalog > 0, _("No chapter catalog available."))
         store:put(book_id, "meta", "catalog", catalog)
@@ -320,21 +319,12 @@ function M:_runAnnotationJob(context, options)
         request.progress:show()
         request.guard = require("weread.lib.standby_guard").acquire()
     end
-    local source_book = context.book or { bookId = context.book_id, book_id = context.book_id,
-        title = context.binding.title, format = context.binding.format }
     request.job = Sync:new{
         store = context.store, client = self.client, book_id = context.book_id,
         chapters = options.chapters or context.chapters, ranges = context.ranges,
         document = not options.prefetch and self.ui.document or nil,
         document_key = not options.prefetch and context.document_key or nil,
         refresh = options.refresh, offline = options.offline,
-        fetch_source = function(chapter)
-            local html = Content.fetch_chapter_xhtml(self.client, self.settings, source_book, chapter)
-            if source_book._content_format == "txt" then
-                return context.store:get(context.book_id, "original", Chapters.uid(chapter)) or {}
-            end
-            return html
-        end,
         on_chapter = function(uid, projection)
             if projection then
                 local key = context.store:projectionKey(context.document_key, uid)

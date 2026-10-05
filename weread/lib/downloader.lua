@@ -1171,9 +1171,7 @@ function Downloader:start(book, chapters, suffix, options)
         body_files = {},
         assets = {},
         assets_by_uid = {},
-        state = {
-            parallel_shards = Content.fetch_chapter_xhtml_parallel ~= nil,
-        },
+        state = {},
         total = total,
         failed = {},
         annotation_failed_batches = 0,
@@ -1236,8 +1234,6 @@ function Downloader:start(book, chapters, suffix, options)
             return
         end
         local ok_init, err_init = pcall(function()
-            Content.ensure_reader_state(self.client, book)
-            dl.state.reader_state_ready = true
             local cache = self.settings.get
                 and self.settings:get("cache", {}) or {}
 

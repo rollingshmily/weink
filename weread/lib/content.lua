@@ -1525,29 +1525,8 @@ function Content.download_remote_images_to_files(client, xhtml, used_names, work
     return body, assets
 end
 
-function Content.ensure_reader_state(client, book)
-    local book_id = book.book_id or book.bookId
-    local reader_url = book.reader_url or WeRead.reader_url(book_id)
-    local reader_html = client:get_text(reader_url, { referer = reader_url })
-    local state = Content.extract_reader_state(reader_html, function(encoded)
-        return client:json_decode(encoded)
-    end)
-    book.book_id = book.book_id or state.book_id or book.bookId
-    book.title = book.title or state.title
-    book.author = book.author or state.author
-    -- These values belong to one Web Reader session. Never retain a cached
-    -- value when the freshly opened reader omits it (notably pclts).
-    book.psvts = state.psvts
-    book.pclts = state.pclts
-    book.token = state.token
-    book.reader_url = reader_url
-
-    ReaderState.apply_to_book(book, state)
-
-    if not book.psvts then
-        error("reader.psvts not found")
-    end
-    return state
+function Content.ensure_reader_state(_client, _book)
+    error("web reader state is disabled")
 end
 
 --- Refresh psvts before downloading a chapter (matches per-chapter reader page fetch).
@@ -1745,33 +1724,8 @@ function Content.fetch_txt_as_xhtml(client, settings, book, chapter)
     return Content.txt_to_xhtml(plain)
 end
 
-function Content.fetch_chapter_xhtml(client, settings, book, chapter, state)
-    if not (state and state.reader_state_ready and book.psvts) then
-        Content.refresh_reader_state(client, book, chapter)
-        if state then state.reader_state_ready = true end
-    end
-
-    if book._content_format == "txt" then
-        return Content.fetch_txt_as_xhtml(client, settings, book, chapter)
-    end
-
-    local ok, e0 = pcall(Content.fetch_chapter_shard, client, settings, book, chapter, "/web/book/chapter/e_0")
-
-    if ok and e0:sub(1, 1) == "{" and e0:find('"bookId"', 1, true) then
-        book._content_format = "txt"
-        return Content.fetch_txt_as_xhtml(client, settings, book, chapter)
-    end
-
-    if not ok then
-        error(e0)
-    end
-
-    book._content_format = "epub"
-    return Content.decode_content_shards(
-        e0,
-        Content.fetch_chapter_shard(client, settings, book, chapter, "/web/book/chapter/e_1"),
-        Content.fetch_chapter_shard(client, settings, book, chapter, "/web/book/chapter/e_3")
-    )
+function Content.fetch_chapter_xhtml(_client, _settings, _book, _chapter, _state)
+    error("web chapter shards are disabled")
 end
 
 -- Remove hostile zero-sized root rules from server CSS. Other zero font sizes

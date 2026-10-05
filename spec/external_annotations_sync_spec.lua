@@ -140,5 +140,61 @@ assert(type(race_error) == "string"
     "cancelled annotation response must abort before persistence")
 assert(not race_store:get("race", "batch", "1:1"),
     "cancelled annotation response wrote a stale batch")
+
+-- Local books match thought abstracts. Heat-map ranges without quote text
+-- skip original HTML instead of fetching web chapter shards.
+local abstract_store = helper.new()
+local abstract_job = Sync:new {
+    store = abstract_store,
+    client = {
+        get_chapter_underlines = function()
+            return true, { underlines = { { range = "1-2" } } }
+        end,
+        build_chapter_review_batches = function()
+            return { { "1-2" } }
+        end,
+        get_chapter_reviews_batch = function()
+            return true, { reviews = { { range = "1-2", pageReviews = {
+                { review = { abstract = "alpha", content = "thought", author = {} } } } } } }
+        end,
+    },
+    book_id = "abs",
+    chapters = { { chapterUid = "1" } },
+    document = document,
+    document_key = "local",
+    fetch_source = function()
+        error("web original HTML must not be fetched")
+    end,
+}
+assert(finish(abstract_job))
+local abstract_records = abstract_store:get("abs", "projection", "local:1").records
+assert(#abstract_records == 1 and abstract_records[1].text == "alpha",
+    "thought abstract must locate without web chapter HTML")
+
+local missing_store = helper.new()
+local missing_job = Sync:new {
+    store = missing_store,
+    client = {
+        get_chapter_underlines = function()
+            return true, { underlines = { { range = "1-2" } } }
+        end,
+        build_chapter_review_batches = function()
+            return { { "1-2" } }
+        end,
+        get_chapter_reviews_batch = function()
+            return true, { reviews = {} }
+        end,
+    },
+    book_id = "miss",
+    chapters = { { chapterUid = "1" } },
+    document = document,
+    document_key = "local",
+}
+assert(finish(missing_job))
+local missing_proj = missing_store:get("miss", "projection", "local:1")
+assert(#missing_proj.records == 0
+    and missing_proj.stats.missing_text == 1,
+    "heat-map rows without quote text must skip instead of fetching web HTML")
+
 helper.cleanup()
 print("external_annotations_sync_spec: resume, cross-file reuse, empty updates and offline prefetch passed")

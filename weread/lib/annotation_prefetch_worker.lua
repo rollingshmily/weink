@@ -1,5 +1,3 @@
-local Chapters = require("weread.lib.annotation_chapters")
-local Content = require("weread.lib.content")
 local Sync = require("weread.lib.annotation_sync")
 local WorkerSettings = require("weread.lib.worker_settings")
 
@@ -7,12 +5,6 @@ local M = {}
 
 function M.run(settings, client, context, chapters, worker_context)
     local auth_result = WorkerSettings.capture(settings)
-    local source_book = context.book or {
-        bookId = context.book_id,
-        book_id = context.book_id,
-        title = context.binding and context.binding.title,
-        format = context.binding and context.binding.format,
-    }
     local job = Sync:new {
         store = context.store,
         client = client,
@@ -24,15 +16,6 @@ function M.run(settings, client, context, chapters, worker_context)
         refresh = false,
         offline = false,
         is_cancelled = worker_context.cancelled,
-        fetch_source = function(chapter)
-            local html = Content.fetch_chapter_xhtml(client, settings,
-                source_book, chapter)
-            if source_book._content_format == "txt" then
-                return context.store:get(context.book_id, "original",
-                    Chapters.uid(chapter)) or {}
-            end
-            return html
-        end,
     }
     while true do
         worker_context.checkCancelled()
