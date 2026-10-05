@@ -7,6 +7,7 @@ local logger = require("weread.lib.logger")
 local PathChooser = require("ui/widget/pathchooser")
 local Scan = require("weread.lib.scan")
 local UIManager = require("ui/uimanager")
+local WeRead = require("weread.lib.protocol")
 
 local PluginUtil = require("weread.lib.plugin_util")
 local _ = PluginUtil.tr
@@ -592,6 +593,7 @@ function M:showCacheManagement()
     end
 
     local function add_cache_entry(book_id, book)
+        if WeRead.is_mp_book(book_id) then return end
         local book_dir = Content.book_resolved_dir(self.settings, book_id, book)
         local key = book_dir or book_id
         if seen_dirs[key] then
@@ -728,6 +730,7 @@ function M:scanLocalCache(root, allowed, dry_run)
         fs = lfs,
         books = books,
         allowed = allowed,
+        is_mp = WeRead.is_mp_book,
         dry_run = dry_run,
         now = os.time(),
     })

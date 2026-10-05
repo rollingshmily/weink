@@ -30,6 +30,9 @@ end
 package.preload["weread.lib.logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
+package.preload["weread.lib.protocol"] = function()
+    return { is_mp_book = function() return false end }
+end
 package.preload["weread.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,
@@ -110,6 +113,7 @@ local host = {
         end,
     },
     shelf_regular = { { bookId = "b1" }, { bookId = "b2" } },
+    shelf_mp = {},
     safeCallback = function(_self, _name, fn) return fn end,
     runOnlineTask = function(_self, _label, fn) fn() end,
     showBusy = function() end,

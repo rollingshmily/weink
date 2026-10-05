@@ -35,6 +35,9 @@ end
 package.preload["weread.ui.thought_popup"] = function()
     return { closeVisible = function() end }
 end
+package.preload["weread.lib.protocol"] = function()
+    return { is_mp_book = function(book_id) return book_id == "mp-book" end }
+end
 package.preload["weread.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,
@@ -171,6 +174,14 @@ expect(menu_has(weread_reader_items, "Sync progress now")
         and not menu_has(weread_reader_items, "Download thoughts for this chapter")
         and menu_has(weread_reader_items, "Underlines and thoughts management"),
     "WeRead book menu retained the local-book annotation submenu")
+
+host.detectWeReadBook = function() return "mp-book" end
+local mp_reader_items = host:getMainMenuItems()
+expect(not menu_has(mp_reader_items, "Sync progress now")
+        and menu_has(mp_reader_items, "Book details")
+        and not menu_has(mp_reader_items, "Download thoughts for this chapter")
+        and menu_has(mp_reader_items, "Underlines and thoughts management"),
+    "public-account menu exposed unsupported progress or local-book actions")
 
 host.ui.document = nil
 host.detectWeReadBook = nil

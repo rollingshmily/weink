@@ -12,6 +12,9 @@ end
 package.preload["weread.lib.plugin_util"] = function()
     return { tr = function(text) return text end }
 end
+package.preload["weread.lib.protocol"] = function()
+    return { is_mp_book = function(book_id) return book_id == "mp-book" end }
+end
 
 local Navigation = require("weread.ui.reader_navigation")
 
@@ -101,6 +104,22 @@ expect(stats_opened,
 dialog_callbacks.on_toggle_annotations()
 expect(annotations_toggled,
     "quick menu annotation button delegates to the shared visibility toggle")
+
+context_books["mp-book"] = { book_id = "mp-book", title = "Article" }
+context_host.ensureChaptersLoaded = function()
+    error("public account quick menu must not load regular book chapters")
+end
+expect(context_host:showEndOfBookDialog("mp-book"),
+    "quick menu opens for a public account article")
+expect(dialog_options.enable_book_details == true
+        and dialog_options.enable_chapter_list == false
+        and dialog_options.enable_next_chapter == false
+        and dialog_options.enable_sync_progress == false,
+    "public account articles only enable supported contextual actions")
+notice = nil
+dialog_callbacks.on_sync_progress()
+expect(notice and notice.timeout == 1,
+    "public account article explains that progress sync needs a regular book")
 
 print(string.format(
     "reader_quick_menu_spec: %d checks, %d failure(s)", checks, failures))

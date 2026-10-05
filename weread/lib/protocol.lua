@@ -262,12 +262,20 @@ function WeRead.make_read_payload(opts)
     return params
 end
 
+function WeRead.is_mp_book(book_id)
+    return tostring(book_id or ""):sub(1, 7) == "MP_WXS_"
+end
+
 function WeRead.reader_url(book_id, chapter_uid)
     local url = "https://weread.qq.com/web/reader/" .. WeRead.e(book_id)
     if chapter_uid then
         url = url .. "k" .. WeRead.e(chapter_uid)
     end
     return url
+end
+
+function WeRead.mp_reader_url(book_id)
+    return "https://weread.qq.com/web/mp/reader/" .. WeRead.e(book_id)
 end
 
 --- Upgrade WeRead CDN cover URLs to the higher-resolution t9 token.

@@ -1,10 +1,11 @@
--- Local-cache scanner: registers manually copied book directories under
+-- Local-cache scanner: registers manually copied book/article directories under
 -- a download root into the books table. Only directories whose name matches an
 -- entry in `allowed` (built from the user's WeRead shelf) are imported, so when
 -- the download dir points at a user-selected library, unrelated folders can
 -- never be registered and later deleted by cache cleanup.
 --
--- Kept free of KOReader dependencies so it can be unit-tested with Lua.
+-- Kept free of KOReader dependencies (filesystem access and the MP check are
+-- injected) so it can be unit-tested with a plain Lua interpreter.
 
 local Scan = {}
 
@@ -28,6 +29,7 @@ end
 --   fs       lfs-like interface: fs.dir(path) iterator, fs.attributes(path)
 --   books    books table, mutated in place unless dry_run
 --   allowed  map of directory name -> { book_id, title, author } from the shelf
+--   is_mp    function(book_id) -> true for MP (public account) ids
 --   dry_run  when true, only count what would change
 --   now      timestamp used for updated_at on new records
 -- Returns added, updated.
@@ -43,9 +45,10 @@ function Scan.scan_root(opts)
             local dir = opts.root .. "/" .. entry
             local attr = fs.attributes(dir)
             if attr and attr.mode == "directory" then
-                -- Track the largest EPUB as the book file to open.
+                -- MP dirs hold .html articles; regular books hold .epub, and we
+                -- track the largest one as the book file to open.
                 local main_epub, main_size = nil, -1
-                local has_epub = false
+                local has_epub, has_html = false, false
                 local ok2, fiter, fobj = pcall(fs.dir, dir)
                 if ok2 then
                     for f in fiter, fobj do
@@ -54,7 +57,9 @@ function Scan.scan_root(opts)
                             if fattr and fattr.mode == "file" then
                                 local ext = f:match("%.([^.]+)$")
                                 ext = ext and ext:lower()
-                                if ext == "epub" then
+                                if ext == "html" then
+                                    has_html = true
+                                elseif ext == "epub" then
                                     has_epub = true
                                     if (fattr.size or 0) > main_size then
                                         main_size = fattr.size or 0
@@ -71,7 +76,9 @@ function Scan.scan_root(opts)
                 local shelf_book = allowed[entry]
                 if shelf_book then
                     local book_id = shelf_book.book_id
-                    if has_epub then
+                    local is_mp = opts.is_mp(book_id)
+                    local has_content = is_mp and has_html or (not is_mp and has_epub)
+                    if has_content then
                         local record = books[book_id] or { book_id = book_id }
                         local had_cache = (type(record.cache_dir) == "string" and record.cache_dir ~= "")
                             or record.cached_file ~= nil
@@ -83,10 +90,11 @@ function Scan.scan_root(opts)
                         -- missing, points outside this directory (stale after a
                         -- download-dir change), or no longer exists on disk. A
                         -- valid file inside this directory is kept even when
-                        -- another EPUB here is larger.
+                        -- another epub here is larger. MP articles are opened
+                        -- per-article, not via a single file.
                         local cf = record.cached_file
                         local cf_valid = dirname(cf) == dir and file_exists(fs, cf)
-                        local needs_file = main_epub ~= nil and not cf_valid
+                        local needs_file = not is_mp and main_epub ~= nil and not cf_valid
                         local needs_title = not record.title or record.title == ""
                         local changed = is_new or dir_changed or needs_file or needs_title
                         if opts.dry_run then

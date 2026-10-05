@@ -68,7 +68,7 @@ function Content.book_content_dir(settings)
     return settings.cache_dir
 end
 
--- Canonical per-book sidecar root: catalog/thoughts/metadata.
+-- Canonical per-book sidecar root: catalog/thoughts/metadata/MP html.
 -- Always keyed by bookId under settings.meta_dir so content and metadata stay
 -- linked even when EPUBs are flat title-named files in the book library.
 function Content.book_meta_dir(settings, book_id)
@@ -100,9 +100,10 @@ local function dir_has_sidecar(dir)
         or path_exists(dir .. "/thoughts.db")
         or path_exists(dir .. "/metadata.json")
         or path_exists(dir .. "/reading_state.json")
+        or path_exists(dir .. "/articles.json")
 end
 
--- Resolve sidecar directory for thoughts/catalog/metadata.
+-- Resolve sidecar directory for thoughts/catalog/metadata/MP articles.
 -- Priority:
 --   1) explicit book.cache_dir when it still holds sidecars (or is the canonical meta path)
 --   2) legacy combined layout: parent of cached_file/chapter when parent is <bookId>

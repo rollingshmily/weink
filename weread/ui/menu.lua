@@ -7,6 +7,7 @@ local InfoMessage = require("ui/widget/infomessage")
 local logger = require("weread.lib.logger")
 local UIManager = require("ui/uimanager")
 local ThoughtPopup = require("weread.ui.thought_popup")
+local WeRead = require("weread.lib.protocol")
 
 local PluginUtil = require("weread.lib.plugin_util")
 local _ = PluginUtil.tr
@@ -259,13 +260,15 @@ function M:getMainMenuItems()
         local book_id = self:detectWeReadBook()
         local reader_items = {}
         if book_id ~= nil then
-            reader_items[#reader_items + 1] = {
-                text = _("Sync progress now"),
-                keep_menu_open = true,
-                callback = self:safeCallback(_("Sync progress now"), function()
-                    self:onWeReadSyncProgress()
-                end),
-            }
+            if not WeRead.is_mp_book(book_id) then
+                reader_items[#reader_items + 1] = {
+                    text = _("Sync progress now"),
+                    keep_menu_open = true,
+                    callback = self:safeCallback(_("Sync progress now"), function()
+                        self:onWeReadSyncProgress()
+                    end),
+                }
+            end
             reader_items[#reader_items + 1] = {
                 text = _("Book details"),
                 keep_menu_open = true,

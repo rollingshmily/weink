@@ -1,6 +1,7 @@
 -- End-of-book navigation dialog integration.
 local EndOfBookDialog = require("weread.ui.end_of_book_dialog")
 local PluginUtil = require("weread.lib.plugin_util")
+local WeRead = require("weread.lib.protocol")
 
 local _ = PluginUtil.tr
 
@@ -36,8 +37,8 @@ function M:showEndOfBookDialog(book_id)
 
     local books = self.settings:get("books", {})
     local book = book_id and (books[tostring(book_id)] or books[book_id]) or nil
-    local is_regular_weread_book = book ~= nil
-    local chapters = book and self:ensureChaptersLoaded(book) or nil
+    local is_regular_weread_book = book ~= nil and not WeRead.is_mp_book(book_id)
+    local chapters = is_regular_weread_book and self:ensureChaptersLoaded(book) or nil
 
     local current_idx, is_full_book
     if chapters then

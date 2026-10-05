@@ -19,6 +19,9 @@ end
 package.preload["weread.lib.logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
+package.preload["weread.lib.protocol"] = function()
+    return { is_mp_book = function() return false end }
+end
 package.preload["weread.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,

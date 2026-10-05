@@ -4,6 +4,7 @@ local EpubPath = require("weread.lib.epub_path")
 local logger = require("weread.lib.logger").scoped("Prefetch")
 local UIManager = require("ui/uimanager")
 local PluginUtil = require("weread.lib.plugin_util")
+local WeRead = require("weread.lib.protocol")
 local _ = PluginUtil.tr
 local T = PluginUtil.T
 local display_error = PluginUtil.display_error
@@ -62,7 +63,7 @@ end
 
 function M:onWeReadSyncProgress()
     local book_id = self:detectWeReadBook()
-    if not book_id then
+    if not book_id or WeRead.is_mp_book(book_id) then
         self:showTransientInfo(
             _("This action requires an open WeRead book."), 1)
         return false

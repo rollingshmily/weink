@@ -606,7 +606,8 @@ function Client:get_shelf()
         "response=", table_summary(result),
         "books=", table_summary(type(result) == "table" and result.books or nil),
         "archive=", table_summary(type(result) == "table" and result.archive or nil),
-        "albums=", table_summary(type(result) == "table" and result.albums or nil)
+        "albums=", table_summary(type(result) == "table" and result.albums or nil),
+        "mp=", table_summary(type(result) == "table" and result.mp or nil)
     )
     return result, code, headers
 end

@@ -10,6 +10,7 @@ local logger = require("weread.lib.logger")
 local ProgressbarDialog = require("ui/widget/progressbardialog")
 local TextViewer = require("ui/widget/textviewer")
 local UIManager = require("ui/uimanager")
+local WeRead = require("weread.lib.protocol")
 
 local PluginUtil = require("weread.lib.plugin_util")
 local _ = PluginUtil.tr
@@ -108,6 +109,7 @@ function M:onWeReadAccountChanged()
     end
     self:closeWeReadUI()
     self.shelf_regular = nil
+    self.shelf_mp = nil
     self.shelf_books = nil
     self.shelf_search_keyword = nil
     self.shelf_view_pages = nil
@@ -125,8 +127,13 @@ function M:applyShelfSnapshot(all_books)
     local shelf = self.settings:get("shelf")
     self.shelf_filters = { reading = shelf.filter_reading, download = shelf.filter_download }
     self.shelf_regular = {}
+    self.shelf_mp = {}
     for _i, book in ipairs(all_books or {}) do
-        table.insert(self.shelf_regular, book)
+        if WeRead.is_mp_book(book.book_id or book.bookId) then
+            table.insert(self.shelf_mp, book)
+        else
+            table.insert(self.shelf_regular, book)
+        end
     end
     self.shelf_books = self.shelf_regular
 end
@@ -154,6 +161,14 @@ function M:refreshBookshelf(old_view, view_options)
         local shelf = self.settings:get("shelf")
         self.shelf_filters = { reading = shelf.filter_reading, download = shelf.filter_download }
         self.shelf_regular = {}
+        self.shelf_mp = {}
+        for _i, book in ipairs(all_books) do
+            if WeRead.is_mp_book(book.bookId) then
+                table.insert(self.shelf_mp, book)
+            else
+                table.insert(self.shelf_regular, book)
+            end
+        end
         if self.library_db then
             self.library_db:cacheShelf(all_books)
         end
