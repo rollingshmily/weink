@@ -26,12 +26,10 @@ describe("WeRead plugin integration", function()
         assert.matches("weread%.koplugin$", plugin.path)
     end)
 
-    it("loads project modules only through the weread namespace", function()
-        assert.is_table(package.loaded["weread.lib.client"])
-        assert.is_table(package.loaded["weread.lib.settings"])
-        assert.is_table(package.loaded["weread.ui.menu"])
-        assert.is_nil(package.loaded["lib.client"])
-        assert.is_nil(package.loaded["lib.settings"])
-        assert.is_nil(package.loaded["ui.menu"])
+    it("loads its startup module through the weread namespace", function()
+        -- Client, settings and menu load only when the user opens WeRead.
+        -- PluginLoader discovery itself requires path_index from main.lua.
+        assert.is_table(package.loaded["weread.lib.path_index"])
+        assert.is_nil(package.loaded["lib.path_index"])
     end)
 end)
