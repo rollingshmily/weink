@@ -127,8 +127,9 @@ function LibraryDB:open()
                 PRIMARY KEY (list_type, review_id)
             ) WITHOUT ROWID
         ]])
-        -- Discard incompatible article-table layouts; only the current
-        -- favorites/floating model is supported.
+        -- v1.2.77 used review_id as the sole primary key. The same article can
+        -- be both a favorite and a floating article, so migrate in place while
+        -- retaining the older list and its cached file paths.
         local pragma = db:prepare("PRAGMA table_info(mp_articles)")
         local primary_key = {}
         local column = pragma:step()
@@ -140,11 +141,10 @@ function LibraryDB:open()
         pragma:close()
         if #primary_key > 0
             and (primary_key[1] ~= "list_type" or primary_key[2] ~= "review_id") then
-            local reset_ok, reset_err = pcall(function()
+            local migration_ok, migration_err = pcall(function()
                 db:exec("BEGIN")
-                db:exec("DROP TABLE mp_articles")
                 db:exec([[
-                    CREATE TABLE mp_articles (
+                    CREATE TABLE mp_articles_new (
                         review_id TEXT NOT NULL, list_type INTEGER NOT NULL,
                         idx INTEGER NOT NULL, key TEXT, book_id TEXT,
                         title TEXT NOT NULL, account TEXT, url TEXT,
@@ -155,11 +155,14 @@ function LibraryDB:open()
                         PRIMARY KEY (list_type, review_id)
                     ) WITHOUT ROWID
                 ]])
+                db:exec("INSERT INTO mp_articles_new SELECT * FROM mp_articles")
+                db:exec("DROP TABLE mp_articles")
+                db:exec("ALTER TABLE mp_articles_new RENAME TO mp_articles")
                 db:exec("COMMIT")
             end)
-            if not reset_ok then
+            if not migration_ok then
                 pcall(function() db:exec("ROLLBACK") end)
-                error(reset_err)
+                error(migration_err)
             end
         end
         -- Adds the richer detail snapshot for databases created by an early

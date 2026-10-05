@@ -28,10 +28,9 @@ package.preload["lua-ljsqlite3/init"] = function()
         open = function(_path)
             local db = {}
             db.exec = function(_db, sql)
-                if sql == "DROP TABLE mp_articles" then
+                if sql:find("ALTER TABLE mp_articles_new RENAME TO mp_articles", 1, true) then
                     schema_old = false
                     migrations = migrations + 1
-                    mock_tables.mp_articles = {}
                 end
             end
             db.close = function() end
@@ -167,7 +166,7 @@ local float_articles = {
 }
 
 expect(db:cacheMpArticles(1, fav_articles) == true, "cache favorites failed")
-expect(migrations == 1, "incompatible article table was not reset exactly once")
+expect(migrations == 1, "article table was not migrated exactly once")
 expect(db:cacheMpArticles(2, float_articles) == true, "cache floating failed")
 
 local fetched_favs = db:getMpArticles(1)
