@@ -468,6 +468,36 @@ local function log_position(label, position)
         "raw_offset=", tostring(tonumber(position.raw_chapter_offset)))
 end
 
+local function coordinate_integer(value, minimum)
+    local number = tonumber(value)
+    if not number or number ~= number or number == math.huge
+        or number < minimum or number % 1 ~= 0 then return nil end
+    return number
+end
+
+-- Upload-only comparison. percent is deliberately NOT compared: the local
+-- value is floored, while the readback may be recomputed from chapter words.
+-- Require explicit, valid coordinates, never normalize_remote's default 0.
+-- Exact offsets acknowledge this upload, not a nearby page/another upload.
+local function upload_confirmation(position, remote)
+    if type(remote) ~= "table" then return "unavailable", "readback_unavailable" end
+    if position.chapter_uid == nil then return "unavailable", "snapshot_uid_missing" end
+    local local_uid = coordinate_integer(position.chapter_uid, 1)
+    if not local_uid then return "unavailable", "snapshot_uid_invalid" end
+    if position.chapter_offset == nil then return "unavailable", "snapshot_offset_missing" end
+    local local_offset = coordinate_integer(position.chapter_offset, 0)
+    if not local_offset then return "unavailable", "snapshot_offset_invalid" end
+    if remote.chapter_uid == nil then return "unavailable", "readback_uid_missing" end
+    local remote_uid = coordinate_integer(remote.chapter_uid, 1)
+    if not remote_uid then return "unavailable", "readback_uid_invalid" end
+    if not remote.chapter_offset_present then return "unavailable", "readback_offset_missing" end
+    local remote_offset = coordinate_integer(remote.raw_chapter_offset, 0)
+    if not remote_offset then return "unavailable", "readback_offset_invalid" end
+    if local_uid ~= remote_uid then return "not_confirmed", "chapter_uid_mismatch" end
+    if local_offset ~= remote_offset then return "not_confirmed", "chapter_offset_mismatch" end
+    return "confirmed", "chapter_coordinates_match"
+end
+
 function ProgressSync:_account_identity()
     return tostring((self.settings:get("eink", {}) or {}).vid or "")
 end
@@ -564,6 +594,7 @@ function ProgressSync:_upload_snapshot(position, reason, show_result, on_complet
     local snapshot_id = self.snapshot_sequence
     local snapshot_chapters = copy(self.document_context and self.document_context.chapters
         or self.get_chapters(self.get_book(book_id)))
+    log_position("upload snapshot", position)
     if not self.is_online() then
         self.state = "offline"
         if show_result then self.notify("offline", {}) end
@@ -693,9 +724,9 @@ function ProgressSync:_upload_snapshot(position, reason, show_result, on_complet
                             self:_apply_job_auth(result)
                             local remote = result and result.remote
                             log_position("upload readback", remote)
-                            log("info", "upload confirmation:", remote and
-                                (PositionMapper.same_position(position, remote)
-                                    and "confirmed" or "not_confirmed") or "unavailable")
+                            local status, confirmation_reason = upload_confirmation(position, remote)
+                            log("info", "upload confirmation:", status,
+                                "reason=", confirmation_reason)
                         end)
                     end)
                 end
