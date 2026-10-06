@@ -1124,18 +1124,6 @@ function ReadReport:_send(book_id, book, position, elapsed_seconds)
         book,
         position
     )
-    -- Only explicit progress uploads, never periodic reading-time reports.
-    -- Log the final outgoing numeric fields; fraction is the upload snapshot's
-    -- precise fraction, not an extra field sent to /book/read.
-    if elapsed_seconds == 0 and type(position) == "table" then
-        log("info", "upload payload:",
-            "uid=", tostring(tonumber(payload.chapterUid)),
-            "offset=", tostring(tonumber(payload.chapterOffset)),
-            "fraction=", tostring(tonumber(position.fraction)),
-            "percent=", tostring(tonumber(payload.progress)),
-            "current_progress=", tostring(tonumber(payload.currentProgress)),
-            "chapter_progress=", tostring(tonumber(payload.chapterProgress)))
-    end
     return self.client:report_read(payload)
 end
 

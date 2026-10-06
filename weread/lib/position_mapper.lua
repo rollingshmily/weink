@@ -98,9 +98,6 @@ function PositionMapper.normalize_remote(value, book_id, source, chapters)
         percent = clamp(percent, 0, 100),
         raw_percent = percent,
         raw_chapter_offset = tonumber(raw_offset),
-        -- Keep raw presence for upload confirmation; chapter_offset still
-        -- defaults/clamps exactly as before for existing mapping callers.
-        chapter_offset_present = raw_offset ~= nil,
         chapter_uid = raw_field(
             node, "chapterUid", "chapterId", "chapter_uid"
         ),

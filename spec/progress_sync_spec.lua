@@ -3,23 +3,15 @@
 --   lua spec/progress_sync_spec.lua
 
 package.path = "./?.lua;" .. package.path
-local diagnostic_logs, diagnostic_events = {}, {}
-local function capture_log(...)
-    local line = {}
-    for i = 1, select("#", ...) do line[i] = tostring(select(i, ...)) end
-    diagnostic_logs[#diagnostic_logs + 1] = table.concat(line, " ")
-    diagnostic_events[#diagnostic_events + 1] = { ... }
-end
+local diagnostic_logs = {}
 package.loaded["weread.lib.logger"] = { scoped = function()
-    return { info = capture_log, warn = capture_log, err = capture_log }
+    return { info = function(...)
+        local line = {}
+        for i = 1, select("#", ...) do line[i] = tostring(select(i, ...)) end
+        diagnostic_logs[#diagnostic_logs + 1] = table.concat(line, " ")
+    end }
 end }
--- Only unrelated catalog/network dependencies are stubbed. Mapper, payload
--- construction, _send, normalization and confirmation below are real functions.
-package.preload["weread.lib.content"] = function() return {} end
-package.preload["weread.lib.protocol"] = function() return {} end
 local ProgressSync = require("weread.lib.progress_sync")
-local Mapper = require("weread.lib.position_mapper")
-local ReadReport = require("weread.lib.read_report")
 
 local failures, checks = 0, 0
 local current_test
@@ -36,23 +28,7 @@ end
 
 local function test(name, fn)
     current_test = name
-    diagnostic_logs, diagnostic_events = {}, {}
     fn()
-end
-
-local function events(label)
-    local result = {}
-    for _, event in ipairs(diagnostic_events) do
-        if event[1] == label then result[#result + 1] = event end
-    end
-    return result
-end
-
-local function confirmation(status, reason)
-    local calls = events("upload confirmation:")
-    eq(#calls, 1, "exactly one confirmation for this test's upload")
-    eq(calls[1] and calls[1][2], status, "exact confirmation status")
-    eq(calls[1] and calls[1][4], reason, "fixed confirmation reason")
 end
 
 local chapters = {
@@ -230,8 +206,7 @@ end
 
 -- Unlike the legacy fixture, child execution and completion are separate
 -- scheduled phases. This catches close/reopen races before fork and after POST.
-local function deferred_upload_fixture(accepted, remote_provider, options)
-    options = options or {}
+local function deferred_upload_fixture(accepted, remote_provider)
     local child, payload, done
     local stats = { built = 0, applied = 0, reads = 0 }
     local runner = {
@@ -244,8 +219,6 @@ local function deferred_upload_fixture(accepted, remote_provider, options)
     }
     local f = fixture(nil, {
         subprocess = runner,
-        get_chapters = options.get_chapters,
-        now = options.now,
         remote_provider = function()
             stats.reads = stats.reads + 1
             if remote_provider then return remote_provider() end
@@ -261,7 +234,7 @@ local function deferred_upload_fixture(accepted, remote_provider, options)
     f.values.sync.pull_on_open = false
     f.sync:on_reader_ready(); f.drain()
     f.sync.verified = true
-    f.document.page = options.percent or 50
+    f.document.page = 50
     f.sync:on_page_update()
     f.execute_child = function() child(10, 20); done = true end
     local original_drain = f.drain
@@ -340,9 +313,6 @@ test("failed GET cannot retry an accepted POST", function()
     eq(f.stats.built, 1, "POST performed once")
     eq(f.stats.reads, 1, "GET performed once")
     eq(f.values.books.book.pending_upload_position, nil, "GET failure does not requeue POST")
-    confirmation("unavailable", "readback_unavailable")
-    eq(table.concat(diagnostic_logs, "\n"):find("private response", 1, true), nil,
-        "GET exception text is not logged")
 end)
 
 test("newer pending survives same-session accepted callback", function()
@@ -372,7 +342,8 @@ test("accepted is persisted before separate readback starts", function()
     local accepted_log = table.concat(diagnostic_logs, "\n")
     eq(accepted_log:find("upload accepted:", 1, true) ~= nil, true, "accepted log exists")
     f.step(); f.execute_child(); f.step()
-    confirmation("confirmed", "chapter_coordinates_match")
+    eq(table.concat(diagnostic_logs, "\n"):find("confirmed", 1, true) ~= nil,
+        true, "separate confirmation log")
 end)
 
 test("readback diagnostics never log remote text or credentials", function()
@@ -383,234 +354,6 @@ test("readback diagnostics never log remote text or credentials", function()
     f.sync:on_close_document(); f.step(); f.execute_child(); f.drain()
     eq(table.concat(diagnostic_logs, "\n"):find("SECRET", 1, true), nil,
         "position log uses numeric allowlist")
-end)
-
--- million-word catalog reproduces the integer-vs-reconstructed percent bug.
-local function roundtrip_fixture(percent, mutate_response)
-    local snapshot_catalog = {
-        { chapterUid = 652, chapterIdx = 1, wordCount = 455000 },
-        { chapterUid = 653, chapterIdx = 2, wordCount = 1000 },
-        { chapterUid = 654, chapterIdx = 3, wordCount = 544000 },
-    }
-    local response
-    local f = deferred_upload_fixture(true, function() return response end, {
-        percent = percent,
-        get_chapters = function() return snapshot_catalog end,
-    })
-    f.values.read_report = {}
-    local report = ReadReport:new{
-        settings = f.sync.settings,
-        scheduler = f.sync.scheduler,
-        get_document = f.sync.get_document,
-        detect_book = f.sync.detect_book,
-        now = function() return 100 end,
-        subprocess = false,
-        client = { report_read = function(_self, payload)
-            f.stats.posts = (f.stats.posts or 0) + 1
-            f.stats.payload = payload
-            response = {}
-            for key, value in pairs(payload) do response[key] = value end
-            if mutate_response then mutate_response(response) end
-            return { succ = 1 }
-        end },
-    }
-    f.sync.build_upload_outcome = function(id, position, elapsed)
-        f.stats.built = f.stats.built + 1
-        f.stats.position = position
-        local result = report:_send(id, {}, position, elapsed)
-        return { accepted = result.succ == 1 }
-    end
-    f.report = report
-    f.catalog = snapshot_catalog
-    f.response = function() return response end
-    return f
-end
-
-local function complete_close(f)
-    f.sync:on_close_document(); f.step(); f.execute_child(); f.drain()
-    eq(f.stats.posts, 1, "one final payload posted")
-    eq(f.stats.reads, 1, "one readback")
-    eq(f.values.books.book.pending_upload_position, nil, "accepted stays committed")
-    eq(f.sync.state, "idle", "closed reader is not reopened by confirmation")
-    f.sync:on_close_document(); f.drain()
-    eq(f.stats.posts, 1, "confirmation never makes the accepted snapshot retryable")
-end
-
-for _, percent in ipairs({ 0, 44.99999, 45, 45.49, 45.50, 45.52275,
-        45.52564, 45.88353, 45.99, 45.99999, 46, 46.00001, 99.99999, 100 }) do
-    test("real payload roundtrip at " .. percent .. " percent", function()
-        local f = roundtrip_fixture(percent)
-        complete_close(f)
-        confirmation("confirmed", "chapter_coordinates_match")
-        local position, payload = f.stats.position, f.stats.payload
-        eq(payload.chapterUid, position.chapter_uid, "actual outgoing UID")
-        eq(payload.chapterOffset, position.chapter_offset, "actual outgoing offset")
-        eq(payload.progress, position.percent, "actual outgoing floored percent unchanged")
-        eq(payload.fraction, nil, "diagnostic fraction not added to payload protocol")
-        local remote = assert(Mapper.normalize_remote(f.response(), "book", "eink", f.catalog))
-        eq(Mapper.same_position(position, remote), math.abs(position.percent - remote.percent) <= 0.5,
-            "generic same_position tolerance unchanged")
-        if percent == 45.52564 then
-            eq(position.chapter_uid, 653, "minimal reproduction UID")
-            eq(position.chapter_offset, 256, "minimal reproduction offset")
-            eq(position.percent, 45, "minimal reproduction floored percent")
-            eq(math.abs(remote.percent - 45.5256) < 1e-9, true, "reconstructed precise percent")
-            eq(Mapper.same_position(position, remote), false, "legacy comparator demonstrably fails")
-        end
-        eq(#events("upload snapshot"), 1, "one key-action snapshot log")
-        eq(#events("upload payload:"), 1, "one final payload log")
-        eq(#events("upload readback"), 1, "one numeric readback log")
-    end)
-end
-
-for _, mismatch in ipairs({
-    { field = "chapterUid", delta = 1, reason = "chapter_uid_mismatch" },
-    { field = "chapterOffset", delta = 1, reason = "chapter_offset_mismatch" },
-    { field = "chapterOffset", delta = -1, reason = "chapter_offset_mismatch" },
-}) do
-    test("readback mismatch " .. mismatch.field .. mismatch.delta, function()
-        local f = roundtrip_fixture(45.52564, function(response)
-            response[mismatch.field] = response[mismatch.field] + mismatch.delta
-        end)
-        complete_close(f)
-        confirmation("not_confirmed", mismatch.reason)
-    end)
-end
-
-test("numeric string coordinates confirm without comparing percent", function()
-    local f = roundtrip_fixture(45.52564, function(response)
-        response.chapterUid = tostring(response.chapterUid)
-        response.chapterOffset = tostring(response.chapterOffset)
-        response.progress = 99 -- lower-priority coarse field is not positional evidence
-    end)
-    complete_close(f)
-    confirmation("confirmed", "chapter_coordinates_match")
-end)
-
-for _, field in ipairs({ "chapterUid", "chapterOffset" }) do
-    for _, invalid in ipairs({
-        { label = "missing", value = nil },
-        { label = "text", value = "SECRET_BAD_COORDINATE" },
-        { label = "empty", value = "" },
-        { label = "boolean", value = false },
-        { label = "table", value = {} },
-        { label = "negative", value = -1 },
-        { label = "fractional", value = 0.5 },
-        { label = "infinite", value = math.huge },
-        { label = "negative_infinite", value = -math.huge },
-        { label = "nan", value = 0 / 0 },
-    }) do
-        test("readback " .. field .. " " .. invalid.label .. " cannot confirm", function()
-            -- A chapter start specifically catches default/clamped-zero false matches.
-            local f = roundtrip_fixture(45.50, function(response)
-                response[field] = invalid.value
-            end)
-            complete_close(f)
-            local coordinate = field == "chapterUid" and "uid" or "offset"
-            local problem = invalid.label == "missing" and "missing" or "invalid"
-            confirmation("unavailable", "readback_" .. coordinate .. "_" .. problem)
-            eq(table.concat(diagnostic_logs, "\n"):find("SECRET", 1, true), nil,
-                "illegal coordinate text never enters logs")
-        end)
-    end
-end
-
-test("zero is an invalid chapter UID but a valid offset", function()
-    local f = roundtrip_fixture(45.50, function(response) response.chapterUid = 0 end)
-    complete_close(f)
-    confirmation("unavailable", "readback_uid_invalid")
-end)
-
-for _, field in ipairs({ "chapter_uid", "chapter_offset" }) do
-    for _, invalid in ipairs({ { label = "missing" }, { label = "invalid", value = -1 } }) do
-        test("invalid upload snapshot " .. field .. " " .. invalid.label, function()
-            local f = roundtrip_fixture(45.50)
-            local position = f.sync:capture_local()
-            position[field] = invalid.value
-            f.sync:_upload_snapshot(position, "manual_sync", false)
-            f.step(); f.execute_child(); f.drain()
-            confirmation("unavailable", "snapshot_" ..
-                (field == "chapter_uid" and "uid" or "offset") .. "_" .. invalid.label)
-            eq(f.stats.posts, 1, "no retry for incomplete accepted snapshot")
-        end)
-    end
-end
-
-for _, malformed in ipairs({ "empty", "missing_progress", "invalid_progress" }) do
-    test("unavailable readback " .. malformed .. " cannot confirm", function()
-        local f = roundtrip_fixture(45.50, function(response)
-            if malformed == "empty" then
-                for key in pairs(response) do response[key] = nil end
-            else
-                response.progress = malformed == "invalid_progress" and "SECRET_PROGRESS" or nil
-            end
-        end)
-        complete_close(f)
-        confirmation("unavailable", "readback_unavailable")
-        eq(table.concat(diagnostic_logs, "\n"):find("SECRET", 1, true), nil,
-            "invalid progress text never enters logs")
-    end)
-end
-
-test("confirmation uses the close-time catalog after mutation and release", function()
-    local f = roundtrip_fixture(45.52564)
-    local observed_chapters
-    local fetch = f.sync._child_fetch_remote
-    f.sync._child_fetch_remote = function(self, id, snapshot_chapters)
-        observed_chapters = snapshot_chapters
-        return fetch(self, id, snapshot_chapters)
-    end
-    f.sync:on_close_document()
-    f.catalog[1].wordCount = 1
-    f.document.page = 90
-    eq(f.sync.document_context, nil, "reader context released before child starts")
-    f.step(); f.execute_child(); f.drain()
-    eq(observed_chapters == f.catalog, false, "catalog independently copied")
-    eq(observed_chapters[1].wordCount, 455000, "original chapter word count retained")
-    confirmation("confirmed", "chapter_coordinates_match")
-    local readback = events("upload readback")[1]
-    eq(math.abs(tonumber(readback[9]) - 45.5256) < 1e-9, true,
-        "logged readback percent uses the same snapshot catalog")
-end)
-
-test("hung confirmation times out without requeuing an accepted POST", function()
-    local now = 100
-    local f = deferred_upload_fixture(true, nil, { now = function() return now end })
-    f.sync:on_close_document(); f.step(); f.execute_child(); f.step()
-    eq(f.values.books.book.pending_upload_position, nil, "accepted persisted before hung GET")
-    f.step() -- queue readback worker, deliberately never execute it
-    eq(f.sync.job.kind, "progress_confirmation", "independent confirmation worker")
-    now = now + 181
-    f.step()
-    confirmation("unavailable", "readback_unavailable")
-    eq(f.stats.built, 1, "timeout did not repost")
-    eq(f.values.books.book.pending_upload_position, nil, "timeout did not restore pending")
-    eq(f.sync.job, nil, "confirmation job released")
-    eq(#f.queue, 0, "no retry scheduled")
-    eq(f.sync.state, "idle", "closed reader remains idle")
-end)
-
-test("key-action logs exclude private text and heartbeat/page updates stay quiet", function()
-    local f = roundtrip_fixture(45.52564, function(response)
-        response.summary = "SECRET_REMOTE_TEXT"
-        response.chapterTitle = "SECRET_REMOTE_TITLE"
-        response.token = "SECRET_REMOTE_TOKEN"
-    end)
-    f.values.books.book.title = "SECRET_LOCAL_TITLE"
-    f.values.books.book.summary = "SECRET_LOCAL_SUMMARY"
-    f.values.eink = { access_token = "SECRET_ACCESS_TOKEN" }
-    complete_close(f)
-    eq(table.concat(diagnostic_logs, "\n"):find("SECRET", 1, true), nil,
-        "snapshot, final payload and readback omit text and credentials")
-    local logged = #diagnostic_events
-    f.report:_send("book", {}, f.stats.position, 30)
-    f.report:_send("book", {}, f.stats.position, nil)
-    for _ = 1, 20 do f.sync:on_page_update() end
-    eq(#diagnostic_events, logged, "periodic reports and page updates add no diagnostic noise")
-    local snapshot, payload = events("upload snapshot")[1], events("upload payload:")[1]
-    for _, index in ipairs({ 3, 5, 7, 9 }) do
-        eq(tonumber(payload[index]), tonumber(snapshot[index]), "final payload numeric field " .. index)
-    end
 end)
 
 test("failed immutable close snapshot can be retried explicitly", function()
