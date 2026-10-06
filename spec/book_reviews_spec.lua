@@ -105,6 +105,36 @@ test("keeps review type and can drop underlines", function()
     eq(mixed.items[1].review_type, 4, "review type preserved")
 end)
 
+test("filters empty rendered bodies without removing short reviews", function()
+    local empty = { false, "", " \t\r\n", "<p><br /></p>", "<div>&nbsp;&#160;&#x3000;</div>",
+        "　 ", "&#x200B;&#x200C;&#x200D;&#xFEFF;", "&ensp;&emsp;&thinsp;&zwnj;&zwj;&ZeroWidthSpace;",
+        "<!-- no visible content -->", "<style>p { color: black }</style><script>placeholder()</script>",
+        "<img src='rating.png'>", {},
+    }
+    local rows = { { type = 4, star = 100 } } -- missing body
+    for _, body in ipairs(empty) do rows[#rows + 1] = { type = 4, content = body } end
+    rows[#rows + 1] = { type = 4, content = "好" }
+    rows[#rows + 1] = { type = 4, content = "<p> </p>", htmlContent = "<div>短评</div>" }
+    rows[#rows + 1] = { type = 4, content = "👩‍💻" }
+    rows[#rows + 1] = { type = 4, content = "0" }
+    rows[#rows + 1] = { type = 1, content = "not a book review" }
+    local result = BookReviews.normalize_list({ reviews = rows, totalCount = 1087, hasMore = 1, synckey = 12 },
+        { only_type = 4 })
+    eq(#result.items, 4, "only real bodies retained")
+    eq(result.items[1].content, "好", "single character retained")
+    eq(result.items[2].content, "短评", "HTML fallback after empty plain body")
+    eq(result.items[3].content, "👩‍💻", "emoji joiner preserved")
+    eq(result.items[4].content, "0", "literal zero is real text")
+    eq(result.total_count, 1087, "eink totalCount remains server total")
+    eq(result.raw_count, #rows, "raw count includes filtered entries")
+    eq(result.has_more, true, "eink hasMore survives filtering")
+    eq(result.synckey, 12, "cursor retained")
+    local all_empty = BookReviews.normalize_list({ reviews = { { content = " " } }, hasMore = true, synckey = 99 })
+    eq(#all_empty.items, 0, "empty page")
+    eq(all_empty.has_more, true, "empty page is not end of list")
+    eq(all_empty.total_count, 1, "fallback count is unfiltered")
+end)
+
 if failures > 0 then
     error(string.format("%d/%d checks failed", failures, checks))
 end

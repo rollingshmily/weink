@@ -516,7 +516,7 @@ function Client:get_book_info(book_id)
     return self:eink_json("/book/info", { bookId = tostring(book_id) })
 end
 
-function Client:get_book_reviews(book_id, review_list_type, count, review_type)
+function Client:get_book_reviews(book_id, review_list_type, count, review_type, synckey)
     local params = {
         bookId = tostring(book_id),
         listType = review_list_type or 3,
@@ -525,6 +525,7 @@ function Client:get_book_reviews(book_id, review_list_type, count, review_type)
     if review_type ~= nil then
         params.type = review_type
     end
+    if synckey ~= nil then params.synckey = synckey end
     return self:eink_json("/review/list", params)
 end
 

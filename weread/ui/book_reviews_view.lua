@@ -13,6 +13,8 @@ local HorizontalSpan = require("ui/widget/horizontalspan")
 local ScrollableContainer = require("ui/widget/container/scrollablecontainer")
 local Size = require("ui/size")
 local TextWidget = require("ui/widget/textwidget")
+local TextBoxWidget = require("ui/widget/textboxwidget")
+local TopContainer = require("ui/widget/container/topcontainer")
 local TitleBar = require("ui/widget/titlebar")
 local UIManager = require("ui/uimanager")
 local VerticalGroup = require("ui/widget/verticalgroup")
@@ -39,6 +41,7 @@ local BookReviewsView = FocusManager:extend{
     result = nil,
     on_switch = nil,
     on_select = nil,
+    on_more = nil,
 }
 
 function BookReviewsView:buildTabBar()
@@ -95,9 +98,7 @@ function BookReviewsView:reviewText(review)
     if review_date ~= "" then
         metadata[#metadata + 1] = review_date
     end
-    local preview = BookReviews.preview(
-        review.content ~= "" and review.content or _("No review content."), 80
-    )
+    local preview = BookReviews.preview(review.content, 80)
     return table.concat(metadata, " · ") .. "  |  " .. preview
 end
 
@@ -111,11 +112,11 @@ function BookReviewsView:buildContent()
     if #items == 0 then
         table.insert(content, VerticalSpan:new{ width = Size.padding.large })
         table.insert(content, TextWidget:new{
-            text = _("No reviews."),
+            text = self.result and self.result.has_more and _("No written reviews in the loaded results.")
+                or _("No reviews."),
             face = Font:getFace("cfont", 20),
             max_width = self.content_width,
         })
-        return content
     end
 
     for _i, review in ipairs(items) do
@@ -131,7 +132,9 @@ function BookReviewsView:buildContent()
             bordersize = Size.border.thin,
             background = Blitbuffer.COLOR_WHITE,
             text_font_bold = false,
-            text_font_size = 18,
+            text_font_face = "cfont",
+            text_font_size = 17,
+            avoid_text_truncation = false,
             show_parent = self,
             callback = function()
                 if self.on_select then
@@ -139,9 +142,44 @@ function BookReviewsView:buildContent()
                 end
             end,
         }
+        -- Button normally shrinks 18pt to 17pt when it switches from a
+        -- TextWidget to multiline text, then vertically centres short rows.
+        -- Use the latest tab's multiline metrics for EVERY row, including
+        -- real short reviews. TopContainer also avoids vertical centering of
+        -- font-dependent glyph overflow, while retaining Button's normal
+        -- tap/focus/feedback behaviour.
+        button.label_widget:free()
+        button.label_widget = TextBoxWidget:new{
+            text = button.text,
+            face = Font:getFace("cfont", 17),
+            bold = false,
+            line_height = 0,
+            alignment = "left",
+            width = button.label_container.dimen.w,
+            height = button.height,
+            height_adjust = false,
+            height_overflow_show_ellipsis = true,
+            fgcolor = Blitbuffer.COLOR_BLACK,
+            bgcolor = Blitbuffer.COLOR_WHITE,
+        }
+        button.label_container = TopContainer:new{
+            dimen = button.label_container.dimen,
+            button.label_widget,
+        }
+        button.frame[1] = button.label_container
         self._review_buttons[#self._review_buttons + 1] = button
         table.insert(content, button)
         table.insert(content, VerticalSpan:new{ width = Size.padding.small })
+    end
+    if self.result and self.result.has_more then
+        local more = Button:new{
+            text = _("Load more reviews"),
+            width = self.content_width,
+            show_parent = self,
+            callback = function() if self.on_more then self.on_more() end end,
+        }
+        self._review_buttons[#self._review_buttons + 1] = more
+        table.insert(content, more)
     end
     return content
 end
@@ -228,6 +266,7 @@ function M.show(data, callbacks)
         result = data.result,
         on_switch = callbacks.on_switch,
         on_select = callbacks.on_select,
+        on_more = callbacks.on_more,
     }
     UIManager:show(view)
     return view

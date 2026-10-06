@@ -114,6 +114,8 @@ for _, name in ipairs({
     "ui/widget/container/framecontainer",
     "ui/widget/container/inputcontainer",
     "ui/widget/container/scrollablecontainer",
+    "ui/widget/container/topcontainer",
+    "ui/widget/textboxwidget",
     "ui/widget/imagewidget",
     "ui/widget/horizontalgroup",
     "ui/widget/horizontalspan",

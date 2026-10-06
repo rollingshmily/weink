@@ -7,7 +7,8 @@ end
 local Notes = require("weread.lib.own_notes")
 local function review(rid, vid, book, kind)
     return { review = { review = { reviewId = rid, author = { userVid = vid or "me" },
-        bookId = book or "b", type = kind or 1, chapterUid = 7, abstract = "quote", content = "thought" } } }
+        bookId = book or "b", type = kind or 1, chapterUid = 7, abstract = "quote", content = "thought",
+        createTime = 1700000000 } } }
 end
 local marks = { updated = {
     { bookmarkId = "same", type = 1, chapterUid = 7, markText = "quote", reviewId = "do-not-delete" },
@@ -120,6 +121,19 @@ expect(#tasks == 1 and #menus == 0, "UI load is deferred through network task")
 flush()
 expect(#session.items == 2 and session.more and menus[#menus].opts.items_per_page == 8, "paginated personal list renders")
 expect(menus[#menus].items[3].text:find("Chapter title", 1, true), "chapter title rendered")
+local thought_row = menus[#menus].items[4]
+local thought_date = os.date("%Y-%m-%d", 1700000000)
+expect(thought_row.text == "Chapter title · " .. thought_date .. "\nthought",
+    "thought row starts with chapter/date, not repeated My thought prefix; body intact")
+expect(menus[#menus].title == "My underlines/thoughts · Test book", "page title keeps personal context")
+expect(menus[#menus].items[3].text:find("My underline · ", 1, true) == 1,
+    "mixed list still distinguishes underline rows")
+thought_row.callback()
+local initial_thought_viewer = shown[#shown]
+expect(initial_thought_viewer.title == "My thought", "thought detail retains meaningful title")
+expect(initial_thought_viewer.text == "Test book\nChapter title\n" .. thought_date
+    .. "\n\nQuoted text\nquote\n\nMy thought\nthought",
+    "detail removes only duplicate type header, preserves chapter/date/quote/body and section labels")
 review_page = { reviews = { review("second") }, hasMore = 0, synckey = 200 }
 menus[#menus].items[2].callback() -- load more
 flush()

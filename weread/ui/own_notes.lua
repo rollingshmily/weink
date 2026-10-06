@@ -121,7 +121,7 @@ local function confirm_delete(session, note, viewer)
 end
 
 detail = function(session, note)
-    local text = { session.title, kind_label(note), chapter_label(session, note) }
+    local text = { session.title, chapter_label(session, note) }
     local date = BookReviews.format_date(note.create_time)
     if date ~= "" then text[#text + 1] = date end
     text[#text + 1] = "\n" .. _("Quoted text") .. "\n" .. (note.quote ~= "" and note.quote or _("No quoted text."))
@@ -146,8 +146,14 @@ render = function(session)
         items[#items + 1] = { text = _("Load more of my thoughts"), callback = function() load(session, true) end }
     end
     for _, note in ipairs(session.items) do
+        local metadata = chapter_label(session, note)
+        local date = BookReviews.format_date(note.create_time)
+        if date ~= "" then metadata = metadata .. " · " .. date end
+        -- The page already establishes ownership. Keep the underline marker
+        -- to distinguish the two kinds, not a repeated "My thought" prefix.
+        if note.kind == "bookmark" then metadata = kind_label(note) .. " · " .. metadata end
         items[#items + 1] = {
-            text = kind_label(note) .. " · " .. chapter_label(session, note) .. "\n"
+            text = metadata .. "\n"
                 .. BookReviews.preview(note.content ~= "" and note.content or note.quote, 90),
             callback = function() detail(session, note) end,
         }

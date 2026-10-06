@@ -882,7 +882,8 @@ function M:showBookReviews(book)
     }
 
     local loadReviews
-    loadReviews = function(mode, old_view)
+    loadReviews = function(mode, old_view, more)
+        if session.loading then return end
         local function showResult(result)
             if old_view then
                 UIManager:close(old_view)
@@ -899,15 +900,19 @@ function M:showBookReviews(book)
                 on_select = function(review, selected_mode)
                     self:showBookReviewDetail(book, review, selected_mode)
                 end,
+                on_more = function()
+                    loadReviews(mode, view, true)
+                end,
             })
         end
 
-        if session.cache[mode] then
+        if session.cache[mode] and not more then
             showResult(session.cache[mode])
             return
         end
+        session.loading = true
         self:showBusy(_("Loading book reviews..."))
-        self:runOnlineTask(_("Book reviews"), function()
+        local started = self:runOnlineTask(_("Book reviews"), function()
             local ok, result = pcall(function()
                 -- APK BaseBookReviewListService:
                 -- latest = ReviewListType.BOOK_TOP (listType=3)
@@ -919,11 +924,10 @@ function M:showBookReviews(book)
                     list_type = 3
                     review_type = nil
                 end
-                return BookReviews.normalize_list(
-                    self.client:get_book_reviews(book_id, list_type, 20, review_type),
-                    { only_type = 4 }
-                )
+                return BookReviews.load_more(self.client, book_id, list_type, review_type,
+                    more and session.cache[mode] or nil)
             end)
+            session.loading = false
             self:closeBusy()
             if not ok then
                 logger.err("load book reviews failed:", log_error(result))
@@ -933,6 +937,10 @@ function M:showBookReviews(book)
             session.cache[mode] = result
             showResult(result)
         end)
+        if started == false then
+            session.loading = false
+            self:closeBusy()
+        end
     end
 
     loadReviews("recommended", nil)
