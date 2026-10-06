@@ -170,15 +170,7 @@ function PositionMapper.local_to_remote(chapters, fraction, options)
     local selected
     local offset
     local overall_fraction
-    if options.resolved_chapter then
-        local resolved = options.resolved_chapter
-        selected = map.by_uid[tostring(resolved.chapter_uid)]
-        if not selected or selected.words <= 0 then
-            return nil, "current_chapter_not_found"
-        end
-        offset = math.floor(clamp(resolved.chapter_fraction, 0, 1) * selected.words)
-        overall_fraction = (selected.before + offset) / map.total_words
-    elseif options.is_full_book then
+    if options.is_full_book then
         local target = fraction * map.total_words
         for _index, item in ipairs(map.chapters) do
             if item.words > 0 and target < item.after then
@@ -217,10 +209,6 @@ function PositionMapper.local_to_remote(chapters, fraction, options)
         summary = tostring(options.summary or ""),
         safe = true,
         is_full_book = options.is_full_book == true,
-        chapter_verified = options.resolved_chapter and true or nil,
-        local_xpointer = options.resolved_chapter and options.resolved_chapter.local_xpointer,
-        document_fraction = options.resolved_chapter and options.resolved_chapter.document_fraction,
-        offset_basis = options.resolved_chapter and options.resolved_chapter.offset_basis,
     }
 end
 
@@ -278,20 +266,6 @@ function PositionMapper.compare(local_position, remote, threshold)
     threshold = math.max(0, tonumber(threshold) or 2)
     local delta = (tonumber(remote.percent) or 0)
         - (tonumber(local_position.percent) or 0)
-    if local_position.chapter_verified then
-        if remote.chapter_uid == nil then return "unknown", delta end
-        if tostring(local_position.chapter_uid) ~= tostring(remote.chapter_uid) then
-            return "different", delta
-        end
-        local offset = tonumber(remote.raw_chapter_offset or remote.chapter_offset)
-        if remote.has_chapter_offset == false or remote.chapter_offset_present == false
-            or not offset or offset ~= offset or math.abs(offset) == math.huge
-            or offset < 0 or offset % 1 ~= 0 then return "unknown", delta end
-        -- Coordinate equality is NOT proof of native htmlPos equivalence or
-        -- credited time. Different estimates are unknown, not 'close enough'.
-        if offset == local_position.chapter_offset then return "same", delta end
-        return "unknown", delta
-    end
     if local_position.chapter_uid ~= nil and remote.chapter_uid ~= nil
         and tostring(local_position.chapter_uid)
             ~= tostring(remote.chapter_uid)
@@ -304,8 +278,6 @@ end
 
 function PositionMapper.same_position(left, right, tolerance)
     if type(left) ~= "table" or type(right) ~= "table" then return false end
-    if left.local_xpointer and right.local_xpointer
-        and left.local_xpointer ~= right.local_xpointer then return false end
     tolerance = math.max(0, tonumber(tolerance) or 0.5)
     return math.abs((tonumber(left.percent) or 0) - (tonumber(right.percent) or 0))
             <= tolerance

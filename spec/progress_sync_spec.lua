@@ -92,36 +92,6 @@ local function fixture(remote, options)
         getCurrentPage = function(self) return self.page end,
         getPageCount = function() return 100 end,
     }
-    -- The reader now resolves actual TOC/XPointer identity. This baseline
-    -- fixture deliberately has layout proportional to words; separate regression
-    -- cases below make those distributions disagree.
-    local reader_catalog
-    local function get_chapters()
-        if options.get_chapters then reader_catalog = options.get_chapters()
-        else reader_catalog = chapters end
-        if reader_catalog then
-            for _, ch in ipairs(reader_catalog) do
-                ch.title = ch.title or tostring(ch.chapterUid)
-            end
-        end
-        return reader_catalog
-    end
-    document.info = { doc_height = 10000 }
-    document.getXPointer = function(self) return tostring(self.page * 100) end
-    document.getPosFromXPointer = function(_, xp) return tonumber(xp) end
-    document.getPageXPointer = function(_, page) return tostring(page * 100) end
-    document.compareXPointers = function(_, a, b)
-        a, b = tonumber(a), tonumber(b)
-        return a == b and 0 or (a < b and 1 or -1)
-    end
-    document.getToc = function()
-        local map, toc = Mapper.catalog(reader_catalog), {}
-        for _, item in ipairs(map.chapters) do
-            toc[#toc + 1] = { title = item.source.title, depth = 1,
-                xpointer = tostring(item.before / map.total_words * 10000) }
-        end
-        return toc
-    end
     local book = {
         book_id = "book",
         title = "Book",
@@ -196,7 +166,7 @@ local function fixture(remote, options)
         get_document = function() return document end,
         detect_book = function() return "book" end,
         get_book = function() return book end,
-        get_chapters = get_chapters,
+        get_chapters = options.get_chapters or function() return chapters end,
         refresh_catalog = options.refresh_catalog,
         get_file_context = function()
             return nil, nil, true
@@ -215,11 +185,6 @@ local function fixture(remote, options)
         goto_fraction = function(fraction)
             jumps[#jumps + 1] = fraction
             document.page = math.floor(fraction * 100 + 0.5)
-            return true
-        end,
-        goto_xpointer = function(xp)
-            jumps[#jumps + 1] = tonumber(xp) / 10000
-            document.page = tonumber(xp) / 100
             return true
         end,
         open_chapter = function() return true end,
@@ -810,7 +775,7 @@ test("automatic online task failure remains silent and retries", function()
     eq(#f.notifications, 0, "automatic start failure does not notify")
 end)
 
-test("nearby percent no longer hides uncertain chapter offsets", function()
+test("nearby progress within two percent is treated as aligned", function()
     local f = fixture({
         bookId = "book",
         progress = 26.9,
@@ -821,9 +786,8 @@ test("nearby percent no longer hides uncertain chapter offsets", function()
     })
     f.sync:on_reader_ready()
     f.drain()
-    eq(f.sync:status().verified, false, "uncertain offset stays gated")
-    eq(#f.choices, 1, "uncertain offset prompts")
-    eq(f.choices[1].position_uncertain, true, "does not claim a precise native mismatch")
+    eq(f.sync:status().verified, true, "nearby position verifies")
+    eq(#f.choices, 0, "nearby position does not prompt")
 end)
 
 test("unresolved conflict blocks reports and local choice uploads", function()
@@ -1282,107 +1246,6 @@ test("progress persistence updates only the current book", function()
     eq(#updates, 1, "one single-book update is issued")
     eq(updates[1].book_id, "book", "single-book update receives the book id")
     eq(updates[1].patch.progress, 42, "single-book update receives the patch")
-end)
-
-test("real chapter wins over stale footer and whole-book word distribution", function()
-    local f = fixture({ progress = 50, chapterUid = 33, chapterOffset = 100 })
-    f.document.getToc = function() return {
-        { title = "11", xpointer = "0" },
-        { title = "22", xpointer = "5000" },
-        { title = "33", xpointer = "8000" },
-    } end
-    f.document.page = 60 -- Real chapter 22; the old whole-book calculation said 33.
-    f.sync.get_footer = function() return { percent_finished = 0.9 } end
-    f.sync:on_reader_ready(); f.drain()
-    eq(#f.choices, 1, "actual different chapters prompt even with a stale footer")
-    eq(f.choices[1].local_position.chapter_uid, 22, "real local chapter")
-    eq(f.sync.verified, false, "mismatch not verified")
-    f.choices[1].keep_local()
-    eq(f.uploads[1].chapter_uid, 22, "explicit local upload uses actual chapter")
-    f.document.page = 65
-    local heartbeat = f.sync:position_for_report("book")
-    eq(heartbeat.chapter_uid, 22, "heartbeat uses same capture chain")
-    eq(heartbeat.chapter_offset, 150, "live offset not footer offset")
-    f.sync:on_close_document()
-    eq(f.uploads[#f.uploads].chapter_offset, heartbeat.chapter_offset, "close uses same location")
-end)
-
-test("pull completion and local choice recapture the live reading page", function()
-    local f
-    f = fixture(nil, { remote_provider = function()
-        f.document.page = 50
-        return { progress = 25, chapterUid = 22, chapterOffset = 150 }
-    end })
-    f.sync:on_reader_ready(); f.drain()
-    eq(#f.choices, 1, "in-flight page turn cannot verify stale initial coordinates")
-    eq(f.choices[1].local_position.chapter_uid, 33, "compare uses current chapter")
-    f.document.page = 75
-    f.choices[1].keep_local()
-    eq(f.uploads[1].chapter_offset, 350, "choice does not upload the dialog's stale snapshot")
-end)
-
-test("unmapped page clears verification and cannot upload a stale close snapshot", function()
-    local f = fixture({ progress = 25, chapterUid = 22, chapterOffset = 150 })
-    f.sync:on_reader_ready(); f.drain()
-    eq(f.sync.verified, true, "initial coordinates verified")
-    f.document.getXPointer = function() return nil end
-    f.sync:on_page_update()
-    eq(f.sync.verified, false, "lost position clears the gate")
-    eq(f.sync.state, "unsafe", "unavailable is explicit")
-    local count = #f.notifications
-    f.sync:on_page_update()
-    eq(#f.notifications, count, "same unavailable reason is not spammed")
-    f.sync:on_close_document()
-    eq(#f.uploads, 0, "no stale fallback POST on close")
-end)
-
-test("unknown offset always asks instead of silently keeping local", function()
-    local f = fixture({ progress = 25, chapterUid = 22, chapterOffset = 8000 })
-    f.values.sync.ask_on_conflict = false
-    f.sync:on_reader_ready(); f.drain()
-    eq(#f.choices, 1, "uncertainty is not auto-resolved")
-    eq(f.choices[1].position_uncertain, true, "uncertain rather than same")
-    eq(f.sync.verified, false, "unknown gated")
-end)
-
-test("cloud jump is gated until the actual target chapter is captured", function()
-    local f = fixture({ progress = 50, chapterUid = 33, chapterOffset = 100 })
-    f.sync:on_reader_ready(); f.drain()
-    f.sync.goto_xpointer = function() return true end -- API accepted but reader did not move.
-    f.choices[1].use_remote()
-    eq(f.sync.verified, false, "no eager verification")
-    f.drain()
-    eq(f.sync.verified, false, "wrong landing cannot unblock reporting")
-    eq(f.sync.state, "unsafe", "failed landing is explicit")
-end)
-
-test("legacy queued positions cannot be replayed as trusted real chapters", function()
-    local f = fixture({ progress = 25, chapterUid = 22, chapterOffset = 150 })
-    f.sync:on_reader_ready(); f.drain()
-    f.values.books.book.pending_upload_position = {
-        book_id = "book", percent = 25, chapter_uid = 22, chapter_offset = 150,
-    }
-    f.sync:on_network_connected()
-    eq(#f.uploads, 0, "unverified legacy coordinates not sent")
-    eq(f.notifications[#f.notifications].data.error, "queued_chapter_unverified", "legacy queue is explicit")
-    eq(f.values.books.book.pending_upload_position ~= nil, true, "old snapshot preserved, not deleted")
-    local get_point = f.document.getXPointer
-    f.document.getXPointer = function() return nil end
-    f.sync:on_page_update()
-    eq(f.sync.verified, false, "unavailable reading position gates reports")
-    f.document.getXPointer = get_point
-    f.sync:on_page_update(); f.drain()
-    eq(f.sync.verified, true, "a now-reliable page can recheck without reopening")
-end)
-
-test("single chapter uses live engine instead of footer", function()
-    local f = fixture({ progress = 25, chapterUid = 22, chapterOffset = 150 })
-    f.sync.get_file_context = function() return 2, chapters[2], false end
-    f.sync.get_footer = function() return { percent_finished = 0.9 } end
-    f.document.page = 50
-    local position = assert(f.sync:capture_local())
-    eq(position.chapter_uid, 22, "single chapter identity")
-    eq(position.chapter_offset, 150, "live page, not footer")
 end)
 
 print(string.format(

@@ -37,17 +37,6 @@ plugin.ui = { handleEvent = function(_, event)
 end }
 assert(captured.goto_fraction(0.44678535854103))
 assert(math.abs(received - 44.678535854103) < 1e-12)
-plugin.ui = { rolling = { onGotoXPointer = function(_, xp) received = xp end } }
-assert(captured.goto_xpointer("/body/p[9]"))
-assert(received == "/body/p[9]")
-plugin.ui = { handleEvent = function(_, event)
-    assert(event.name == "GotoXPointer")
-    received = event.percent
-end }
-assert(captured.goto_xpointer("/body/p[10]"))
-assert(received == "/body/p[10]")
-checks = checks + 4
 plugin.ui = nil
-assert(not captured.goto_xpointer("/body/p[10]"))
 assert(not captured.goto_fraction(0.5))
 print(("plugin_runtime_progress_spec: %d checks"):format(checks + 2))
