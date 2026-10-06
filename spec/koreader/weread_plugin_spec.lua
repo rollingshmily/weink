@@ -2,6 +2,10 @@
 -- scripts/run_koreader_integration.sh and runs with KOReader's own Busted setup.
 
 describe("WeRead plugin integration", function()
+    local original_package_path
+    before_each(function() original_package_path = package.path end)
+    after_each(function() package.path = original_package_path end)
+
     setup(function()
         require("commonrequire")
         disable_plugins()
@@ -28,6 +32,9 @@ describe("WeRead plugin integration", function()
 
     it("lays out personal quotes and thoughts with real scrollable widgets", function()
         load_plugin("weread.koplugin")
+        -- PluginLoader restores package.path after discovery. Direct component
+        -- tests must provide the same plugin-local paths as runtime loading.
+        package.path = "plugins/weread.koplugin/?.lua;plugins/weread.koplugin/?/init.lua;" .. package.path
         local Screen = require("device").screen
         local Blitbuffer = require("ffi/blitbuffer")
         local UIManager = require("ui/uimanager")
