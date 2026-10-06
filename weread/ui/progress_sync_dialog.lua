@@ -71,8 +71,14 @@ function ProgressSyncDialog.notify(code, data)
         text = T(_("Could not jump to WeRead progress:\n%1"),
             tostring(data.error or ""))
     elseif code == "local_unavailable" then
-        text = T(_("Could not determine the current reading position:\n%1"),
-            tostring(data.error or ""))
+        local reason = tostring(data.error or "")
+        if reason == "document_chapter_unmapped" or reason == "document_chapter_ambiguous" then
+            text = _("This chapter could not be matched with WeRead's catalog; sync is paused and will resume on the next page.")
+        elseif reason == "document_toc_unavailable" then
+            text = _("This document has no usable table of contents; position sync is paused.")
+        else
+            text = T(_("Could not determine the current reading position:\n%1"), reason)
+        end
     elseif code == "authentication_required" then
         text = _("Please scan the QR code to log in first.")
     elseif code == "offline" then

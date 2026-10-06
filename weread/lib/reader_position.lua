@@ -80,12 +80,26 @@ function ReaderPosition.prepare(document, book, chapters)
         filtered = {}
         local exact, normalized = title_index(toc)
         local cloud_exact, cloud_normalized = title_index(chapters)
+        -- Short titles repeat across a long novel. When both sides repeat a
+        -- title the same number of times and the occurrences stay in step,
+        -- Chapters.map pairs k-th with k-th in document order; counts that
+        -- disagree or drift beyond a few entries stay gated instead.
+        local function occurrences_aligned(candidates, owners)
+            if #candidates ~= #owners then return false end
+            for k = 1, #candidates do
+                if math.abs(candidates[k] - owners[k]) > 16 then return false end
+            end
+            return true
+        end
         for _, chapter in ipairs(chapters) do
             local title = tostring(chapter.title or "")
             local norm = Chapters.normalize(title)
             local candidates = exact[title] or normalized[norm] or {}
             local owners = exact[title] and cloud_exact[title] or cloud_normalized[norm]
             if title ~= "" and #candidates == 1 and #owners == 1 then
+                filtered[#filtered + 1] = chapter
+            elseif title ~= "" and #candidates >= 2
+                and occurrences_aligned(candidates, owners or {}) then
                 filtered[#filtered + 1] = chapter
             elseif #candidates > 0 then
                 ambiguous = ambiguous + 1
