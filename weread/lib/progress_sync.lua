@@ -1,4 +1,5 @@
 local PositionMapper = require("weread.lib.position_mapper")
+local ReaderPosition = require("weread.lib.reader_position")
 
 local logger = require("weread.lib.logger").scoped("ProgressSync")
 local PluginUtil = require("weread.lib.plugin_util")
@@ -110,6 +111,7 @@ function ProgressSync:new(options)
         build_upload_outcome = options.build_upload_outcome,
         apply_upload_outcome = options.apply_upload_outcome,
         goto_fraction = options.goto_fraction,
+        goto_xpointer = options.goto_xpointer,
         open_chapter = options.open_chapter,
         is_online = options.is_online or function() return true end,
         on_choice = options.on_choice or function(context)
@@ -474,16 +476,36 @@ end
 
 function ProgressSync:_apply_remote(remote, context, options)
     options = options or {}
-    local target, reason = PositionMapper.remote_to_local(
-        context.chapters,
-        remote,
-        {
-            is_full_book = context.is_full_book,
-            current_chapter_uid = context.current_chapter
-                and (context.current_chapter.chapterUid
-                    or context.current_chapter.chapterId),
-        }
-    )
+    local target, reason
+    if context.is_full_book and self.goto_xpointer then
+        -- KOReader's whole-book percent is a different scale than the cloud
+        -- percent, so a percent jump lands in the wrong chapter. Resolve the
+        -- cloud chapter against the document's real TOC and jump by XPointer.
+        if context.mapping == nil and context.book then
+            local ok_prepare, mapping = pcall(
+                ReaderPosition.prepare,
+                self.get_document(), context.book, context.chapters)
+            context.mapping = ok_prepare and mapping or nil
+        end
+        if context.mapping then
+            local ok_target, resolved = pcall(
+                ReaderPosition.target,
+                self.get_document(), context.mapping, context.chapters, remote)
+            if ok_target then target = resolved end
+        end
+    end
+    if not target then
+        target, reason = PositionMapper.remote_to_local(
+            context.chapters,
+            remote,
+            {
+                is_full_book = context.is_full_book,
+                current_chapter_uid = context.current_chapter
+                    and (context.current_chapter.chapterUid
+                        or context.current_chapter.chapterId),
+            }
+        )
+    end
     if not target then return false, reason end
 
     if target.requires_chapter_open then
@@ -508,7 +530,12 @@ function ProgressSync:_apply_remote(remote, context, options)
         end
         return true
     end
-    local ok, err = self.goto_fraction(target.fraction)
+    local ok, err
+    if target.xpointer and self.goto_xpointer then
+        ok, err = self.goto_xpointer(target.xpointer)
+    else
+        ok, err = self.goto_fraction(target.fraction)
+    end
     if not ok then return false, err or "jump_failed" end
     self.dirty = false
     self:_mark_verified(

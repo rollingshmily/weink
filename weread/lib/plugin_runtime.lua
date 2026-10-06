@@ -175,6 +175,17 @@ local function bind_session_services(plugin, options)
                 end
             end)
         end,
+        goto_xpointer = function(xpointer)
+            return pcall(function()
+                if plugin.ui and plugin.ui.rolling and plugin.ui.rolling.onGotoXPointer then
+                    plugin.ui.rolling:onGotoXPointer(xpointer)
+                elseif plugin.ui then
+                    plugin.ui:handleEvent(Event:new("GotoXPointer", xpointer))
+                else
+                    error("reader unavailable")
+                end
+            end)
+        end,
         open_chapter = function(book, chapter)
             return plugin:openProgressTargetChapter(book, chapter)
         end,
