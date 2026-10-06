@@ -1,4 +1,5 @@
 local PositionMapper = require("weread.lib.position_mapper")
+local ReaderPosition = require("weread.lib.reader_position")
 
 local logger = require("weread.lib.logger").scoped("ProgressSync")
 local PluginUtil = require("weread.lib.plugin_util")
@@ -110,6 +111,7 @@ function ProgressSync:new(options)
         build_upload_outcome = options.build_upload_outcome,
         apply_upload_outcome = options.apply_upload_outcome,
         goto_fraction = options.goto_fraction,
+        goto_xpointer = options.goto_xpointer,
         open_chapter = options.open_chapter,
         is_online = options.is_online or function() return true end,
         on_choice = options.on_choice or function(context)
@@ -309,12 +311,8 @@ function ProgressSync:_local_fraction()
     local document = self.get_document()
     if not document then return nil end
 
-    local footer = self.get_footer and self.get_footer()
-    local footer_value = footer and tonumber(footer.percent_finished)
-    if footer_value then
-        if footer_value > 1 then footer_value = footer_value / 100 end
-        return math.max(0, math.min(1, footer_value))
-    end
+    -- The footer is presentation state and may be stale after navigation.
+    -- Read the live document only, never its cached presentation percentage.
 
     local page
     if type(document.getCurrentPage) == "function" then
@@ -333,7 +331,11 @@ function ProgressSync:_local_fraction()
     if page and total and total > 0 then
         return math.max(0, math.min(1, page / total))
     end
-    local current_pos = tonumber(document.current_pos)
+    local current_pos
+    if type(document.getCurrentPos) == "function" then
+        local ok, value = pcall(document.getCurrentPos, document)
+        if ok then current_pos = tonumber(value) end
+    end
     local doc_height = tonumber(document.info and document.info.doc_height)
         or tonumber(document.doc_height)
     if current_pos and doc_height and doc_height > 0 then
@@ -356,7 +358,8 @@ function ProgressSync:capture_local()
     local chapters
     local current_chapter
     local is_full_book
-    if cached and cached.book_id == book_id and cached.path == path then
+    if cached and cached.book_id == book_id and cached.path == path
+        and cached.document == document then
         book = cached.book
         chapters = cached.chapters
         current_chapter = cached.current_chapter
@@ -378,9 +381,25 @@ function ProgressSync:capture_local()
             current_chapter = current_chapter,
             is_full_book = is_full_book == true,
             path = path,
+            document = document,
         }
     end
-    local fraction = self:_local_fraction()
+    local resolved
+    local fraction
+    if is_full_book then
+        local context = self.document_context
+        if not context.mapping then
+            local mapping, reason = ReaderPosition.prepare(document, book, chapters)
+            if not mapping then return nil, reason end
+            context.mapping = mapping
+        end
+        local reason
+        resolved, reason = ReaderPosition.capture(document, context.mapping)
+        if not resolved then return nil, reason end
+        fraction = resolved.document_fraction
+    else
+        fraction = self:_local_fraction()
+    end
     if fraction == nil then return nil, "position_unavailable" end
     local position, reason = PositionMapper.local_to_remote(
         chapters,
@@ -390,9 +409,14 @@ function ProgressSync:capture_local()
             current_chapter_uid = current_chapter
                 and (current_chapter.chapterUid or current_chapter.chapterId),
             summary = book.summary or book.title or "",
+            resolved_chapter = resolved,
         }
     )
     if not position then return nil, reason end
+    if not is_full_book then
+        position.chapter_verified = true
+        position.offset_basis = "chapter_layout_estimate"
+    end
     position.book_id = book_id
     position.captured_at = self.now()
     position.current_chapter_uid = current_chapter
@@ -405,6 +429,7 @@ function ProgressSync:capture_local()
         current_chapter = current_chapter,
         is_full_book = is_full_book == true,
         path = path,
+        mapping = self.document_context.mapping,
     }
 end
 
@@ -442,6 +467,16 @@ function ProgressSync:_clear_verified(reason)
     end
 end
 
+function ProgressSync:_position_unavailable(reason)
+    local changed = self.state ~= "unsafe" or self.verified_reason ~= reason
+    self:_clear_verified(reason)
+    self.state = "unsafe"
+    if changed then
+        log("warn", "local position unavailable:", tostring(reason))
+        self.notify("local_unavailable", { error = reason })
+    end
+end
+
 function ProgressSync:_fetch_remote(book_id, chapters)
     local ok, result = pcall(self.client.get_progress, self.client, book_id)
     if not ok then
@@ -465,7 +500,10 @@ local function log_position(label, position)
             or (tonumber(position.percent) and position.percent / 100)),
         "percent=", tostring(tonumber(position.percent)),
         "raw_progress=", tostring(tonumber(position.raw_percent)),
-        "raw_offset=", tostring(tonumber(position.raw_chapter_offset)))
+        "raw_offset=", tostring(tonumber(position.raw_chapter_offset)),
+        "document_fraction=", tostring(tonumber(position.document_fraction)),
+        "chapter_verified=", position.chapter_verified == true,
+        "offset_estimated=", position.offset_basis == "chapter_layout_estimate")
 end
 
 local function coordinate_integer(value, minimum)
@@ -504,16 +542,17 @@ end
 
 function ProgressSync:_apply_remote(remote, context, options)
     options = options or {}
-    local target, reason = PositionMapper.remote_to_local(
-        context.chapters,
-        remote,
-        {
-            is_full_book = context.is_full_book,
+    local target, reason
+    if context.is_full_book then
+        target, reason = ReaderPosition.target(self.get_document(), context.mapping,
+            context.chapters, remote)
+    else
+        target, reason = PositionMapper.remote_to_local(context.chapters, remote, {
+            is_full_book = false,
             current_chapter_uid = context.current_chapter
-                and (context.current_chapter.chapterUid
-                    or context.current_chapter.chapterId),
-        }
-    )
+                and (context.current_chapter.chapterUid or context.current_chapter.chapterId),
+        })
+    end
     if not target then return false, reason end
 
     if target.requires_chapter_open then
@@ -538,29 +577,28 @@ function ProgressSync:_apply_remote(remote, context, options)
         end
         return true
     end
-    local ok, err = self.goto_fraction(target.fraction)
+    local ok, err
+    if target.xpointer then
+        if not self.goto_xpointer then return false, "jump_xpointer_unavailable" end
+        ok, err = self.goto_xpointer(target.xpointer)
+    else
+        ok, err = self.goto_fraction(target.fraction)
+    end
     if not ok then return false, err or "jump_failed" end
     self.dirty = false
-    self:_mark_verified(
-        context.book_id,
-        "remote_selected",
-        self.local_position,
-        remote
-    )
-    if options.manual then
-        self.notify("remote_applied", { position = remote })
-    end
+    self:_clear_verified("checking_jump")
     local jump_generation = self.generation
     self.scheduler:scheduleIn(0.15, function()
         if jump_generation ~= self.generation then return end
-        local position = self:capture_local()
+        local position, capture_reason = self:capture_local()
         log_position("remote applied capture", position)
-        if position then
-            self.local_position = position
+        if position and tostring(position.chapter_uid) == tostring(remote.chapter_uid) then
+            self:_mark_verified(context.book_id, "remote_selected", position, remote)
             self.dirty = false
-            self:_persist(context.book_id, {
-                last_local_position = position,
-            })
+            self:_persist(context.book_id, { last_local_position = position })
+            if options.manual then self.notify("remote_applied", { position = remote }) end
+        else
+            self:_position_unavailable(capture_reason or "jump_chapter_mismatch")
         end
     end)
     return true
@@ -583,6 +621,10 @@ end
 
 function ProgressSync:_upload_snapshot(position, reason, show_result, on_complete)
     if type(position) ~= "table" then return false end
+    if position.chapter_verified ~= true then
+        self:_position_unavailable("queued_chapter_unverified")
+        return false
+    end
     local book_id = tostring(position.book_id or self.current_book_id or "")
     if book_id == "" then return false end
     if self.uploading then
@@ -807,7 +849,8 @@ function ProgressSync:_resolve(local_position, remote, context, options)
     end
 
     local ask = self:_config().ask_on_conflict ~= false
-    if remote.conflict or ask then
+    if remote.conflict or ask or comparison == "unknown" then
+        self:_clear_verified("awaiting_choice")
         self.state = "awaiting_choice"
         local choice_generation = self.generation
         local function choice_is_current()
@@ -819,6 +862,7 @@ function ProgressSync:_resolve(local_position, remote, context, options)
             local_position = copy(local_position),
             remote_position = copy(remote),
             source_conflict = remote.conflict == true,
+            position_uncertain = comparison == "unknown",
             use_remote = function()
                 if not choice_is_current() then return end
                 local ok, reason = self:_apply_remote(
@@ -830,7 +874,9 @@ function ProgressSync:_resolve(local_position, remote, context, options)
             end,
             keep_local = function()
                 if not choice_is_current() then return end
-                self:_keep_local(local_position, remote, {
+                local current, capture_reason = self:capture_local()
+                if not current then self:_position_unavailable(capture_reason); return end
+                self:_keep_local(current, remote, {
                     manual = options.manual,
                     upload_now = true,
                     reason = "explicit_local_choice",
@@ -856,7 +902,7 @@ function ProgressSync:_resolve(local_position, remote, context, options)
     end
 end
 
-function ProgressSync:_complete_pull(generation, local_position, context,
+function ProgressSync:_complete_pull(generation, _local_position, context,
         options, remote, pull_error)
     if generation == self.generation then
         self.pulling = false
@@ -883,6 +929,11 @@ function ProgressSync:_complete_pull(generation, local_position, context,
         end
         return
     end
+    -- A network response must not compare against a pre-request reading page.
+    local current, reason, current_context = self:capture_local()
+    if not current then self:_position_unavailable(reason); return end
+    local local_position = current
+    context = current_context
     self:_persist(context.book_id, {
         last_remote_position = remote,
         last_local_position = local_position,
@@ -933,9 +984,7 @@ function ProgressSync:_pull(options)
         if not (options.manual == true
             and reason == "catalog_unavailable"
             and type(self.refresh_catalog) == "function") then
-            if options.manual then
-                self.notify("local_unavailable", { error = reason })
-            end
+            self:_position_unavailable(reason)
             return false
         end
     end
@@ -1046,7 +1095,7 @@ function ProgressSync:_apply_pending_jump(book_id)
     if not pending or tostring(pending.book_id) ~= tostring(book_id) then
         return false
     end
-    local local_position, _reason, context = self:capture_local()
+    local _, _reason, context = self:capture_local()
     if not context or not context.current_chapter
         or tostring(context.current_chapter.chapterUid or context.current_chapter.chapterId)
             ~= tostring(pending.chapter_uid) then
@@ -1060,23 +1109,18 @@ function ProgressSync:_apply_pending_jump(book_id)
         return true
     end
     self.dirty = false
-    self:_mark_verified(
-        book_id,
-        "remote_chapter_applied",
-        local_position,
-        pending.remote
-    )
-    if pending.notify then
-        self.notify("remote_applied", { position = pending.remote })
-    end
+    self:_clear_verified("checking_jump")
     local jump_generation = self.generation
     self.scheduler:scheduleIn(0.15, function()
         if jump_generation ~= self.generation then return end
-        local position = self:capture_local()
+        local position, reason = self:capture_local()
         log_position("remote applied capture", position)
-        if position then
-            self.local_position = position
+        if position and tostring(position.chapter_uid) == tostring(pending.chapter_uid) then
+            self:_mark_verified(book_id, "remote_chapter_applied", position, pending.remote)
             self:_persist(book_id, { last_local_position = position })
+            if pending.notify then self.notify("remote_applied", { position = pending.remote }) end
+        else
+            self:_position_unavailable(reason or "jump_chapter_mismatch")
         end
     end)
     return true
@@ -1152,8 +1196,7 @@ function ProgressSync:on_reader_ready()
 
         local local_position, reason = self:capture_local()
         if not local_position then
-            self.state = "unsafe"
-            log("warn", "local position unavailable:", tostring(reason))
+            self:_position_unavailable(reason)
             return
         end
         self.local_position = local_position
@@ -1168,13 +1211,17 @@ end
 
 function ProgressSync:on_page_update()
     if not self.current_book_id then return end
-    local position = self:capture_local()
-    if not position then return end
+    local position, reason = self:capture_local()
+    if not position then self:_position_unavailable(reason); return end
     if self.local_position
         and not PositionMapper.same_position(position, self.local_position) then
         self.dirty = true
     end
     self.local_position = position
+    if self.state == "unsafe" and self:_config().pull_on_open == true then
+        self.state = "unverified"
+        self:_pull({ manual = false })
+    end
 end
 
 function ProgressSync:release_document(_reason)
@@ -1197,7 +1244,8 @@ function ProgressSync:on_close_document()
         self:release_document("document_close")
         return
     end
-    local position = self:capture_local() or self.local_position
+    local position, reason = self:capture_local()
+    if not position then self:_position_unavailable(reason) end
     if position and self.verified
         and self:_config().upload_on_close == true then
         if not self.local_position
@@ -1213,7 +1261,8 @@ end
 
 function ProgressSync:on_suspend()
     self.suspended_at = self.now()
-    local position = self:capture_local() or self.local_position
+    local position, reason = self:capture_local()
+    if not position then self:_position_unavailable(reason) end
     if position and self.local_position
         and not PositionMapper.same_position(position, self.local_position) then
         self.dirty = true
@@ -1286,6 +1335,14 @@ function ProgressSync:_pending_upload()
             and book.pending_upload_account ~= self:_account_identity()) then
         return nil
     end
+    if book.pending_upload_position.chapter_verified ~= true then
+        if self._legacy_queue_warned ~= book_id then
+            self._legacy_queue_warned = book_id
+            log("warn", "legacy queued position not sent: chapter unverified")
+            self.notify("local_unavailable", { error = "queued_chapter_unverified" })
+        end
+        return nil
+    end
     return copy(book.pending_upload_position),
         book.pending_upload_reason or "queued"
 end
@@ -1335,6 +1392,7 @@ function ProgressSync:position_for_report(book_id)
     end
     local position, reason = self:capture_local()
     if not position then
+        self:_position_unavailable(reason)
         return nil, reason or "position_unavailable", true
     end
     if self.local_position

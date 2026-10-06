@@ -79,103 +79,78 @@ local function book_record(books, book_id)
     return books[tostring(book_id)] or books[book_id]
 end
 
-local function response_body(result)
-    if type(result) ~= "table" then
-        return result
-    end
-    if result.succ ~= nil or result.synckey ~= nil then
-        return result
-    end
-    if type(result.data) == "table" then
-        return result.data
-    end
-    if type(result.result) == "table" then
-        return result.result
-    end
-    return result
+local ERROR_FIELDS = { "errCode", "errcode", "errorCode" }
+local PAYLOAD_DIAGNOSTIC_FIELDS = {
+    "readingTime", "chapterUid", "chapterIdx", "chapterOffset",
+    "progress", "currentProgress", "chapterProgress",
+}
+
+local function finite_number(value)
+    if type(value) ~= "number" and type(value) ~= "string" then return nil end
+    local number = tonumber(value)
+    if number and number == number and math.abs(number) ~= math.huge then return number end
 end
 
-local function table_keys(value)
-    if type(value) ~= "table" then
-        return ""
-    end
-    local keys = {}
-    for key in pairs(value) do
-        keys[#keys + 1] = tostring(key)
-    end
-    table.sort(keys)
-    return table.concat(keys, "|")
-end
-
-local function response_accepted(result, http_code)
-    local body = response_body(result)
-    if type(body) ~= "table" then return false, body end
-    -- An error or explicit failure wins over a watermark. A synckey alone
-    -- does not acknowledge a /book/read upload (APK checks BooleanResult).
-    for _, node in ipairs({ result, body }) do
-        for _, key in ipairs({ "errCode", "errcode", "errorCode" }) do
-            if node[key] ~= nil and tonumber(node[key]) ~= 0 then return false, body end
-        end
-        if node.succ ~= nil and node.succ ~= true and tonumber(node.succ) ~= 1 then
-            return false, body
+-- Inspect every data/result envelope, including siblings and deeper wrappers.
+-- A failure anywhere wins over success elsewhere. Unknown flags are not proof
+-- of rejection: replaying their readingTime could count the same time twice.
+local function classify_response(result, http_code)
+    local accepted, rejected, unknown, authentication, has_synckey = false, false, false, false, false
+    local fields, pending, seen = {}, { { node = result, path = "response" } }, {}
+    local function add_number(path, value)
+        if value ~= nil and #fields < 24 then
+            fields[#fields + 1] = path:sub(1, 160) .. "=" .. tostring(value)
         end
     end
-    return WeRead.is_success_response(body), body
-end
-
-local function response_rejected(result)
-    if type(result) ~= "table" then return false end
-    for _, node in ipairs({ result, response_body(result) }) do
-        if type(node) == "table" then
-            if node.succ == false or tonumber(node.succ) == 0 then return true end
-            for _, key in ipairs({ "errCode", "errcode", "errorCode" }) do
-                if node[key] ~= nil and tonumber(node[key]) ~= 0 then return true end
+    while #pending > 0 do
+        local entry = table.remove(pending)
+        local node = entry.node
+        if type(node) == "table" and not seen[node] then
+            seen[node] = true
+            if node.synckey ~= nil then has_synckey = true end
+            if node.succ ~= nil then
+                local succ = node.succ == true and 1 or node.succ == false and 0 or finite_number(node.succ)
+                add_number(entry.path .. ".succ", succ)
+                if succ == 1 then accepted = true
+                elseif succ == 0 then rejected = true
+                else unknown = true end
+            end
+            for _, key in ipairs(ERROR_FIELDS) do
+                if node[key] ~= nil then
+                    local code = finite_number(node[key])
+                    add_number(entry.path .. "." .. key, code)
+                    if code == nil then unknown = true
+                    elseif code ~= 0 then
+                        rejected = true
+                        if code == -2012 then authentication = true end
+                    end
+                end
+            end
+            for _, key in ipairs({ "result", "data" }) do
+                if type(node[key]) == "table" then
+                    pending[#pending + 1] = { node = node[key], path = entry.path .. "." .. key }
+                end
             end
         end
     end
-    return false
-end
-
-local function full_response_body(client, result)
-    if type(result) == "table" and client and type(client.json_encode) == "function" then
-        local ok, encoded = pcall(function()
-            return client:json_encode(result)
-        end)
-        if ok then
-            return encoded
-        end
-    end
-    return tostring(result)
-end
-
-local function response_summary(client, result, http_code)
-    if type(result) ~= "table" then
-        return "non_table_response, http=" .. tostring(http_code)
-            .. ", response_body=" .. full_response_body(client, result)
-    end
-    local body = response_body(result)
-    local parts = {
-        "http=" .. tostring(http_code),
-        "keys=" .. table_keys(result),
-        "body_keys=" .. table_keys(body),
-        "succ=" .. tostring(type(body) == "table" and body.succ or nil),
-        "has_synckey=" .. tostring(type(body) == "table" and body.synckey ~= nil or false),
+    local http = finite_number(http_code)
+    add_number("http", http)
+    if http and (http < 200 or http >= 300) then unknown = true end
+    return {
+        state = rejected and "rejected" or (accepted and not unknown and "accepted" or "unconfirmed"),
+        authentication = authentication,
+        has_synckey = has_synckey,
+        fields = table.concat(fields, ", "),
     }
-    local code = type(body) == "table" and (body.errCode or body.errcode or body.code)
-        or result.errCode or result.errcode or result.code
-    local message = type(body) == "table" and (body.errMsg or body.errmsg or body.message or body.msg)
-        or result.errMsg or result.errmsg or result.message or result.msg
-    if code ~= nil then
-        parts[#parts + 1] = "error_code=" .. tostring(code)
+end
+
+local function diagnostic_summary(request, response)
+    local parts = { "result=" .. response.state }
+    for _, key in ipairs(PAYLOAD_DIAGNOSTIC_FIELDS) do
+        local value = finite_number(request[key])
+        if value ~= nil then parts[#parts + 1] = key .. "=" .. tostring(value) end
     end
-    if message ~= nil then
-        parts[#parts + 1] = "error_message="
-            .. tostring(message):gsub("[%c]+", " "):sub(1, 160)
-    end
-    -- Only rejected reading reports call this function. Keep the complete
-    -- decoded response in the failure log so unexpected server replies can be
-    -- diagnosed without enabling verbose logging for successful reports.
-    parts[#parts + 1] = "response_body=" .. full_response_body(client, result)
+    if response.fields ~= "" then parts[#parts + 1] = response.fields end
     return table.concat(parts, ", ")
 end
 
@@ -279,7 +254,7 @@ function ReadReport:_set_error(err, kind, prefix)
     end
 end
 
-function ReadReport:_record_success(result)
+function ReadReport:_record_success(outcome)
     local recovered = self.last_error ~= nil
     self.count = (self.count or 0) + 1
     self.last_time = self.now()
@@ -292,7 +267,8 @@ function ReadReport:_record_success(result)
     if recovered or self.count == 1 or self.count % 20 == 0 then
         log("info", "read report success:",
             "count=", self.count,
-            "has_synckey=", type(result) == "table" and result.synckey ~= nil or false)
+            "has_synckey=", outcome.has_synckey == true,
+            outcome.diagnostic or "result=accepted")
     end
 end
 
@@ -717,12 +693,16 @@ function ReadReport:_apply_outcome(outcome)
         self.last_renew_attempt = self.now()
     end
     if outcome.accepted then
-        self:_record_success({ synckey = outcome.has_synckey and true or nil })
+        self:_record_success(outcome)
         return true
     end
+    local changed = self.last_error_kind ~= outcome.error_kind
     self:_set_error(outcome.error or "unknown report failure",
         outcome.error_kind or "error",
         outcome.error_prefix)
+    if outcome.diagnostic and (changed or self.failure_count == 1 or self.failure_count % 20 == 0) then
+        log("warn", "read report outcome:", outcome.diagnostic)
+    end
     return false
 end
 
@@ -821,86 +801,71 @@ end
 -- is described by the returned outcome table.
 function ReadReport:_run_pipeline(book_id, opts)
     opts = opts or {}
-    local outcome = { accepted = false, renew_attempted = false }
+    local outcome = { accepted = false, renew_attempted = false, response_state = "unconfirmed" }
+
+    local function attempt(book)
+        local request = {}
+        local ok, result, http_code = pcall(function()
+            return self:_send(book_id, book, opts.position, opts.elapsed_seconds, request)
+        end)
+        outcome.book = self:_context_snapshot(book)
+        -- Thrown errors can contain response bodies or credentials. Never log
+        -- them here, and never interpret them as proof that the POST failed.
+        local response = classify_response(ok and result or nil, http_code)
+        outcome.response_state = response.state
+        outcome.accepted = response.state == "accepted"
+        outcome.has_synckey = response.has_synckey
+        outcome.diagnostic = diagnostic_summary(request, response)
+        return response
+    end
+
+    local function uncertain()
+        outcome.error = "read report acknowledgment missing or request outcome uncertain; not replaying POST"
+        outcome.error_kind = "unconfirmed"
+        return outcome
+    end
 
     local context_ok, book = pcall(function()
         return self:ensure_context(book_id, false)
     end)
     if not context_ok then
-        outcome.error = tostring(book)
+        outcome.error = "read report context initialization failed"
         outcome.error_kind = "context"
         outcome.error_prefix = "read report context initialization failed:"
         return outcome
     end
-    local ok, result, http_code = pcall(function()
-        return self:_send(
-            book_id, book, opts.position, opts.elapsed_seconds)
-    end)
-    outcome.book = self:_context_snapshot(book)
-    local accepted, accepted_body = response_accepted(result, http_code)
-    if ok and accepted then
-        outcome.accepted = true
-        outcome.has_synckey = type(accepted_body) == "table"
-            and accepted_body.synckey ~= nil or false
-        return outcome
-    end
-    if not ok then
-        outcome.error = tostring(result)
-        outcome.error_kind = "transport"
-        outcome.error_prefix = "read report request failed:"
-        return outcome
-    end
+    local response = attempt(book)
+    if outcome.accepted then return outcome end
+    if response.state ~= "rejected" then return uncertain() end
 
-    local failure = response_summary(self.client, result, http_code)
-    if not response_rejected(result) then
-        outcome.error = "read report acknowledgment missing; not replaying POST"
-        outcome.error_kind = "unconfirmed"
-        return outcome
-    end
+    local failure = response.fields
     local refresh_ok, refreshed = pcall(function()
         return self:ensure_context(book_id, true)
     end)
     if refresh_ok then
-        outcome.book = self:_context_snapshot(refreshed)
-        local retry_ok, retry_result, retry_code = pcall(function()
-            return self:_send(
-                book_id, refreshed, opts.position, opts.elapsed_seconds)
-        end)
-        outcome.book = self:_context_snapshot(refreshed)
-        local retry_accepted, retry_body = response_accepted(retry_result, retry_code)
-        if retry_ok and retry_accepted then
-            outcome.accepted = true
-            outcome.has_synckey = type(retry_body) == "table"
-                and retry_body.synckey ~= nil or false
-            return outcome
-        end
-        if not retry_ok or not response_rejected(retry_result) then
-            outcome.error = "read report retry outcome uncertain; not replaying POST"
-            outcome.error_kind = "unconfirmed"
-            return outcome
-        end
-        failure = "initial=" .. failure .. "; refreshed="
-            .. (retry_ok and response_summary(self.client, retry_result, retry_code)
-                or tostring(retry_result))
+        response = attempt(refreshed)
+        if outcome.accepted then return outcome end
+        if response.state ~= "rejected" then return uncertain() end
+        failure = "initial=" .. failure .. "; refreshed=" .. response.fields
     else
-        failure = failure .. "; context_refresh=" .. tostring(refreshed)
+        failure = failure .. "; context_refresh=failed"
     end
 
-    if not opts.allow_renewal then
+    -- Context recovery is bounded to one retry. Only the known login-expiry
+    -- error can enter auth renewal; arbitrary server rejections are not auth
+    -- failures. The client's own HTTP-401 renewal remains unchanged.
+    if not opts.allow_renewal or not response.authentication then
         outcome.error = failure
         outcome.error_kind = "server"
         outcome.error_prefix = "read report server rejected:"
         return outcome
     end
     outcome.renew_attempted = true
-
     local renew_ok, renew_result = pcall(function()
         return self.client:eink_refresh_session()
     end)
     if not renew_ok or renew_result ~= true then
-        outcome.error = failure .. "; renewal=" .. (renew_ok
-            and "eink refresh failed"
-            or tostring(renew_result))
+        outcome.error = failure .. "; renewal=failed"
         outcome.error_kind = "authentication"
         outcome.error_prefix = "read report eink renewal failed:"
         return outcome
@@ -910,28 +875,16 @@ function ReadReport:_run_pipeline(book_id, opts)
         return self:ensure_context(book_id, true)
     end)
     if not final_context_ok then
-        outcome.error = failure .. "; final_context=" .. tostring(final_book)
+        outcome.error = failure .. "; final_context=failed"
         outcome.error_kind = "context"
         outcome.error_prefix = "read report final context refresh failed:"
         return outcome
     end
-    outcome.book = self:_context_snapshot(final_book)
-    local final_ok, final_result, final_code = pcall(function()
-        return self:_send(
-            book_id, final_book, opts.position, opts.elapsed_seconds)
-    end)
-    outcome.book = self:_context_snapshot(final_book)
-    local final_accepted, final_body = response_accepted(final_result, final_code)
-    if final_ok and final_accepted then
-        outcome.accepted = true
-        outcome.has_synckey = type(final_body) == "table"
-            and final_body.synckey ~= nil or false
-        return outcome
-    end
-    outcome.error = failure .. "; final=" .. (final_ok
-        and response_summary(self.client, final_result, final_code)
-        or tostring(final_result))
-    outcome.error_kind = final_ok and "server" or "transport"
+    response = attempt(final_book)
+    if outcome.accepted then return outcome end
+    if response.state ~= "rejected" then return uncertain() end
+    outcome.error = failure .. "; final=" .. response.fields
+    outcome.error_kind = "server"
     outcome.error_prefix = "read report final retry failed:"
     return outcome
 end
@@ -1108,7 +1061,7 @@ function ReadReport:build_payload(book_id, elapsed_seconds, book, position)
     return payload
 end
 
-function ReadReport:_send(book_id, book, position, elapsed_seconds)
+function ReadReport:_send(book_id, book, position, elapsed_seconds, diagnostic)
     apply_position(book, position)
     if book.read_session_id ~= self.session_id then
         book.read_session_id = self.session_id
@@ -1124,8 +1077,15 @@ function ReadReport:_send(book_id, book, position, elapsed_seconds)
         book,
         position
     )
-    -- Only explicit progress uploads, never periodic reading-time reports.
-    -- Log the final outgoing numeric fields; fraction is the upload snapshot's
+    -- Carry only numeric request fields back to the parent for its existing
+    -- first/every-20th outcome log. Capture before I/O, including on exceptions.
+    if diagnostic then
+        for _, key in ipairs(PAYLOAD_DIAGNOSTIC_FIELDS) do
+            diagnostic[key] = finite_number(payload[key])
+        end
+    end
+    -- Explicit progress uploads retain their separate key-action payload log.
+    -- Fraction is the upload snapshot's
     -- precise fraction, not an extra field sent to /book/read.
     if elapsed_seconds == 0 and type(position) == "table" then
         log("info", "upload payload:",

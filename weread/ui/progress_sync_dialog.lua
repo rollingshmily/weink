@@ -17,7 +17,13 @@ end
 
 function ProgressSyncDialog.show_choice(context)
     local message
-    if context.source_conflict then
+    if context.position_uncertain then
+        message = T(_(
+            "Cannot precisely compare chapter offsets for \"%1\".\n\n"
+            .. "KOReader: %2%\nWeRead: %3%\n\n"
+            .. "The local offset is estimated. Choose which position to keep."
+        ), context.book_title, percent(context.local_position), percent(context.remote_position))
+    elseif context.source_conflict then
         message = T(_(
             "WeRead's two progress sources disagree for \"%1\".\n\n"
             .. "KOReader: %2%\nSelected cloud position: %3%\n\n"
@@ -47,14 +53,14 @@ function ProgressSyncDialog.notify(code, data)
     data = data or {}
     local text
     if code == "upload_success" then
-        text = T(_("Progress uploaded to WeRead: %1%"),
+        text = T(_("WeRead accepted the progress request: %1%. App position and reading time are not verified."),
             percent(data.position))
     elseif code == "upload_failed" then
         text = T(_("Progress upload failed:\n%1"), tostring(data.error or ""))
     elseif code == "already_synced" then
-        text = _("KOReader and WeRead are already at the same position.")
+        text = _("The reported coordinates match. App position and reading time are not verified.")
     elseif code == "remote_applied" then
-        text = T(_("Jumped to WeRead progress: %1%"),
+        text = T(_("Opened WeRead's chapter near %1%. The within-chapter position is estimated."),
             percent(data.position))
     elseif code == "local_kept" then
         text = _("Kept the current KOReader position.")
