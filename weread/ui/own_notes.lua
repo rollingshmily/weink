@@ -1,6 +1,6 @@
 -- Current-book cloud note manager. No writes to KOReader notes or public overlays.
 local UIManager = require("ui/uimanager")
-local TextViewer = require("ui/widget/textviewer")
+local NotesView = require("weread.ui.own_notes_view")
 local ConfirmBox = require("ui/widget/confirmbox")
 local Notes = require("weread.lib.own_notes")
 local BookReviews = require("weread.lib.book_reviews")
@@ -54,7 +54,7 @@ local function run(session, label, action)
     end
 end
 
-local render, load, detail
+local render, load
 
 local function fetch(session, more)
     guard(session)
@@ -85,7 +85,7 @@ local function fetch(session, more)
     if next_cursor then session.cursors[next_cursor] = true end
 end
 
-local function confirm_delete(session, note, viewer)
+local function confirm_delete(session, note)
     if session.running then return end
     if not current(session) then
         session.plugin:showInfo(_("Book or account changed. Reopen My underlines/thoughts."))
@@ -104,7 +104,6 @@ local function confirm_delete(session, note, viewer)
                 assert(found, _("Note list changed. Refresh and retry."))
                 Notes.delete(session.plugin.client, note, session.book_id, session.vid)
                 guard(session)
-                UIManager:close(viewer)
                 -- Success only: remove the selected kind/id, never the paired quote/thought.
                 for index, row in ipairs(session.items) do
                     if row == note then table.remove(session.items, index); break end
@@ -120,52 +119,23 @@ local function confirm_delete(session, note, viewer)
     })
 end
 
-detail = function(session, note)
-    local text = { session.title, chapter_label(session, note) }
-    local date = BookReviews.format_date(note.create_time)
-    if date ~= "" then text[#text + 1] = date end
-    text[#text + 1] = "\n" .. _("Quoted text") .. "\n" .. (note.quote ~= "" and note.quote or _("No quoted text."))
-    if note.kind == "review" then text[#text + 1] = "\n" .. _("My thought") .. "\n" .. note.content end
-    local viewer
-    viewer = TextViewer:new{
-        title = kind_label(note), text = table.concat(text, "\n"),
-        text_type = "general", auto_para_direction = true,
-        buttons_table = {{
-            { text = _("Delete from WeRead"), callback = function() confirm_delete(session, note, viewer) end },
-            { text = _("Close"), callback = function() UIManager:close(viewer) end },
-        }},
-    }
-    UIManager:show(viewer)
-end
-
 render = function(session)
-    local items = {
-        { text = _("Refresh from WeRead"), callback = function() load(session, false) end },
-    }
-    if session.more then
-        items[#items + 1] = { text = _("Load more of my thoughts"), callback = function() load(session, true) end }
-    end
+    local records = {}
     for _, note in ipairs(session.items) do
         local metadata = chapter_label(session, note)
         local date = BookReviews.format_date(note.create_time)
-        if date ~= "" then metadata = metadata .. " · " .. date end
-        -- The page already establishes ownership. Keep the underline marker
-        -- to distinguish the two kinds, not a repeated "My thought" prefix.
+        if date ~= "" then metadata = date .. " · " .. metadata end
         if note.kind == "bookmark" then metadata = kind_label(note) .. " · " .. metadata end
-        items[#items + 1] = {
-            text = metadata .. "\n"
-                .. BookReviews.preview(note.content ~= "" and note.content or note.quote, 90),
-            callback = function() detail(session, note) end,
-        }
-    end
-    if #session.items == 0 then
-        items[#items + 1] = { text = _("No personal underlines or thoughts in this book."), enabled = false }
+        records[#records + 1] = { note = note, metadata = metadata }
     end
     if session.menu then UIManager:close(session.menu) end
-    session.menu = session.plugin:showList(_("My underlines/thoughts") .. " · " .. session.title, items, nil, {
-        items_per_page = 8,
-        subtitle = session.more and _("Cloud notes · more thoughts available") or _("Cloud notes · all loaded"),
-    })
+    session.menu = NotesView.show{
+        title = _("My underlines/thoughts") .. " · " .. session.title,
+        records = records, more = session.more,
+        on_refresh = function() load(session, false) end,
+        on_more = function() load(session, true) end,
+        on_delete = function(note) confirm_delete(session, note) end,
+    }
 end
 
 load = function(session, more)

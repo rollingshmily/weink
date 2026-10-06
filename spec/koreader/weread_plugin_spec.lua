@@ -26,6 +26,37 @@ describe("WeRead plugin integration", function()
         assert.matches("weread%.koplugin$", plugin.path)
     end)
 
+    it("lays out personal quotes and thoughts with real scrollable widgets", function()
+        load_plugin("weread.koplugin")
+        local Screen = require("device").screen
+        local Blitbuffer = require("ffi/blitbuffer")
+        local UIManager = require("ui/uimanager")
+        local View = require("weread.ui.own_notes_view")
+        local note = { kind = "review", quote = string.rep("Quoted paragraph.\n", 100),
+            content = string.rep("My thought.\n", 100) }
+        local selected
+        local view = View.show{
+            title = "Personal notes · Book", records = { { note = note, metadata = "2026-10-06 · Chapter" } },
+            on_refresh = function() end,
+            on_delete = function(row) selected = row end,
+        }
+        local bb = Blitbuffer.new(Screen:getWidth(), Screen:getHeight(), Blitbuffer.TYPE_BB8)
+        view:paintTo(bb, 0, 0)
+        local block = view._blocks[1]
+        assert.is_true(block.quote:getSize().h > view.scroll.dimen.h)
+        assert.is_true(block.thought.dimen.y > block.quote.dimen.y)
+        assert.equals(note.content, block.thought.text)
+        view:onNextPage()
+        assert.is_true(view.scroll:getScrolledOffset().y > 0)
+        view:paintTo(bb, 0, 0)
+        view:onPrevPage()
+        assert.equals(0, view.scroll:getScrolledOffset().y)
+        block.delete.callback()
+        assert.equals(note, selected)
+        UIManager:close(view)
+        bb:free()
+    end)
+
     it("loads its startup module through the weread namespace", function()
         -- Client, settings and menu load only when the user opens WeRead.
         -- PluginLoader discovery itself requires path_index from main.lua.

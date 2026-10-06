@@ -3,6 +3,14 @@
 --   lua spec/progress_sync_spec.lua
 
 package.path = "./?.lua;" .. package.path
+local diagnostic_logs = {}
+package.loaded["weread.lib.logger"] = { scoped = function()
+    return { info = function(...)
+        local line = {}
+        for i = 1, select("#", ...) do line[i] = tostring(select(i, ...)) end
+        diagnostic_logs[#diagnostic_logs + 1] = table.concat(line, " ")
+    end }
+end }
 local ProgressSync = require("weread.lib.progress_sync")
 
 local failures, checks = 0, 0
@@ -195,6 +203,185 @@ local function fixture(remote, options)
         drain = drain,
     }
 end
+
+-- Unlike the legacy fixture, child execution and completion are separate
+-- scheduled phases. This catches close/reopen races before fork and after POST.
+local function deferred_upload_fixture(accepted, remote_provider)
+    local child, payload, done
+    local stats = { built = 0, applied = 0, reads = 0 }
+    local runner = {
+        run = function(fn) child = fn; done = false; return 10, 20 end,
+        write_all = function(_fd, data) payload = data end,
+        is_done = function() return done end,
+        terminate = function() done = true end,
+        read_size = function() return payload and #payload or 0 end,
+        read_all = function() local p = payload; payload = nil; return p end,
+    }
+    local f = fixture(nil, {
+        subprocess = runner,
+        remote_provider = function()
+            stats.reads = stats.reads + 1
+            if remote_provider then return remote_provider() end
+            return { progress = 50, chapterUid = 33, chapterOffset = 100 }
+        end,
+        build_upload_outcome = function(_id, position)
+            stats.built = stats.built + 1
+            stats.position = position
+            return { accepted = accepted ~= false }
+        end,
+        apply_upload_outcome = function() stats.applied = stats.applied + 1 end,
+    })
+    f.values.sync.pull_on_open = false
+    f.sync:on_reader_ready(); f.drain()
+    f.sync.verified = true
+    f.document.page = 50
+    f.sync:on_page_update()
+    f.execute_child = function() child(10, 20); done = true end
+    local original_drain = f.drain
+    f.drain = function()
+        -- Start any queued confirmation, then run its separate worker phase.
+        if stats.applied > 0 then
+            original_drain()
+            return
+        end
+        if #f.queue > 0 and stats.built > 0 then f.step() end
+        if #f.queue > 0 and f.delays[1] == 0.2 then
+            f.step()
+            if f.sync.job then f.execute_child() end
+        end
+        original_drain()
+    end
+    f.stats = stats
+    return f
+end
+
+test("close snapshot survives deferred fork and confirms once", function()
+    local f = deferred_upload_fixture()
+    f.sync:on_close_document()
+    eq(f.stats.built, 0, "close did not perform network IO")
+    f.document.page = 90
+    f.step() -- start the child, do not execute it inline
+    f.execute_child()
+    f.drain()
+    eq(f.stats.built, 1, "closed snapshot actually posted")
+    eq(f.stats.position.percent, 50, "immutable close location")
+    eq(f.stats.applied, 1, "outcome applied once")
+    eq(f.stats.reads, 1, "one diagnostic readback")
+    eq(f.sync.state, "idle", "closed reader stays idle")
+    eq(f.values.books.book.pending_upload_position, nil, "accepted cleared pending")
+    f.sync:on_close_document(); f.drain()
+    eq(f.stats.built, 1, "duplicate close cannot upload twice")
+end)
+
+for _, change in ipairs({ "account", "same_book", "other_book" }) do
+    for _, phase in ipairs({ "queued", "inflight" }) do
+        test(change .. " rejects stale " .. phase .. " upload", function()
+            local f = deferred_upload_fixture()
+            f.sync:on_close_document()
+            if phase == "inflight" then f.step(); f.execute_child() end
+            if change == "account" then
+                f.values.eink = { vid = "new_account" }
+                f.sync:on_account_changed()
+            else
+                if change == "other_book" then
+                    f.sync.detect_book = function() return "other" end
+                end
+                f.sync:on_reader_ready()
+            end
+            f.sync:_queue_snapshot({ book_id = "book", percent = 75 }, "newer")
+            f.drain()
+            eq(f.stats.built, phase == "inflight" and 1 or 0, "no stale queued POST")
+            eq(f.stats.applied, 0, "no stale auth/context apply")
+            eq(f.values.books.book.pending_upload_position.percent, 75,
+                "late result preserves newer pending")
+            eq(f.sync.last_uploaded_position, nil, "new reader not polluted")
+        end)
+    end
+end
+
+test("failed close preserves retry snapshot without readback", function()
+    local f = deferred_upload_fixture(false)
+    f.sync:on_close_document(); f.step(); f.execute_child(); f.drain()
+    eq(f.values.books.book.pending_upload_position.percent, 50, "failed snapshot retained")
+    eq(f.stats.reads, 0, "failed POST needs no diagnostic GET")
+    eq(f.stats.built, 1, "no unbounded retry")
+end)
+
+test("failed GET cannot retry an accepted POST", function()
+    local f = deferred_upload_fixture(true, function() error("private response") end)
+    f.sync:on_close_document(); f.step(); f.execute_child(); f.drain()
+    eq(f.stats.built, 1, "POST performed once")
+    eq(f.stats.reads, 1, "GET performed once")
+    eq(f.values.books.book.pending_upload_position, nil, "GET failure does not requeue POST")
+end)
+
+test("newer pending survives same-session accepted callback", function()
+    local f = deferred_upload_fixture()
+    f.sync:on_close_document(); f.step(); f.execute_child()
+    f.sync:_queue_snapshot({ book_id = "book", percent = 80 }, "newer")
+    f.drain()
+    eq(f.values.books.book.pending_upload_position.percent, 80, "newer snapshot preserved")
+end)
+
+test("new plugin instance invalidates old queued snapshot", function()
+    local f = deferred_upload_fixture()
+    f.sync:on_close_document()
+    local other = fixture(nil)
+    other.sync.settings = f.sync.settings
+    other.values.sync.pull_on_open = false
+    other.sync:on_reader_ready()
+    f.drain()
+    eq(f.stats.built, 0, "shared settings session rejects old instance")
+end)
+
+test("accepted is persisted before separate readback starts", function()
+    local f = deferred_upload_fixture()
+    f.sync:on_close_document(); f.step(); f.execute_child(); f.step()
+    eq(f.values.books.book.pending_upload_position, nil, "POST committed before GET")
+    eq(f.stats.reads, 0, "GET has not run")
+    local accepted_log = table.concat(diagnostic_logs, "\n")
+    eq(accepted_log:find("upload accepted:", 1, true) ~= nil, true, "accepted log exists")
+    f.step(); f.execute_child(); f.step()
+    eq(table.concat(diagnostic_logs, "\n"):find("confirmed", 1, true) ~= nil,
+        true, "separate confirmation log")
+end)
+
+test("readback diagnostics never log remote text or credentials", function()
+    local f = deferred_upload_fixture(true, function()
+        return { progress = 50, chapterUid = 33, chapterOffset = 100,
+            summary = "SECRET_ORIGINAL_TEXT", token = "SECRET_TOKEN", cookie = "SECRET_COOKIE" }
+    end)
+    f.sync:on_close_document(); f.step(); f.execute_child(); f.drain()
+    eq(table.concat(diagnostic_logs, "\n"):find("SECRET", 1, true), nil,
+        "position log uses numeric allowlist")
+end)
+
+test("failed immutable close snapshot can be retried explicitly", function()
+    local f = deferred_upload_fixture(false)
+    f.sync:on_close_document(); f.step(); f.execute_child(); f.drain()
+    local pending = f.values.books.book.pending_upload_position
+    f.sync.build_upload_outcome = function(_id, position)
+        f.stats.built = f.stats.built + 1
+        eq(position.percent, 50, "retry retains failed close location")
+        return { accepted = true }
+    end
+    f.sync:_upload_snapshot(pending, "retry", false)
+    f.step(); f.execute_child(); f.step()
+    eq(f.values.books.book.pending_upload_position, nil, "retry acceptance clears snapshot")
+    eq(f.stats.built, 2, "one failed POST and one explicit retry")
+    f.step(); f.execute_child(); f.step()
+end)
+
+test("late duplicate job callback is idempotent", function()
+    local f = deferred_upload_fixture()
+    f.sync:on_close_document(); f.step()
+    local completion = f.sync.job.complete
+    f.execute_child(); f.step()
+    completion({ upload = { accepted = true } })
+    eq(f.stats.applied, 1, "duplicate completion cannot apply context again")
+    eq(#f.queue, 1, "duplicate completion schedules no second confirmation")
+    f.step(); f.execute_child(); f.step()
+end)
 
 test("matching open progress verifies the reporting gate", function()
     local f = fixture({

@@ -109,21 +109,31 @@ end
 
 local function response_accepted(result, http_code)
     local body = response_body(result)
-    if WeRead.is_success_response(body) then
-        return true, body
+    if type(body) ~= "table" then return false, body end
+    -- An error or explicit failure wins over a watermark. A synckey alone
+    -- does not acknowledge a /book/read upload (APK checks BooleanResult).
+    for _, node in ipairs({ result, body }) do
+        for _, key in ipairs({ "errCode", "errcode", "errorCode" }) do
+            if node[key] ~= nil and tonumber(node[key]) ~= 0 then return false, body end
+        end
+        if node.succ ~= nil and node.succ ~= true and tonumber(node.succ) ~= 1 then
+            return false, body
+        end
     end
-    if type(body) ~= "table" then
-        return false, body
+    return WeRead.is_success_response(body), body
+end
+
+local function response_rejected(result)
+    if type(result) ~= "table" then return false end
+    for _, node in ipairs({ result, response_body(result) }) do
+        if type(node) == "table" then
+            if node.succ == false or tonumber(node.succ) == 0 then return true end
+            for _, key in ipairs({ "errCode", "errcode", "errorCode" }) do
+                if node[key] ~= nil and tonumber(node[key]) ~= 0 then return true end
+            end
+        end
     end
-    if body.synckey ~= nil then
-        return true, body
-    end
-    local error_code = body.errCode or body.errcode or body.errorCode
-        or result.errCode or result.errcode or result.errorCode
-    if error_code ~= nil then
-        return false, body
-    end
-    return false, body
+    return false
 end
 
 local function full_response_body(client, result)
@@ -842,6 +852,11 @@ function ReadReport:_run_pipeline(book_id, opts)
     end
 
     local failure = response_summary(self.client, result, http_code)
+    if not response_rejected(result) then
+        outcome.error = "read report acknowledgment missing; not replaying POST"
+        outcome.error_kind = "unconfirmed"
+        return outcome
+    end
     local refresh_ok, refreshed = pcall(function()
         return self:ensure_context(book_id, true)
     end)
@@ -857,6 +872,11 @@ function ReadReport:_run_pipeline(book_id, opts)
             outcome.accepted = true
             outcome.has_synckey = type(retry_body) == "table"
                 and retry_body.synckey ~= nil or false
+            return outcome
+        end
+        if not retry_ok or not response_rejected(retry_result) then
+            outcome.error = "read report retry outcome uncertain; not replaying POST"
+            outcome.error_kind = "unconfirmed"
             return outcome
         end
         failure = "initial=" .. failure .. "; refreshed="
@@ -1065,13 +1085,27 @@ end
 function ReadReport:build_payload(book_id, elapsed_seconds, book, position)
     book = book or self:ensure_context(book_id, false)
     apply_position(book, position)
-    return {
+    local payload = {
         bookId = tostring(book_id),
         chapterUid = tonumber(book.chapter_uid) or book.chapter_uid,
+        chapterIdx = tonumber(book.chapter_idx) or 0,
         chapterOffset = math.max(0, math.floor(tonumber(book.chapter_offset) or 0)),
         progress = tonumber(book.progress) or 0,
         readingTime = math.max(0, math.floor(tonumber(elapsed_seconds) or 0)),
     }
+    -- APK ReadingProgressReporter forwards the current position separately
+    -- from progress. Use the live position, never a cached chapter's fraction.
+    if type(position) == "table" then
+        local current = tonumber(position.percent)
+        if current then payload.currentProgress = math.max(0, math.min(100, current)) end
+        local fraction = tonumber(position.chapter_fraction)
+        if fraction then
+            payload.chapterProgress = math.floor(math.max(0, math.min(1, fraction)) * 100)
+        end
+    end
+    -- Reading reports deliberately omit device/app identity, install identity
+    -- and book version. Login/renewal keeps its own required identity fields.
+    return payload
 end
 
 function ReadReport:_send(book_id, book, position, elapsed_seconds)

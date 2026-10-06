@@ -97,6 +97,7 @@ function PositionMapper.normalize_remote(value, book_id, source, chapters)
         book_id = raw_field(node, "bookId", "book_id") or book_id,
         percent = clamp(percent, 0, 100),
         raw_percent = percent,
+        raw_chapter_offset = tonumber(raw_offset),
         chapter_uid = raw_field(
             node, "chapterUid", "chapterId", "chapter_uid"
         ),

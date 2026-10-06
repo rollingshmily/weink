@@ -161,9 +161,9 @@ local function bind_session_services(plugin, options)
                 book_id, outcome)
         end,
         goto_fraction = function(fraction)
-            local percent = math.floor(
-                math.max(0, math.min(1, tonumber(fraction) or 0))
-                    * 100 + 0.5)
+            -- ReaderRolling:onGotoPercent accepts fractional percentages;
+            -- _gotoPercent scales directly to page/position before pagination.
+            local percent = math.max(0, math.min(1, tonumber(fraction) or 0)) * 100
             return pcall(function()
                 if plugin.ui and plugin.ui.rolling
                     and plugin.ui.rolling.onGotoPercent then

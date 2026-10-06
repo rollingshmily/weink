@@ -87,7 +87,10 @@ package.preload["ui/uimanager"] = function() return {
     show = function(_self, widget) shown[#shown + 1] = widget end,
     close = function(_self, widget) widget.closed = true end,
 } end
-package.preload["ui/widget/textviewer"] = function() return { new = function(_self, args) return args end } end
+package.preload["weread.ui.own_notes_view"] = function() return { show = function(args)
+    menus[#menus + 1] = args
+    return args
+end } end
 package.preload["ui/widget/confirmbox"] = function() return { new = function(_self, args) return args end } end
 package.preload["weread.lib.plugin_util"] = function() return {
     tr = function(s) return s end, display_error = tostring,
@@ -119,32 +122,23 @@ local function flush() local fn = table.remove(tasks, 1); assert(fn); fn() end
 local session = UI.show(host)
 expect(#tasks == 1 and #menus == 0, "UI load is deferred through network task")
 flush()
-expect(#session.items == 2 and session.more and menus[#menus].opts.items_per_page == 8, "paginated personal list renders")
-expect(menus[#menus].items[3].text:find("Chapter title", 1, true), "chapter title rendered")
-local thought_row = menus[#menus].items[4]
+expect(#session.items == 2 and session.more and #menus[#menus].records == 2, "personal blocks render")
+local thought_row = menus[#menus].records[2]
 local thought_date = os.date("%Y-%m-%d", 1700000000)
-expect(thought_row.text == "Chapter title · " .. thought_date .. "\nthought",
-    "thought row starts with chapter/date, not repeated My thought prefix; body intact")
-expect(menus[#menus].title == "My underlines/thoughts · Test book", "page title keeps personal context")
-expect(menus[#menus].items[3].text:find("My underline · ", 1, true) == 1,
-    "mixed list still distinguishes underline rows")
-thought_row.callback()
-local initial_thought_viewer = shown[#shown]
-expect(initial_thought_viewer.title == "My thought", "thought detail retains meaningful title")
-expect(initial_thought_viewer.text == "Test book\nChapter title\n" .. thought_date
-    .. "\n\nQuoted text\nquote\n\nMy thought\nthought",
-    "detail removes only duplicate type header, preserves chapter/date/quote/body and section labels")
+expect(thought_row.metadata == thought_date .. " · Chapter title", "metadata follows text")
+expect(thought_row.note.quote == "quote" and thought_row.note.content == "thought", "full quote and thought reach same page")
+expect(menus[#menus].title == "My underlines/thoughts · Test book", "book title only in header")
+expect(menus[#menus].records[1].metadata:find("My underline · ", 1, true) == 1, "underlines distinguished")
 review_page = { reviews = { review("second") }, hasMore = 0, synckey = 200 }
-menus[#menus].items[2].callback() -- load more
+menus[#menus].on_more() -- load more
 flush()
 expect(book_reads == 1 and thought_reads == 2 and requests[#requests].cursor == 100, "more uses server cursor without reloading bookmarks")
 expect(#session.items == 3 and not session.more, "second page accumulated and all-loaded reflected")
 
-menus[#menus].items[2].callback() -- underline detail
-local viewer = shown[#shown]
-expect(viewer.text:find("quote", 1, true) and viewer.text:find("Chapter title", 1, true), "detail contains quote and chapter")
+local viewer = menus[#menus]
+local selected_note = viewer.records[1].note
 n = #posted
-viewer.buttons_table[1][1].callback()
+viewer.on_delete(selected_note)
 local confirm = shown[#shown]
 expect(#posted == n and confirm.text:find("cannot be undone", 1, true), "delete opens confirmation, no network mutation")
 -- Cancel is no callback, hence no delete. A stale confirmation must be harmless.
@@ -152,23 +146,33 @@ active_vid = "other"
 confirm.ok_callback(); flush()
 expect(#posted == n and #session.items == 3, "account switch after confirmation leaves list intact")
 active_vid = "me"
-viewer.buttons_table[1][1].callback()
+viewer.on_delete(selected_note)
 confirm = shown[#shown]
 confirm.ok_callback()
 host.ui.document.file = "changed.epub"
 flush()
 expect(#posted == n, "document switch during queued delete blocks request")
 host.ui.document.file = "book.epub"
+viewer.on_delete(selected_note); shown[#shown].ok_callback()
+host._reader_session_gen = 1
+flush()
+expect(#posted == n, "reader session switch during queued delete blocks request")
+host._reader_session_gen = nil
+viewer.on_delete(selected_note); shown[#shown].ok_callback()
+binding = { book_id = "other", title = "Other book" }
+flush()
+expect(#posted == n, "binding switch during queued delete blocks request")
+binding = { book_id = "b", title = "Test book" }
 response = { succ = 0 }
-viewer.buttons_table[1][1].callback(); shown[#shown].ok_callback(); flush()
+viewer.on_delete(selected_note); shown[#shown].ok_callback(); flush()
 expect(#session.items == 3 and not viewer.closed, "failed deletion preserves detail and list")
 response = {}
-viewer.buttons_table[1][1].callback(); shown[#shown].ok_callback(); flush()
+viewer.on_delete(selected_note); shown[#shown].ok_callback(); flush()
 expect(#session.items == 3 and not viewer.closed, "empty HTTP-success payload cannot remove a note")
 response = { succ = 1 }
 -- After successful deletion the cloud refresh itself fails: retain all other rows.
 function client:eink_bookmarklist() error("refresh unavailable") end
-viewer.buttons_table[1][1].callback(); shown[#shown].ok_callback(); flush()
+viewer.on_delete(selected_note); shown[#shown].ok_callback(); flush()
 expect(viewer.closed and #session.items == 2 and session.items[1].kind == "review", "successful delete removes only chosen kind")
 expect(notices[#notices]:find("refresh failed", 1, true), "successful mutation with failed refresh is reported distinctly")
 expect(posted[#posted].path == "/book/removeBookmark", "UI selected underline posts only bookmark endpoint")
@@ -180,14 +184,14 @@ expect(#posted == n, "reusing an old confirmation cannot delete an already remov
 function client:eink_bookmarklist() return marks end
 review_page = { reviews = { review("same") }, hasMore = 0, synckey = 300 }
 local fresh = UI.show(host); flush()
-menus[#menus].items[3].callback()
-local thought_viewer = shown[#shown]
+local thought_viewer = menus[#menus]
+local selected_thought = thought_viewer.records[2].note
 function client:eink_post_json(path, params)
     posted[#posted + 1] = { path = path, params = params }
     review_page = { reviews = {}, hasMore = 0, synckey = 301 }
     return { succ = true }
 end
-thought_viewer.buttons_table[1][1].callback(); shown[#shown].ok_callback(); flush()
+thought_viewer.on_delete(selected_thought); shown[#shown].ok_callback(); flush()
 expect(#fresh.items == 1 and fresh.items[1].kind == "bookmark" and thought_viewer.closed,
     "confirmed thought deletion refreshes and retains underline")
 expect(posted[#posted].path == "/review/delete", "UI thought delete routes to correct endpoint")

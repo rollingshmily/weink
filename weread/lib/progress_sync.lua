@@ -121,6 +121,9 @@ function ProgressSync:new(options)
             or options.subprocess,
         state = "idle",
         generation = 0,
+        account_generation = 0,
+        reader_session = 0,
+        snapshot_sequence = 0,
         pull_retry_token = 0,
         dirty = false,
         verified = false,
@@ -452,6 +455,23 @@ function ProgressSync:_fetch_remote(book_id, chapters)
     return remote
 end
 
+-- Numeric allowlist only: never stringify response tables, titles or credentials.
+local function log_position(label, position)
+    position = position or {}
+    log("info", label,
+        "uid=", tostring(tonumber(position.chapter_uid)),
+        "offset=", tostring(tonumber(position.chapter_offset)),
+        "fraction=", tostring(tonumber(position.fraction)
+            or (tonumber(position.percent) and position.percent / 100)),
+        "percent=", tostring(tonumber(position.percent)),
+        "raw_progress=", tostring(tonumber(position.raw_percent)),
+        "raw_offset=", tostring(tonumber(position.raw_chapter_offset)))
+end
+
+function ProgressSync:_account_identity()
+    return tostring((self.settings:get("eink", {}) or {}).vid or "")
+end
+
 function ProgressSync:_apply_remote(remote, context, options)
     options = options or {}
     local target, reason = PositionMapper.remote_to_local(
@@ -500,8 +520,11 @@ function ProgressSync:_apply_remote(remote, context, options)
     if options.manual then
         self.notify("remote_applied", { position = remote })
     end
+    local jump_generation = self.generation
     self.scheduler:scheduleIn(0.15, function()
+        if jump_generation ~= self.generation then return end
         local position = self:capture_local()
+        log_position("remote applied capture", position)
         if position then
             self.local_position = position
             self.dirty = false
@@ -517,7 +540,10 @@ function ProgressSync:_queue_snapshot(position, reason)
     if type(position) ~= "table" then return false end
     local book_id = tostring(position.book_id or self.current_book_id or "")
     if book_id == "" then return false end
+    self.snapshot_sequence = self.snapshot_sequence + 1
     self:_persist(book_id, {
+        pending_upload_id = self.snapshot_sequence,
+        pending_upload_account = self:_account_identity(),
         pending_upload_position = position,
         pending_upload_reason = reason or "unspecified",
     })
@@ -528,8 +554,16 @@ end
 function ProgressSync:_upload_snapshot(position, reason, show_result, on_complete)
     if type(position) ~= "table" then return false end
     local book_id = tostring(position.book_id or self.current_book_id or "")
-    if book_id == "" or self.uploading then return false end
+    if book_id == "" then return false end
+    if self.uploading then
+        self:_queue_snapshot(copy(position), reason)
+        return false
+    end
+    position = copy(position)
     self:_queue_snapshot(position, reason)
+    local snapshot_id = self.snapshot_sequence
+    local snapshot_chapters = copy(self.document_context and self.document_context.chapters
+        or self.get_chapters(self.get_book(book_id)))
     if not self.is_online() then
         self.state = "offline"
         if show_result then self.notify("offline", {}) end
@@ -538,43 +572,67 @@ function ProgressSync:_upload_snapshot(position, reason, show_result, on_complet
     self.uploading = true
     self.state = "uploading"
     local upload_generation = self.generation
+    local account_generation = self.account_generation
+    local account_identity = self:_account_identity()
+    local reader_session = self.reader_session
+    local shared_session = self.settings._weread_progress_session
+    local token = {}
+    self.upload_token = token
+    local settled = false
+    local function valid()
+        return self.upload_token == token
+            and self.account_generation == account_generation
+            and self:_account_identity() == account_identity
+            and self.reader_session == reader_session
+            and self.settings._weread_progress_session == shared_session
+    end
+    local function owns_pending()
+        local book = self.settings:get("books", {})[book_id] or {}
+        return book.pending_upload_id == snapshot_id
+            and book.pending_upload_account == account_identity
+    end
     local attempts = 0
     local attempt
     attempt = function()
-        if upload_generation ~= self.generation then
-            self.uploading = false
+        if settled or not valid() then
+            if self.upload_token == token then self.uploading = false end
             return
         end
         attempts = attempts + 1
         local function finish(ok, accepted, outcome)
+            if settled or not valid() then return end
             if ok and not accepted and type(outcome) == "table"
                 and outcome.error_kind == "busy"
                 and attempts < BUSY_RETRY_LIMIT then
                 self.scheduler:scheduleIn(BUSY_RETRY_SECONDS, attempt)
                 return
             end
+            settled = true
             self.uploading = false
             local applies_to_current = upload_generation == self.generation
                 and tostring(self.current_book_id or "") == book_id
             if ok and accepted then
-                if applies_to_current then
+                if applies_to_current and owns_pending()
+                    and PositionMapper.same_position(position, self.local_position) then
                     self.state = "verified"
                     self.dirty = false
                     self.last_uploaded_position = copy(position)
                 end
-                self:_persist(book_id, {
+                if owns_pending() then self:_persist(book_id, {
                     last_local_position = position,
                     last_uploaded_position = position,
                     last_upload_at = self.now(),
                     pending_upload_position = false,
                     pending_upload_reason = false,
+                    pending_upload_id = false,
+                    pending_upload_account = false,
                     last_sync_error = false,
-                })
+                }) end
                 log("info", "upload accepted:",
                     "book=", book_id,
                     "percent=", tostring(position.percent),
                     "reason=", tostring(reason))
-                if show_result then
+                if show_result and applies_to_current then
                     self.notify("upload_success", { position = position })
                 end
                 if applies_to_current and on_complete then
@@ -590,11 +648,11 @@ function ProgressSync:_upload_snapshot(position, reason, show_result, on_complet
             if applies_to_current then
                 self.state = "error"
             end
-            self:_persist(book_id, {
-                last_sync_error = tostring(error_message or "upload_failed"),
-            })
-            log("warn", "upload failed:", tostring(error_message))
-            if show_result then
+            if owns_pending() then self:_persist(book_id, {
+                last_sync_error = "upload_failed",
+            }) end
+            log("warn", "upload failed")
+            if show_result and applies_to_current then
                 self.notify("upload_failed", {
                     error = tostring(error_message or "upload_failed"),
                 })
@@ -606,11 +664,9 @@ function ProgressSync:_upload_snapshot(position, reason, show_result, on_complet
 
         if self.subprocess and type(self.build_upload_outcome) == "function" then
             local started, start_error = self:_start_job("progress_upload", function()
-                return {
-                    upload = self.build_upload_outcome(
-                        book_id, copy(position), 0),
-                }
+                return { upload = self.build_upload_outcome(book_id, copy(position), 0) }
             end, function(job_outcome)
+                if settled or not valid() then return end
                 if type(job_outcome) ~= "table" or job_outcome.ok == false then
                     finish(false, nil, job_outcome and job_outcome.error)
                     return
@@ -625,6 +681,24 @@ function ProgressSync:_upload_snapshot(position, reason, show_result, on_complet
                     type(upload_outcome) == "table"
                         and upload_outcome.accepted == true,
                     upload_outcome)
+                if type(upload_outcome) == "table" and upload_outcome.accepted then
+                    -- Acceptance is persisted BEFORE diagnostic networking.
+                    -- A hung/failed GET can never make the POST retryable.
+                    self.scheduler:scheduleIn(0.2, function()
+                        if not valid() or self.job then return end
+                        self:_start_job("progress_confirmation", function()
+                            return self:_child_fetch_remote(book_id, snapshot_chapters)
+                        end, function(result)
+                            if not valid() then return end
+                            self:_apply_job_auth(result)
+                            local remote = result and result.remote
+                            log_position("upload readback", remote)
+                            log("info", "upload confirmation:", remote and
+                                (PositionMapper.same_position(position, remote)
+                                    and "confirmed" or "not_confirmed") or "unavailable")
+                        end)
+                    end)
+                end
             end)
             if not started then
                 if start_error == "progress_job_busy"
@@ -679,6 +753,8 @@ function ProgressSync:_resolve(local_position, remote, context, options)
     options = options or {}
     self.local_position = copy(local_position)
     self.remote_position = copy(remote)
+    log_position("compare local", local_position)
+    log_position("compare remote", remote)
     local comparison = PositionMapper.compare(
         local_position,
         remote,
@@ -962,8 +1038,11 @@ function ProgressSync:_apply_pending_jump(book_id)
     if pending.notify then
         self.notify("remote_applied", { position = pending.remote })
     end
+    local jump_generation = self.generation
     self.scheduler:scheduleIn(0.15, function()
+        if jump_generation ~= self.generation then return end
         local position = self:capture_local()
+        log_position("remote applied capture", position)
         if position then
             self.local_position = position
             self:_persist(book_id, { last_local_position = position })
@@ -982,6 +1061,9 @@ function ProgressSync:cancel_pending_jump(reason)
 end
 
 function ProgressSync:on_account_changed()
+    self.settings._weread_progress_session = {}
+    self.account_generation = self.account_generation + 1
+    self.upload_token = nil
     self.generation = self.generation + 1
     self.pull_retry_token = self.pull_retry_token + 1
     local job = self.job
@@ -1005,6 +1087,14 @@ function ProgressSync:on_account_changed()
 end
 
 function ProgressSync:on_reader_ready()
+    -- A close may finish in FileManager, but never write from an old session
+    -- after a new reader opens (including reopening the same book).
+    -- Settings is shared across plugin instances; this is ephemeral, never
+    -- persisted. A new ReaderUI must also invalidate the previous instance.
+    self.settings._weread_progress_session = {}
+    self.reader_session = self.reader_session + 1
+    self.upload_token = nil
+    self.uploading = false
     self.generation = self.generation + 1
     local generation = self.generation
     self.current_book_id = nil
@@ -1160,7 +1250,9 @@ function ProgressSync:_pending_upload()
     if book_id == "" then return nil end
     local book = self.settings:get("books", {})[book_id]
     if type(book) ~= "table"
-        or type(book.pending_upload_position) ~= "table" then
+        or type(book.pending_upload_position) ~= "table"
+        or (book.pending_upload_account ~= nil
+            and book.pending_upload_account ~= self:_account_identity()) then
         return nil
     end
     return copy(book.pending_upload_position),
