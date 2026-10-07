@@ -210,21 +210,42 @@ function ReaderPosition.target(document, mapping, chapters, remote)
     local target_pos = start + offset / item.words * (finish - start)
     local xp = entry.range.start_xpointer
     if offset > 0 then
-        -- GotoPercent uses pages in page mode and document height in scroll
-        -- mode. Never feed a height fraction into that mode-dependent API.
-        -- Find the target page's XPointer, then use native GotoXPointer in both.
+        -- BookPosition.convertFromServeProgress sets charPos = chapterOffset, i.e.
+        -- the server offset is a CHARACTER offset inside the chapter text. Locate
+        -- it by text length from the chapter start; interpolating the chapter's
+        -- layout height assumes height is linear in character position, which
+        -- images, titles and spacing break.
         local count = number(call(document, "getPageCount"))
         if not count or count < 1 then return nil, "document_pages_unavailable" end
+        -- KOReader exposes getTextFromXPointers (plural) on the CRE document.
+        local has_text = type(document.getTextFromXPointers) == "function"
+        -- Text metric is a character count, height metric a document position;
+        -- never compare one against the other's limit.
+        local limit = has_text and offset or target_pos
         local low, high = 1, math.floor(count)
         while low <= high do
             local middle = math.floor((low + high) / 2)
             local candidate = call(document, "getPageXPointer", middle)
-            local y = candidate and number(call(document, "getPosFromXPointer", candidate))
-            if not y then return nil, "document_pages_unavailable" end
-            if y <= target_pos then
-                if y >= start and y < finish then xp = candidate end
+            if not candidate then return nil, "document_pages_unavailable" end
+            local metric
+            if has_text then
+                local text = call(document, "getTextFromXPointers",
+                    entry.range.start_xpointer, candidate)
+                metric = text ~= nil and #text or nil
+            else
+                metric = number(call(document, "getPosFromXPointer", candidate))
+            end
+            if metric == nil then return nil, "document_pages_unavailable" end
+            if metric <= limit then
+                -- Height metrics must stay inside the chapter range; the text
+                -- metric is already measured from the chapter start.
+                if has_text or (metric >= start and metric < finish) then
+                    xp = candidate
+                end
                 low = middle + 1
-            else high = middle - 1 end
+            else
+                high = middle - 1
+            end
         end
     end
     return {
