@@ -98,4 +98,53 @@ eq(invalid, nil); eq(reason, "document_chapter_unmapped")
 point = "7000"
 eq(assert(Reader.capture(document, mapping)).chapter_uid, 10, "unrelated chapter still resolves")
 eq(Reader.prepare({ getToc = function() return {} end }, {}, chapters), nil)
+-- Regression: layout height and chapter text length disagree. An image-only
+-- block makes the start of the chapter tall but carries no characters, so a
+-- height fraction lands later than the cloud character offset. The APK treats
+-- the offset as a character position (BookPosition.convertFromServeProgress),
+-- so the text length must decide where to land.
+do
+    local function text_len(xp)
+        -- Pages are 100 height units apart; the chapter spans 6000..9000 and
+        -- the first 1000 units are an image block with no characters.
+        if xp <= 7000 then return 0 end
+        if xp >= 9000 then return 300 end
+        return math.floor((xp - 7000) / 2000 * 300)
+    end
+    local text_document = {
+        file = "full.epub", info = { doc_height = 10000 },
+        getToc = function()
+            return {
+                { title = "第十章 十", xpointer = "6000", depth = 1 },
+                { title = "第十一章 十一", xpointer = "9000", depth = 1 },
+            }
+        end,
+        getXPointer = function() return "8000" end,
+        getPosFromXPointer = function(_, xp) return tonumber(xp) end,
+        getPageCount = function() return 100 end,
+        getPageXPointer = function(_, p) return tostring((p - 1) * 100) end,
+        compareXPointers = function(_, a, b)
+            a, b = tonumber(a), tonumber(b)
+            return a == b and 0 or (a < b and 1 or -1)
+        end,
+        getTextFromXPointers = function(_, first, last)
+            local from, to = tonumber(first), tonumber(last)
+            if not from or not to or to <= from then return "" end
+            return string.rep("x", math.max(0, text_len(to) - text_len(from)))
+        end,
+    }
+    local text_chapters = {
+        { chapterUid = 10, title = "第十章 十", wordCount = 300, chapterIdx = 10 },
+        { chapterUid = 11, title = "第十一章 十一", wordCount = 300, chapterIdx = 11 },
+    }
+    local text_mapping = assert(Reader.prepare(text_document, {}, text_chapters))
+    local text_target = assert(Reader.target(text_document, text_mapping,
+        text_chapters, { chapter_uid = 10, chapter_offset = 150 }))
+    -- The height fraction would land on 7500; character 150 sits at 8000.
+    eq(text_target.xpointer, "8000", "character offset decides, not layout height")
+    local height_only = assert(Reader.target(text_document, text_mapping,
+        text_chapters, { chapter_uid = 10, chapter_offset = 100 }))
+    eq(height_only.xpointer, "7600", "text length still drives the search")
+end
+
 print(("reader_position_spec: %d checks passed"):format(checks))
