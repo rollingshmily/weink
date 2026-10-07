@@ -207,16 +207,16 @@ assert_eq(updater:pick_release_download_url({
     tag_name = "v1.2.11",
     assets = {{
         name = "weread.koplugin-v1.2.11.zip",
-        browser_download_url = "https://github.com/rollingshmily/weread.koplugin/releases/download/v1.2.11/weread.koplugin-v1.2.11.zip",
+        browser_download_url = "https://github.com/rollingshmily/weink/releases/download/v1.2.11/weread.koplugin-v1.2.11.zip",
         digest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     }},
 }),
-    "https://github.com/rollingshmily/weread.koplugin/releases/download/v1.2.11/weread.koplugin-v1.2.11.zip",
+    "https://github.com/rollingshmily/weink/releases/download/v1.2.11/weread.koplugin-v1.2.11.zip",
     "release asset URL")
 local _, _, release_digest = updater:pick_release_download_url({
     assets = {{
         name = "update.zip",
-        browser_download_url = "https://github.com/rollingshmily/weread.koplugin/releases/download/v1/update.zip",
+        browser_download_url = "https://github.com/rollingshmily/weink/releases/download/v1/update.zip",
         digest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     }},
 })

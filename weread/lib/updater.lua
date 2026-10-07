@@ -19,7 +19,7 @@ local Updater = {}
 Updater.__index = Updater
 
 Updater.DEFAULT_OWNER = "rollingshmily"
-Updater.DEFAULT_REPO = "weread.koplugin"
+Updater.DEFAULT_REPO = "weink"
 Updater.DEFAULT_BRANCH = "main"
 Updater.PLUGIN_DIRNAME = "weread.koplugin"
 Updater.USER_AGENT = "KOReader-WeRead-Updater"

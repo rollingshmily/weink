@@ -22,7 +22,7 @@
 
 **方式一：用 Release 包（推荐）**
 
-1. 在本仓库 [Releases](https://github.com/rollingshmily/weread.koplugin/releases) 下载最新的 `weread.koplugin-v*.zip`。
+1. 在本仓库 [Releases](https://github.com/rollingshmily/weink/releases) 下载最新的 `weread.koplugin-v*.zip`。
 2. 国内网络慢的话，可以在链接前加加速前缀，例如：
 
    ```
