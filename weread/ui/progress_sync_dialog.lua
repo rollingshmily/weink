@@ -39,14 +39,24 @@ function ProgressSyncDialog.show_choice(context)
             percent(context.remote_position))
     end
 
-    UIManager:show(ConfirmBox:new{
+    local dialog
+    local function answer(callback)
+        return function()
+            -- Close first: the question is answered, and the upload that
+            -- follows must not stack a second dialog on top of this one.
+            if dialog then UIManager:close(dialog) end
+            if callback then callback() end
+        end
+    end
+    dialog = ConfirmBox:new{
         title = _("Reading progress sync"),
         text = message,
         ok_text = _("Use WeRead progress"),
         cancel_text = _("Keep KOReader progress"),
-        ok_callback = context.use_remote,
-        cancel_callback = context.keep_local,
-    })
+        ok_callback = answer(context.use_remote),
+        cancel_callback = answer(context.keep_local),
+    }
+    UIManager:show(dialog)
 end
 
 function ProgressSyncDialog.notify(code, data)
@@ -90,6 +100,12 @@ function ProgressSyncDialog.notify(code, data)
     elseif code == "offline" then
         text = _("No network connection. Please connect Wi-Fi and try again.")
     else
+        return
+    end
+    if data.transient then
+        -- The reader already answered the dialog that led here, so this
+        -- message must fade out by itself instead of waiting for a tap.
+        UIManager:show(InfoMessage:new{ text = text, timeout = 2 })
         return
     end
     UIManager:show(InfoMessage:new{ text = text })

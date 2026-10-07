@@ -1,9 +1,12 @@
 package.path = "./?.lua;" .. package.path
-local shown, checks = nil, 0
+local shown, closed, checks = nil, nil, 0
 local widget = { new = function(_, options) return options end }
 package.loaded["ui/widget/confirmbox"] = widget
 package.loaded["ui/widget/infomessage"] = widget
-package.loaded["ui/uimanager"] = { show = function(_, options) shown = options end }
+package.loaded["ui/uimanager"] = {
+    show = function(_, options) shown = options end,
+    close = function(_, dialog) closed = dialog end,
+}
 package.loaded["ffi/util"] = { template = function(text, ...)
     local args = { ... }
     return (text:gsub("%%(%d)", function(index) return tostring(args[tonumber(index)]) end))
@@ -23,6 +26,8 @@ contains("Cannot precisely compare chapter offsets")
 contains("The local offset is estimated")
 shown.ok_callback(); shown.cancel_callback()
 assert(local_called == 1 and remote_called == 1)
+checks = checks + 1
+assert(closed ~= nil, "answering the choice dialog closes it")
 Dialog.notify("already_synced", {})
 contains("reported coordinates match")
 contains("cloud record")
@@ -31,6 +36,11 @@ contains("accepted the progress request")
 Dialog.notify("upload_unconfirmed", { position = { percent = 45 } })
 contains("has not caught up yet")
 contains("the next sync will retry")
+shown.timeout = nil
+Dialog.notify("upload_success", { position = { percent = 45 }, transient = true })
+contains("accepted the progress request")
+checks = checks + 1
+assert(shown.timeout == 2, "answered-dialog notices fade out by themselves")
 Dialog.notify("remote_applied", { position = { percent = 45 } })
 contains("within-chapter position is estimated")
 local silent = shown

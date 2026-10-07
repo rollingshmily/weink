@@ -1371,6 +1371,20 @@ test("unknown offset always asks instead of silently keeping local", function()
     eq(f.sync.verified, false, "unknown gated")
 end)
 
+test("answered keep-local choice reports transiently and never stacks a dialog", function()
+    local f = fixture({ progress = 25, chapterUid = 22, chapterOffset = 8000 })
+    f.values.sync.ask_on_conflict = false
+    f.sync:on_reader_ready(); f.drain()
+    eq(#f.choices, 1, "uncertain position asks the reader")
+    f.choices[1].keep_local()
+    f.drain()
+    eq(#f.uploads, 1, "keep-local uploads the reader's position")
+    eq(#f.notifications, 1, "exactly one message after an answered dialog")
+    eq(f.notifications[1].code, "upload_success", "acceptance is reported")
+    eq(f.notifications[1].data.transient, true,
+        "acceptance fades out instead of waiting for a tap")
+end)
+
 test("cloud jump is gated until the actual target chapter is captured", function()
     local f = fixture({ progress = 50, chapterUid = 33, chapterOffset = 100 })
     f.sync:on_reader_ready(); f.drain()

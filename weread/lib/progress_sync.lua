@@ -642,7 +642,7 @@ function ProgressSync:_queue_snapshot(position, reason)
     return true
 end
 
-function ProgressSync:_upload_snapshot(position, reason, show_result, on_complete)
+function ProgressSync:_upload_snapshot(position, reason, show_result, on_complete, transient)
     if type(position) ~= "table" then return false end
     if position.chapter_verified ~= true then
         self:_position_unavailable("queued_chapter_unverified")
@@ -731,7 +731,12 @@ function ProgressSync:_upload_snapshot(position, reason, show_result, on_complet
                 if show_result and applies_to_current then
                     -- Acceptance only; the cloud record is read back below and
                     -- the result is what actually gets reported to the reader.
-                    self.notify("upload_success", { position = position })
+                    -- With transient set the message fades out on its own, so
+                    -- an answered dialog never asks for another tap.
+                    self.notify("upload_success", {
+                        position = position,
+                        transient = transient == true,
+                    })
                 end
                 if applies_to_current and on_complete then
                     on_complete(true, outcome)
@@ -805,7 +810,8 @@ function ProgressSync:_upload_snapshot(position, reason, show_result, on_complet
                                     return
                                 end
                                 -- valid() already covers "still the current session".
-                                if status ~= "confirmed" and show_result then
+                                if status ~= "confirmed" and show_result
+                                    and transient ~= true then
                                     self.notify("upload_unconfirmed", { position = position })
                                 end
                             end)
@@ -857,7 +863,12 @@ function ProgressSync:_keep_local(local_position, remote, options)
         remote
     )
     if options.upload_now then
-        self:_upload_snapshot(local_position, options.reason, true)
+        -- The reader has already answered the dialog: acceptance is still
+        -- worth showing, but as a message that fades out by itself, and a
+        -- failed readback must not stack a second dialog over the book they
+        -- just chose to keep.
+        self:_upload_snapshot(local_position, options.reason, true, nil,
+            options.quiet == true)
     elseif options.manual then
         self.notify("local_kept", { position = local_position })
     end
@@ -920,6 +931,7 @@ function ProgressSync:_resolve(local_position, remote, context, options)
                 self:_keep_local(current, remote, {
                     manual = options.manual,
                     upload_now = true,
+                    quiet = true,
                     reason = "explicit_local_choice",
                 })
             end,
