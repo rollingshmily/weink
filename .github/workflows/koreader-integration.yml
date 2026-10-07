@@ -48,7 +48,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .koreader-integration/build
-          key: koreader-linux-${{ env.KOREADER_COMMIT }}-v1
+          # v2: the repository was renamed, and a cache built under the old
+          # workspace path makes cmake refuse to reuse it.
+          key: koreader-linux-${{ env.KOREADER_COMMIT }}-v2
 
       - name: Run real PluginLoader integration spec
         env:
