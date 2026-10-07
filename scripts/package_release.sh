@@ -13,7 +13,7 @@ if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     exit 1
 fi
 
-archive_path="${1:-dist/weread.koplugin-v${version}.zip}"
+archive_path="${1:-dist/weink-v${version}.zip}"
 if [[ "$archive_path" != /* ]]; then
     archive_path="$repo_dir/$archive_path"
 fi

@@ -18,7 +18,7 @@ Development-only directories such as `.github/`, `docs/`, `scripts/`, and
 bash scripts/package_release.sh
 ```
 
-The default output is `dist/weread.koplugin-vX.Y.Z.zip`, where `X.Y.Z` comes
+The default output is `dist/weink-vX.Y.Z.zip`, where `X.Y.Z` comes
 from `_meta.lua`. A custom output path may be passed as the first argument.
 
 ## Manual GitHub package / 手动打包
@@ -49,7 +49,7 @@ To publish a release:
 Pushes that keep an existing version do not publish anything. Reusing an
 existing release tag fails deliberately; bump to a new version instead.
 Automatic packages use the versioned filename
-`weread.koplugin-vX.Y.Z.zip`. The zip and its `.sha256` checksum are separate
+`weink-vX.Y.Z.zip`. The zip and its `.sha256` checksum are separate
 workflow artifacts and separate GitHub Release assets.
 
 GitHub automatically generates the English release notes from merged pull
