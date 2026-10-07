@@ -127,6 +127,9 @@ Login is eink QR only (`weread/lib/eink_qr_login.lua`). Production APIs use `vid
 
 Existing reference scripts:
 - `scripts/verify_mp_articles.py` — MP article API verification
+- `scripts/verify_own_notes.py` — current-book note list verification
+- `scripts/verify_review_single.py` — single review/comment thread verification
+- `scripts/verify_split_layout_paths.py` — split-layout path verification
 
 ## Privacy / Security
 
@@ -141,15 +144,9 @@ Pre-commit scan:
 rg -n "wrk-|wr_skey[=]|wr_rt[=]|wr_vid[=]|ptcz[=]|x-wrpa|thirdwx" -S .
 ```
 
-## Unimplemented Features (WIP)
-
-These are placeholder menu items shown when a WeRead book is open, currently greyed out:
-- Book details — current-book WeRead metadata display
-- Notes — read-only WeRead highlights/thoughts
-
 ## Reference Docs
 
-- `docs/weread-api-reference.md` — full API endpoint reference (gateway + Web)
-- `docs/weread-content-research.md` — content decoding and image packaging research
 - `docs/weread-annotations-flow.md` — underline/thought download → embed → tap-to-display flow
-- `docs/weread-progress-sync-plan.md` — progress protocol research, mapping, and safety design
+- `docs/weread-eink-upload.md` — eink highlight/thought upload contract
+- `docs/annotations-overlay.md` — annotation overlay architecture, invalidation and limits
+- `docs/releasing.md` / `docs/testing.md` — release packaging and the three test layers

@@ -246,8 +246,8 @@ koreader/plugins/weread.koplugin/
 
 欢迎提交 issue 和 PR。提交前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-XPointer 外部标注层仍是实验性功能，测试步骤和限制见
-[原型说明](docs/xpointer-overlay-prototype.md)。
+本地书的划线与想法通过插件自有的标注层投到正文上（不改 EPUB、不动 KOReader 笔记），
+原理、失效时机、测试步骤与限制见 [标注层说明](docs/annotations-overlay.md)。
 
 ## 许可证
 
