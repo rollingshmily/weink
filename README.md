@@ -31,12 +31,12 @@
    https://ghfast.top/https://github.com/<owner>/<repo>/releases/download/<tag>/<file>
    ```
 
-3. 解压，把 `weread.koplugin/` 放进 KOReader 的 `plugins/` 目录，重启 KOReader。
+3. 解压，把 `weink.koplugin/` 放进 KOReader 的 `plugins/` 目录，重启 KOReader。
 
 **方式二：手动复制源码目录**
 
 把仓库里的 `_meta.lua`、`main.lua`、`weread/`、`fonts/`、`icons/`、`integrations/` 放进
-`koreader/plugins/weread.koplugin/`，重启 KOReader。
+`koreader/plugins/weink.koplugin/`，重启 KOReader。
 
 装好后的入口：
 

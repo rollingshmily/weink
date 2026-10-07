@@ -21,7 +21,7 @@ local function read_plugin_version()
 end
 
 local WeReadPlugin = WidgetContainer:extend{
-    name = "weread",
+    name = "weink",
     is_doc_only = false,
     version = read_plugin_version(),
 }

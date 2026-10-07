@@ -25,7 +25,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-plugin_dir="$stage_dir/weread.koplugin"
+plugin_dir="$stage_dir/weink.koplugin"
 mkdir -p "$plugin_dir"
 cp _meta.lua main.lua LICENSE NOTICE README.md "$plugin_dir/"
 cp -R fonts icons integrations weread "$plugin_dir"

@@ -159,13 +159,29 @@ end
 function Settings:new()
     local data_dir = DataStorage:getFullDataDir() .. "/weread"
     ensure_dir(data_dir)
+    local settings_dir = DataStorage:getSettingsDir()
     local obj = {
         data_dir = data_dir,
         default_cache_dir = data_dir .. "/cache",
         -- Default metadata lives under KOReader data, NOT under the book library.
         default_meta_dir = data_dir .. "/meta",
-        settings_file = DataStorage:getSettingsDir() .. "/weread.lua",
+        settings_file = settings_dir .. "/weink.lua",
     }
+    -- The plugin was renamed: login state, download paths and per-book records
+    -- all live in this file, so copy the old one across once instead of making
+    -- every reader scan the QR code again.
+    if lfs.attributes(obj.settings_file, "mode") ~= "file" then
+        local src = io.open(settings_dir .. "/weread.lua", "rb")
+        if src then
+            local body = src:read("*a") or ""
+            src:close()
+            local dst = io.open(obj.settings_file, "wb")
+            if dst then
+                dst:write(body)
+                dst:close()
+            end
+        end
+    end
     obj.store = LuaSettings:open(obj.settings_file)
     -- cache_dir / download_dir: flat EPUB library root (e.g. /mnt/base-us/books)
     local download_dir = obj.store:readSetting("download_dir", "")

@@ -186,7 +186,7 @@ local plugin = setmetatable({
 }, { __index = Plugin })
 plugin:init()
 
-expect(plugin.name == "weread", "plugin metadata was not loaded")
+expect(plugin.name == "weink", "plugin metadata was not loaded")
 expect(plugin:inherited_from_widget_container(),
     "KOReader WidgetContainer inheritance was broken")
 expect(plugin:inherited_feature() == "reader_lifecycle",

@@ -12,29 +12,29 @@ describe("WeRead plugin integration", function()
     end)
 
     it("is discovered and loaded by KOReader PluginLoader", function()
-        load_plugin("weread.koplugin")
+        load_plugin("weink.koplugin")
 
         local PluginLoader = require("pluginloader")
         local plugin
         for _, candidate in ipairs(PluginLoader.enabled_plugins) do
-            if candidate.name == "weread" then
+            if candidate.name == "weink" then
                 plugin = candidate
                 break
             end
         end
 
         assert.is_table(plugin)
-        assert.equals("weread", plugin.name)
-        assert.equals("WeRead", plugin.fullname)
+        assert.equals("weink", plugin.name)
+        assert.equals("Weink", plugin.fullname)
         assert.is_false(plugin.is_doc_only)
-        assert.matches("weread%.koplugin$", plugin.path)
+        assert.matches("weink%.koplugin$", plugin.path)
     end)
 
     it("lays out personal quotes and thoughts with real scrollable widgets", function()
-        load_plugin("weread.koplugin")
+        load_plugin("weink.koplugin")
         -- PluginLoader restores package.path after discovery. Direct component
         -- tests must provide the same plugin-local paths as runtime loading.
-        package.path = "plugins/weread.koplugin/?.lua;plugins/weread.koplugin/?/init.lua;" .. package.path
+        package.path = "plugins/weink.koplugin/?.lua;plugins/weink.koplugin/?/init.lua;" .. package.path
         local Screen = require("device").screen
         local Blitbuffer = require("ffi/blitbuffer")
         local UIManager = require("ui/uimanager")

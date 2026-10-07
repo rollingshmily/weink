@@ -27,7 +27,10 @@ Updater.DEFAULT_OWNER = "rollingshmily"
 Updater.DEFAULT_REPO = "weink"
 Updater.REPO_ALIASES = { "weread.koplugin" }
 Updater.DEFAULT_BRANCH = "main"
-Updater.PLUGIN_DIRNAME = "weread.koplugin"
+Updater.PLUGIN_DIRNAME = "weink.koplugin"
+-- Directory name used before the rename: left behind it would be loaded as a
+-- second copy of the plugin, so a successful install removes it.
+Updater.LEGACY_PLUGIN_DIRNAME = "weread.koplugin"
 Updater.USER_AGENT = "KOReader-WeRead-Updater"
 Updater.MAX_UPDATE_BYTES = 32 * 1024 * 1024
 Updater.ALLOWED_DOWNLOAD_HOST = "github.com"
@@ -1083,7 +1086,7 @@ function Updater:install_archive(zip_path)
     end
     if extracted == 0 or not has_meta or not has_main then
         remove_path(staging_dir)
-        return false, "archive does not look like weread.koplugin"
+        return false, "archive does not look like weink.koplugin"
     end
 
     -- Swap staging into place with backup rollback.
@@ -1159,6 +1162,14 @@ function Updater:install_archive(zip_path)
     end
 
     remove_path(backup_dir)
+    local legacy = Updater.LEGACY_PLUGIN_DIRNAME
+    if legacy and legacy ~= self.plugin_dirname then
+        local parent = target_dir:match("^(.*)/[^/]+$")
+        local legacy_dir = (parent or "") .. "/" .. legacy
+        if lfs.attributes(legacy_dir, "mode") == "directory" then
+            remove_path(legacy_dir)
+        end
+    end
     return true, {
         extracted = extracted,
         target_dir = target_dir,

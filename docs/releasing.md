@@ -9,7 +9,7 @@ The release package contains only files needed by KOReader:
 
 Development-only directories such as `.github/`, `docs/`, `scripts/`, and
 `spec/` are not shipped. The archive has a single top-level
-`weread.koplugin/` directory, so users can extract it directly into KOReader's
+`weink.koplugin/` directory, so users can extract it directly into KOReader's
 `plugins/` directory.
 
 ## Local package / 本地打包
@@ -28,7 +28,7 @@ controls the filename:
 
 - leave it empty to use the first eight characters of the selected commit ID;
 - enter a label such as `preview-1` to create
-  `weread.koplugin-preview-1.zip`.
+  `weink-preview-1.zip`.
 
 A manual run validates the current version, builds the zip and SHA-256
 checksum, and uploads them as two separate workflow artifacts retained for 14

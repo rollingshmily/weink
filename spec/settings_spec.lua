@@ -44,7 +44,7 @@ end
 package.preload["luasettings"] = function()
     return {
         open = function(_self, path)
-            expect(path == "/settings/weread.lua", "wrong settings file path")
+            expect(path == "/settings/weink.lua", "wrong settings file path")
             return store
         end,
     }
