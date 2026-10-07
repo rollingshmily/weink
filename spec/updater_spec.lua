@@ -223,6 +223,19 @@ local _, _, release_digest = updater:pick_release_download_url({
 assert_eq(release_digest,
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     "release asset digest")
+-- The repository was renamed; asset URLs that still carry the old name must
+-- keep passing the allowlist, or every install older than the rename can see an
+-- update but never download it.
+assert_eq(Updater.is_allowed_download_url(
+    "https://github.com/rollingshmily/weread.koplugin/releases/download/v1.2.11/weread.koplugin-v1.2.11.zip",
+    "rollingshmily", "weink"), true, "legacy repository name still allowed")
+assert_eq(Updater.is_allowed_download_url(
+    "https://github.com/rollingshmily/weink/releases/download/v2.2.1/weink-v2.2.1.zip",
+    "rollingshmily", "weink"), true, "current repository name allowed")
+assert_eq(Updater.is_allowed_download_url(
+    "https://github.com/someone-else/weink/releases/download/v2.2.1/weink-v2.2.1.zip",
+    "rollingshmily", "weink"), false, "foreign owner still rejected")
+
 local rejected, reject_reason = updater:download_to_file(
     "https://example.com/update.zip", "/tmp/weread-updater-rejected.zip")
 assert_eq(rejected, false, "foreign update URL rejected")

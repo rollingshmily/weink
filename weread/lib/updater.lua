@@ -18,8 +18,14 @@ end
 local Updater = {}
 Updater.__index = Updater
 
+-- The repository was renamed from weread.koplugin to weink; the download
+-- allowlist must keep accepting asset URLs that carry the old name, because
+-- GitHub keeps returning whichever name a client asked for in some paths and
+-- renamed repos redirect. Without this, any installed copy older than the
+-- rename can find an update but never download it.
 Updater.DEFAULT_OWNER = "rollingshmily"
 Updater.DEFAULT_REPO = "weink"
+Updater.REPO_ALIASES = { "weread.koplugin" }
 Updater.DEFAULT_BRANCH = "main"
 Updater.PLUGIN_DIRNAME = "weread.koplugin"
 Updater.USER_AGENT = "KOReader-WeRead-Updater"
@@ -112,20 +118,40 @@ local function file_sha256(path)
     return Crypto.sha256_hex(data)
 end
 
+local function repo_names(repo)
+    local names = { tostring(repo) }
+    for _, alias in ipairs(Updater.REPO_ALIASES or {}) do
+        names[#names + 1] = tostring(alias)
+    end
+    return names
+end
+
 local function is_allowed_download_url(url, owner, repo)
     local host, path = tostring(url or ""):match("^https://([^/]+)/(.+)$")
     if host == Updater.ALLOWED_DOWNLOAD_HOST then
-        local prefix = tostring(owner) .. "/" .. tostring(repo) .. "/"
-        if path:sub(1, #prefix) ~= prefix then return false end
-        return path:find("/releases/download/", 1, true) ~= nil
-            or path:find("/archive/refs/", 1, true) ~= nil
+        for _, name in ipairs(repo_names(repo)) do
+            local prefix = tostring(owner) .. "/" .. name .. "/"
+            if path:sub(1, #prefix) == prefix then
+                return path:find("/releases/download/", 1, true) ~= nil
+                    or path:find("/archive/refs/", 1, true) ~= nil
+            end
+        end
+        return false
     elseif host == "api.github.com" then
-        local prefix = "repos/" .. tostring(owner) .. "/" .. tostring(repo) .. "/"
-        if path:sub(1, #prefix) ~= prefix then return false end
-        return path:find("/zipball", 1, true) ~= nil or path:find("/tarball", 1, true) ~= nil
+        for _, name in ipairs(repo_names(repo)) do
+            local prefix = "repos/" .. tostring(owner) .. "/" .. name .. "/"
+            if path:sub(1, #prefix) == prefix then
+                return path:find("/zipball", 1, true) ~= nil
+                    or path:find("/tarball", 1, true) ~= nil
+            end
+        end
+        return false
     end
     return false
 end
+
+-- Exposed for regression tests: the predicate is pure and has no side effects.
+Updater.is_allowed_download_url = is_allowed_download_url
 
 local function ensure_dir(path)
     if type(path) ~= "string" or path == "" then
