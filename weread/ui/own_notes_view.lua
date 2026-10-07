@@ -46,28 +46,32 @@ function TrashButton:getSize()
 end
 
 function TrashButton:paintTo(bb, x, y)
-    local unit = math.max(1, Screen:scaleBySize(2))
+    -- Containers only hand the position to paintTo: the widget owns its dimen,
+    -- and the tap GestureRange points at that same object. Without this line
+    -- the range stays at the origin and taps on the icon go nowhere.
+    self.dimen.x, self.dimen.y = x, y
+    local unit = math.max(1, math.floor(Screen:scaleBySize(1.4)))
     local g = self.glyph
     local left = x + math.floor((self.width - g) / 2)
     local top = y + math.floor((self.height - g) / 2)
     bb:paintRect(x, y, self.width, self.height,
         self.hasFocus and Blitbuffer.COLOR_DARK_GRAY or Blitbuffer.COLOR_WHITE)
-    local lid_y = top + math.floor(g * 0.2)
+    local lid_y = top + math.floor(g * 0.22)
     local body_top = lid_y + unit
-    local body_bottom = top + g - math.floor(g * 0.06)
-    local body_left = left + math.floor(g * 0.16)
-    local body_right = left + g - math.floor(g * 0.16)
+    local body_bottom = top + g - math.floor(g * 0.04)
+    local body_left = left + math.floor(g * 0.2)
+    local body_right = left + g - math.floor(g * 0.2)
     local ink = Blitbuffer.COLOR_BLACK
-    bb:paintRect(left + math.floor(g * 0.36), lid_y - unit,
-        math.floor(g * 0.28), unit, ink)
+    bb:paintRect(left + math.floor(g * 0.4), lid_y - unit,
+        math.floor(g * 0.2), unit, ink)
     bb:paintRect(body_left - unit, lid_y,
         (body_right - body_left) + 2 * unit, unit, ink)
     bb:paintRect(body_left, body_top, unit, body_bottom - body_top, ink)
     bb:paintRect(body_right - unit, body_top, unit, body_bottom - body_top, ink)
     bb:paintRect(body_left, body_bottom - unit, body_right - body_left, unit, ink)
-    local slot_h = math.max(unit, body_bottom - body_top - 3 * unit)
-    bb:paintRect(left + math.floor(g * 0.4), body_top + 2 * unit, unit, slot_h, ink)
-    bb:paintRect(left + math.floor(g * 0.58), body_top + 2 * unit, unit, slot_h, ink)
+    local slot_h = math.max(unit, body_bottom - body_top - 4 * unit)
+    bb:paintRect(left + math.floor(g * 0.42), body_top + 2 * unit, unit, slot_h, ink)
+    bb:paintRect(left + math.floor(g * 0.56), body_top + 2 * unit, unit, slot_h, ink)
 end
 
 function TrashButton:onTap()
@@ -143,7 +147,7 @@ function View:init()
             size = icon_size, show_parent = self,
             callback = function() self.on_delete(note, self) end,
         }
-        local row = HorizontalGroup:new{ align = "top" }
+        local row = HorizontalGroup:new{ align = "center" }
         table.insert(row, column)
         table.insert(row, HorizontalSpan:new{ width = icon_gap })
         table.insert(row, delete)

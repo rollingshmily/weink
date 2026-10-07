@@ -88,6 +88,9 @@ for _, width in ipairs({ 600, 900, 1200 }) do
         and block.metadata.face.orig_size == 14, "metadata is the final small text line")
     block.delete.callback()
     expect(deleted[1] == note and deleted[2] == view, "delete binds exact original record")
+    block.delete:paintTo({ paintRect = function() end }, 40, 800)
+    expect(block.delete.dimen.x == 40 and block.delete.dimen.y == 800,
+        "painted control keeps its tap range where it is drawn")
     view.layout[1][1].callback(); view.layout[#view.layout][1].callback()
     expect(refresh and more, "refresh and more remain focusable")
     local delta
