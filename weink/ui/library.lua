@@ -951,6 +951,11 @@ function M:renderWeChatArticleList(list_type, title, articles, old_view)
         article._cached = cached_path ~= nil and file_exists(cached_path)
         rows[#rows + 1] = article
     end
+    local pending_links = {}
+    for _, article in ipairs(rows) do
+        if not article._cached then pending_links[#pending_links + 1] = article end
+    end
+    self:prefetchWeChatArticleLinks(pending_links)
     if old_view then UIManager:close(old_view) end
     local view
     view = LibraryView.show({
@@ -993,6 +998,42 @@ function M:renderWeChatArticleList(list_type, title, articles, old_view)
     return view
 end
 
+-- Silent, capped prefetch of the signed links for the articles on screen. See
+-- weink/lib/mp_link_prefetch_worker.lua for why the lookup is expensive.
+local MP_LINK_PREFETCH_LIMIT = 6
+
+function M:prefetchWeChatArticleLinks(articles)
+    local worker = self.prefetch_worker
+    if not worker or type(worker.start) ~= "function" or not worker:available() then
+        return false
+    end
+    local MpLinkPrefetchWorker = require("weink.lib.mp_link_prefetch_worker")
+    local candidates = MpLinkPrefetchWorker.candidates(articles, MP_LINK_PREFETCH_LIMIT)
+    if #candidates == 0 then return false end
+    local ok = worker:start {
+        queue = true,
+        timeout = 180,
+        task = function(context)
+            return MpLinkPrefetchWorker.run(self.settings, self.client, candidates, context)
+        end,
+        on_done = function(result)
+            local value = type(result) == "table" and (result.value or result) or nil
+            local links = type(value) == "table" and value.links or nil
+            if type(links) ~= "table" then return end
+            local stored = 0
+            for review_id, url in pairs(links) do
+                if Content.remember_mp_article_url(review_id, url) then
+                    stored = stored + 1
+                end
+            end
+            if stored > 0 then
+                logger.info("MP article links prefetched:", "stored=", tostring(stored))
+            end
+        end,
+    }
+    return ok
+end
+
 function M:downloadWeChatArticleAndRead(article, list_type, on_complete)
     self:runOnlineTask(_("Download article and read"), function()
         self:showBusy(T(_("Downloading article: %1"), article.title or ""))
@@ -1018,9 +1059,15 @@ function M:downloadWeChatArticleAndRead(article, list_type, on_complete)
             if self.library_db and article.reviewId then
                 self.library_db:updateMpArticleCachePath(article.reviewId, saved_path)
             end
-            pcall(function()
-                self.client:eink_report_mp_read(article, false)
+            local reported, report_err = pcall(function()
+                return self.client:eink_report_mp_read(article, false)
             end)
+            if reported then
+                logger.info("MP article marked as read:",
+                    "reviewId=" .. tostring(article.reviewId or ""))
+            else
+                logger.warn("MP article read report failed:", log_error(report_err))
+            end
             return saved_path
         end)
         if progress_dialog then

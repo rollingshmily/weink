@@ -2235,9 +2235,48 @@ end
 -- the unsigned stored form. v2.6.1 asked once and fell back to the unsigned
 -- link, so most downloads still died on the challenge page.
 local MP_SIGNED_URL_ATTEMPTS = 20
+-- A signed link is reused for this long before the cache is ignored; a link
+-- that turns out to be stale is dropped the moment wechat answers with the
+-- verification page (see fetch_article_html).
+local MP_SIGNED_URL_TTL = 6 * 60 * 60
+
+-- reviewId -> { url = <signed link>, at = os.time() }. Filled by the download
+-- path and by the silent link prefetch, so opening the same article twice does
+-- not re-run the 15%-hit-rate lookup.
+local mp_signed_urls = {}
 
 local function mp_url_is_signed(url)
     return type(url) == "string" and url:find("chksm=", 1, true) ~= nil
+end
+
+Content.mp_url_is_signed = mp_url_is_signed
+
+function Content.cached_mp_article_url(review_id)
+    if not review_id or tostring(review_id) == "" then return nil end
+    local entry = mp_signed_urls[tostring(review_id)]
+    if not entry then return nil end
+    if (os.time() - tonumber(entry.at or 0)) > MP_SIGNED_URL_TTL
+        or not mp_url_is_signed(entry.url) then
+        mp_signed_urls[tostring(review_id)] = nil
+        return nil
+    end
+    return entry.url
+end
+
+function Content.remember_mp_article_url(review_id, url)
+    if not review_id or tostring(review_id) == "" or not mp_url_is_signed(url) then
+        return false
+    end
+    mp_signed_urls[tostring(review_id)] = { url = url, at = os.time() }
+    return true
+end
+
+function Content.forget_mp_article_url(review_id)
+    if review_id then mp_signed_urls[tostring(review_id)] = nil end
+end
+
+function Content.clear_mp_article_urls()
+    mp_signed_urls = {}
 end
 
 local function mp_signed_doc_url(client, review_id)
@@ -2272,10 +2311,15 @@ function Content.resolve_mp_article_url(client, article, opts)
         or type(client) ~= "table" or type(client.eink_json) ~= "function" then
         return url
     end
+    local cached = Content.cached_mp_article_url(review_id)
+    if cached and not opts.skip_cache then
+        return cached
+    end
     local attempts = tonumber(opts.attempts) or MP_SIGNED_URL_ATTEMPTS
     for attempt = 1, attempts do
         local doc_url = mp_signed_doc_url(client, review_id)
         if doc_url then
+            Content.remember_mp_article_url(review_id, doc_url)
             logger.info("MP article link normalised to its signed form",
                 "attempt=" .. tostring(attempt))
             return doc_url
@@ -2309,6 +2353,9 @@ function Content.fetch_article_html(client, settings, book, article, opts)
         local challenged = final_url:find("wappoc_appmsgcaptcha", 1, true) ~= nil
             or (type(html) == "string" and html:find("poc_token", 1, true) ~= nil)
         if challenged and not empty_response and round < rounds then
+            -- The link we used is stale: drop it so the next round really
+            -- re-asks instead of getting the cached copy back.
+            Content.forget_mp_article_url(article and (article.reviewId or article.review_id))
             logger.info("MP article fetch was challenged; resolving a fresh signed link",
                 "round=" .. tostring(round))
         else

@@ -136,4 +136,56 @@ local resolved = Content.resolve_mp_article_url(exhausted_client,
 expect(resolved == UNSIGNED, "exhausted lookup must fall back to the stored link")
 expect(exhausted_calls > 1, "exhausted lookup must have retried, got " .. exhausted_calls)
 
+-- 6) a resolved link is cached, so a second download of the same article does
+--    not re-run the 15%-hit-rate lookup (that is what the tap-to-open path and
+--    the background prefetch share)
+local cache_lookups = 0
+local cache_client = {
+    eink_json = function(_self, path, params)
+        cache_lookups = cache_lookups + 1
+        return { review = { mpInfo = { doc_url = DOC_URL } } }
+    end,
+    get_public_text = function(_self, url)
+        return ARTICLE_BODY, { content_type = "text/html", length = #ARTICLE_BODY, url = url }
+    end,
+}
+Content.fetch_article_html(cache_client, settings, nil,
+    { reviewId = "r-6", title = "cache", url = UNSIGNED })
+Content.fetch_article_html(cache_client, settings, nil,
+    { reviewId = "r-6", title = "cache", url = UNSIGNED })
+expect(cache_lookups == 1, "signed link must be cached across downloads, got "
+    .. cache_lookups .. " lookups")
+expect(Content.cached_mp_article_url("r-6") == DOC_URL,
+    "cached signed link must be readable")
+
+-- 7) a cached link that WeChat now challenges must be dropped, so the retry
+--    asks for a fresh signature instead of repeating the dead one
+Content.remember_mp_article_url("r-7", DOC_URL)
+local fresh_doc = "https://mp.weixin.qq.com/s?__biz=a&mid=1&idx=1&sn=b&chksm="
+    .. string.rep("e", 64) .. "#rd"
+local stale_lookups = 0
+local stale_client = {
+    eink_json = function(_self, path, params)
+        stale_lookups = stale_lookups + 1
+        return { review = { mpInfo = { doc_url = fresh_doc } } }
+    end,
+    get_public_text = function(_self, url)
+        requested = url
+        if url == DOC_URL then
+            local challenge = "<html><body>poc_token=abc</body></html>"
+            return challenge, { content_type = "text/html", length = #challenge,
+                url = "https://mp.weixin.qq.com/mp/wappoc_appmsgcaptcha?poc_token=***" }
+        end
+        return ARTICLE_BODY, { content_type = "text/html", length = #ARTICLE_BODY, url = url }
+    end,
+}
+local stale_path = Content.fetch_article_html(stale_client, settings, nil,
+    { reviewId = "r-7", title = "stale", url = UNSIGNED })
+expect(Content.is_valid_article_cache(stale_path), "refreshed article cache missing")
+expect(stale_lookups >= 1, "stale cached link must trigger a fresh lookup")
+expect(requested == fresh_doc, "stale cached link must be replaced, got "
+    .. tostring(requested))
+expect(Content.cached_mp_article_url("r-7") == fresh_doc,
+    "refreshed link must replace the stale cache entry")
+
 print("content_mp_signed_url_spec: " .. checks .. " checks passed")
