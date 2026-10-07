@@ -10,7 +10,7 @@ on:
     paths:
       - main.lua
       - _meta.lua
-      - "weread/**"
+      - "weink/**"
       - "spec/koreader/**"
       - scripts/run_koreader_integration.sh
       - .github/workflows/koreader-integration.yml

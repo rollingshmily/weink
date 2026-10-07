@@ -25,7 +25,7 @@ jobs:
         run: bash scripts/check_lua_namespace.sh
 
       - name: Lua static analysis
-        run: luacheck main.lua _meta.lua weread spec
+        run: luacheck main.lua _meta.lua weink spec
 
       - name: Lua syntax check
         run: |
@@ -45,7 +45,7 @@ jobs:
           fi
 
       - name: Release package smoke test
-        run: bash scripts/package_release.sh /tmp/weread.koplugin-release-test.zip
+        run: bash scripts/package_release.sh /tmp/weink-release-test.zip
 
       - name: Sensitive information scan
         run: |
