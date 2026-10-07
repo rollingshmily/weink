@@ -6,7 +6,7 @@ Weink is an e-ink KOReader client for WeRead (微信读书) books and MP article
 
 ## Identity and upstream
 
-- The code started from `finlater/weread.koplugin` and has run on its own line since `942e25c` (2026-08-01). Upstream keeps the web-reader path; Weink speaks only e-ink APK contracts (web login and shard code deleted in 1.2.84).
+- The code started from `finlater/weread.koplugin` and has run on its own line since `942e25c` (2026-08-01). Upstream and Weink have since diverged in data paths; keep user-facing docs free of protocol internals.
 - Version numbers are independent from 2.0.0 onward. Upstream ports are cherry-picked, and the commit message or CHANGELOG entry names the upstream version they came from.
 - The KOReader plugin directory name, plugin name (`weread`) and `settings/weread.lua` stay unchanged on purpose: existing installs must keep their login, cache and local-book matches.
 
