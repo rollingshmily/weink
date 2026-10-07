@@ -955,7 +955,8 @@ function M:renderWeChatArticleList(list_type, title, articles, old_view)
     for _, article in ipairs(rows) do
         if not article._cached then pending_links[#pending_links + 1] = article end
     end
-    self:prefetchWeChatArticleLinks(pending_links)
+    self:prefetchWeChatArticleLinks(pending_links, mode .. ":" ..
+        tostring(self.shelf_view_pages and self.shelf_view_pages[mode] or 1))
     if old_view then UIManager:close(old_view) end
     local view
     view = LibraryView.show({
@@ -1000,9 +1001,13 @@ end
 
 -- Silent, capped prefetch of the signed links for the articles on screen. See
 -- weink/lib/mp_link_prefetch_worker.lua for why the lookup is expensive.
+-- The same page is only prefetched once per MP_LINK_PREFETCH_INTERVAL: KOReader
+-- re-renders the list on every page turn and refresh, and each batch costs a
+-- couple of dozen /review/single calls on the device.
 local MP_LINK_PREFETCH_LIMIT = 6
+local MP_LINK_PREFETCH_INTERVAL = 60
 
-function M:prefetchWeChatArticleLinks(articles)
+function M:prefetchWeChatArticleLinks(articles, key)
     local worker = self.prefetch_worker
     if not worker or type(worker.start) ~= "function" or not worker:available() then
         return false
@@ -1010,15 +1015,35 @@ function M:prefetchWeChatArticleLinks(articles)
     local MpLinkPrefetchWorker = require("weink.lib.mp_link_prefetch_worker")
     local candidates = MpLinkPrefetchWorker.candidates(articles, MP_LINK_PREFETCH_LIMIT)
     if #candidates == 0 then return false end
-    local ok = worker:start {
+    local now = os.time()
+    key = tostring(key or "default")
+    if self._mp_prefetch_key == key
+        and (now - (self._mp_prefetch_at or 0)) < MP_LINK_PREFETCH_INTERVAL then
+        return false
+    end
+    self._mp_prefetch_key = key
+    self._mp_prefetch_at = now
+    local auth_fingerprint = require("weink.lib.worker_settings").fingerprint(self.settings)
+    -- Declared before the closure: on_done compares against it, and a local
+    -- declared in the same statement is not in scope inside the initializer.
+    local handle
+    local ok
+    ok, handle = worker:start {
         queue = true,
         timeout = 180,
         task = function(context)
             return MpLinkPrefetchWorker.run(self.settings, self.client, candidates, context)
         end,
         on_done = function(result)
+            if self._mp_prefetch_handle == handle then self._mp_prefetch_handle = nil end
             local value = type(result) == "table" and (result.value or result) or nil
-            local links = type(value) == "table" and value.links or nil
+            if type(value) ~= "table" then return end
+            local WorkerSettings = require("weink.lib.worker_settings")
+            if value.auth and not WorkerSettings.merge(self.settings,
+                auth_fingerprint, value.auth) then
+                logger.info("skip MP link prefetch auth write-back: parent auth changed")
+            end
+            local links = value.links
             if type(links) ~= "table" then return end
             local stored = 0
             for review_id, url in pairs(links) do
@@ -1031,10 +1056,22 @@ function M:prefetchWeChatArticleLinks(articles)
             end
         end,
     }
+    self._mp_prefetch_handle = ok and handle or nil
     return ok
 end
 
+function M:cancelWeChatArticleLinkPrefetch(reason)
+    local worker = self.prefetch_worker
+    local handle = self._mp_prefetch_handle
+    self._mp_prefetch_handle = nil
+    if not worker or not handle then return false end
+    return worker:cancel(handle, reason or "cancelled")
+end
+
 function M:downloadWeChatArticleAndRead(article, list_type, on_complete)
+    -- The user wants this link now; stop the background batch so it does not
+    -- compete for the worker and the network.
+    self:cancelWeChatArticleLinkPrefetch("article_open")
     self:runOnlineTask(_("Download article and read"), function()
         self:showBusy(T(_("Downloading article: %1"), article.title or ""))
         local progress_dialog

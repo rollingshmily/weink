@@ -2298,6 +2298,17 @@ local function mp_signed_doc_url(client, review_id)
     return nil
 end
 
+-- One lookup attempt: returns a signed doc_url or nil. Kept separate so the
+-- silent prefetch can interleave attempts across articles instead of spending
+-- the whole budget on the first one.
+function Content.try_mp_article_url(client, review_id)
+    if not review_id or tostring(review_id) == ""
+        or type(client) ~= "table" or type(client.eink_json) ~= "function" then
+        return nil
+    end
+    return mp_signed_doc_url(client, review_id)
+end
+
 function Content.resolve_mp_article_url(client, article, opts)
     opts = opts or {}
     local url = tostring(
@@ -2317,16 +2328,20 @@ function Content.resolve_mp_article_url(client, article, opts)
     end
     local attempts = tonumber(opts.attempts) or MP_SIGNED_URL_ATTEMPTS
     for attempt = 1, attempts do
-        local doc_url = mp_signed_doc_url(client, review_id)
+        local doc_url = Content.try_mp_article_url(client, review_id)
         if doc_url then
             Content.remember_mp_article_url(review_id, doc_url)
-            logger.info("MP article link normalised to its signed form",
-                "attempt=" .. tostring(attempt))
+            if not opts.quiet then
+                logger.info("MP article link normalised to its signed form",
+                    "attempt=" .. tostring(attempt))
+            end
             return doc_url
         end
     end
-    logger.warn("MP article link stayed unsigned after " .. tostring(attempts)
-        .. " attempts; WeChat will ask for a verification")
+    if not opts.quiet then
+        logger.warn("MP article link stayed unsigned after " .. tostring(attempts)
+            .. " attempts; WeChat will ask for a verification")
+    end
     return url
 end
 
