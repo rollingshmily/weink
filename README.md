@@ -104,13 +104,6 @@
 2. 用微信扫码并在手机上确认授权（授权需包含收藏 / 浮窗）。
 3. 凭证过期可在同一菜单里续期；续期失败就重新扫码。
 
-## 许可证
+---
 
-本项目代码采用 [GNU Affero General Public License v3.0](LICENSE)，SPDX 标识 `AGPL-3.0-only`。
-
-修改、整合或再分发时必须遵守 AGPL-3.0：保留版权与许可证声明，并按许可证要求开源你的修改。
-
-`fonts/NotoEmoji-Regular.ttf` 是第三方字体，采用 [SIL Open Font License 1.1](fonts/LICENSE)，不适用本项目的 AGPL-3.0。
-
-Copyright © 2026 finlater and contributors（本项目源自其 AGPL-3.0 工程）。  
-Copyright © 2026 rollingshmily and contributors（Weink 部分）。
+许可与版权声明见文首 [五、许可与版权](#五许可与版权)；完整许可证文本见 [LICENSE](LICENSE)，第三方声明见 [NOTICE](NOTICE)。
