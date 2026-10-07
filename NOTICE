@@ -1,5 +1,11 @@
 Weink
+
+This project is a fork of finlater/weread.koplugin and continues under the
+same license. Substantial portions of the codebase originate from that
+project; see the README for what was carried over and what this fork changes.
+
 Copyright (C) 2026 finlater and contributors
+Copyright (C) 2026 rollingshmily and contributors
 
 The project source code is licensed under the GNU Affero General Public
 License version 3. See LICENSE for the complete license text.
