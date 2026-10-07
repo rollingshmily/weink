@@ -26,7 +26,7 @@ package.preload["logger"] = function()
     }
 end
 
-local Footnotes = require("weread.lib.footnotes")
+local Footnotes = require("weink.lib.footnotes")
 
 expect(not Footnotes.FOOTNOTES_CSS:find("visibility:hidden", 1, true),
     "generated footnotes must remain visible to CREngine")

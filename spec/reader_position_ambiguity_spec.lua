@@ -1,6 +1,6 @@
 -- Regression: an unrelated repeated title must not disable a whole book.
 package.path = "./?.lua;" .. package.path
-local Reader = require("weread.lib.reader_position")
+local Reader = require("weink.lib.reader_position")
 local checks = 0
 local function eq(got, expected, label)
     checks = checks + 1

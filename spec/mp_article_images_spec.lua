@@ -6,14 +6,14 @@ local function expect(condition, message)
     if not condition then error(message or ("check " .. checks .. " failed")) end
 end
 
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
-package.preload["weread.lib.crypto"] = function()
+package.preload["weink.lib.crypto"] = function()
     return { sha256_hex = function(value) return string.rep("a", 64) end }
 end
-package.preload["weread.lib.reader_state"] = function() return {} end
-package.preload["weread.lib.protocol"] = function()
+package.preload["weink.lib.reader_state"] = function() return {} end
+package.preload["weink.lib.protocol"] = function()
     return {
         reader_url = function(book_id, chapter_uid)
             return "https://weread.qq.com/reader/" .. tostring(book_id)
@@ -21,9 +21,9 @@ package.preload["weread.lib.protocol"] = function()
         end,
     }
 end
-package.preload["weread.lib.thoughts"] = function() return {} end
+package.preload["weink.lib.thoughts"] = function() return {} end
 
-local Content = require("weread.lib.content")
+local Content = require("weink.lib.content")
 
 local root = os.tmpname()
 os.remove(root)

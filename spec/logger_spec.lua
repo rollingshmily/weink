@@ -24,7 +24,7 @@ package.preload["logger"] = function()
     }
 end
 
-local logger = require("weread.lib.logger")
+local logger = require("weink.lib.logger")
 logger.info("default message", "value")
 logger.scoped("HTTP").err("scoped message")
 

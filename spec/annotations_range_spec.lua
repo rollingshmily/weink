@@ -1,10 +1,10 @@
 package.path = "./?.lua;./?/init.lua;" .. package.path
 
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
 
-local Annotations = require("weread.lib.annotations")
+local Annotations = require("weink.lib.annotations")
 
 local checks, failures = 0, 0
 local function expect(value, label)

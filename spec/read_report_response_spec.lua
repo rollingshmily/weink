@@ -10,24 +10,24 @@ local function capture(...)
     for i = 1, select("#", ...) do parts[i] = tostring(select(i, ...)) end
     logs[#logs + 1] = table.concat(parts, " ")
 end
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     -- Capture this component only. Shared Client diagnostics are out of scope.
     return { info = function() end, warn = function() end, err = function() end,
         scoped = function() return { info = capture, warn = capture, err = capture } end }
 end
-package.preload["weread.lib.content"] = function() return {} end
-package.preload["weread.lib.protocol"] = function()
+package.preload["weink.lib.content"] = function() return {} end
+package.preload["weink.lib.protocol"] = function()
     return { reader_url = function() return "https://reader/" end }
 end
-package.preload["weread.lib.plugin_util"] = function() return { perf = function() end } end
-package.preload["weread.lib.eink"] = function() return { APPVER = "test", USER_AGENT = "test" } end
+package.preload["weink.lib.plugin_util"] = function() return { perf = function() end } end
+package.preload["weink.lib.eink"] = function() return { APPVER = "test", USER_AGENT = "test" } end
 package.preload["ltn12"] = function() return {} end
 package.preload["socketutil"] = function() return {} end
 package.preload["socket.http"] = function() return {} end
 package.preload["ffi/util"] = function() return {} end
 
-local Client = require("weread.lib.client")
-local ReadReport = require("weread.lib.read_report")
+local Client = require("weink.lib.client")
+local ReadReport = require("weink.lib.read_report")
 local checks = 0
 local function eq(got, want, message)
     checks = checks + 1

@@ -11,10 +11,10 @@ local function expect(condition, message)
     end
 end
 
-package.preload["weread.lib.book_reviews"] = function()
+package.preload["weink.lib.book_reviews"] = function()
     return { format_date = function() return "" end }
 end
-package.preload["weread.ui.book_reviews_view"] = function() return {} end
+package.preload["weink.ui.book_reviews_view"] = function() return {} end
 package.preload["ui/widget/buttondialog"] = function() return {} end
 package.preload["ui/widget/confirmbox"] = function() return {} end
 package.preload["ui/widget/infomessage"] = function() return {} end
@@ -27,13 +27,13 @@ package.preload["ui/uimanager"] = function()
         close = function() end,
     }
 end
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
-package.preload["weread.lib.protocol"] = function()
+package.preload["weink.lib.protocol"] = function()
     return { is_mp_book = function() return false end }
 end
-package.preload["weread.lib.plugin_util"] = function()
+package.preload["weink.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,
         T = function(text, ...) return text end,
@@ -44,7 +44,7 @@ package.preload["weread.lib.plugin_util"] = function()
         end,
     }
 end
-package.preload["weread.lib.content"] = function()
+package.preload["weink.lib.content"] = function()
     return {
         is_valid_article_cache = function(path)
             return path and path:find("/cache/", 1, true) ~= nil
@@ -63,7 +63,7 @@ package.preload["weread.lib.content"] = function()
 end
 
 local shown_views = {}
-package.preload["weread.ui.library_view"] = function()
+package.preload["weink.ui.library_view"] = function()
     return {
         show = function(data, callbacks)
             local view = { data = data, callbacks = callbacks, page = data.page or 1 }
@@ -73,7 +73,7 @@ package.preload["weread.ui.library_view"] = function()
     }
 end
 
-local Library = require("weread.ui.library")
+local Library = require("weink.ui.library")
 
 local opened_files = {}
 local mp_articles_store = { [1] = {}, [2] = {} }

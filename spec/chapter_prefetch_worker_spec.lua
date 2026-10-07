@@ -1,7 +1,7 @@
 package.path = "./?.lua;" .. package.path
 
 local calls = {}
-package.preload["weread.lib.content"] = function()
+package.preload["weink.lib.content"] = function()
     return {
         create_download_workspace = function()
             calls[#calls + 1] = "workspace"
@@ -33,7 +33,7 @@ package.preload["weread.lib.content"] = function()
         end,
     }
 end
-package.preload["weread.lib.footnotes"] = function()
+package.preload["weink.lib.footnotes"] = function()
     return {
         scan_chapter = function() return {} end,
         build_book_index = function() return {} end,
@@ -67,7 +67,7 @@ local context = {
     checkCancelled = function() end,
     sleep = function() end,
 }
-local Worker = require("weread.lib.chapter_prefetch_worker")
+local Worker = require("weink.lib.chapter_prefetch_worker")
 local result = Worker.run(settings, {}, { book_id = "book" },
     { chapterUid = "2", title = "Two" }, context)
 

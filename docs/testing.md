@@ -14,7 +14,7 @@ Run these before every PR:
 ```bash
 bash scripts/run_lua_specs.sh
 bash scripts/check_lua_namespace.sh
-luacheck main.lua _meta.lua weread spec
+luacheck main.lua _meta.lua weink spec
 ```
 
 `run_lua_specs.sh` executes every top-level `spec/*_spec.lua` with LuaJIT.
@@ -28,9 +28,9 @@ not touched.
 
 `check_lua_namespace.sh` enforces the project module layout:
 
-- non-UI modules belong in `weread/lib/`;
-- UI modules belong in `weread/ui/`;
-- project modules use `weread.lib.*` or `weread.ui.*`;
+- non-UI modules belong in `weink/lib/`;
+- UI modules belong in `weink/ui/`;
+- project modules use `weink.lib.*` or `weink.ui.*`;
 - root-level project `lib/` and `ui/` directories are forbidden.
 
 KOReader-owned imports such as `require("ui/widget/menu")` remain valid.
@@ -43,7 +43,7 @@ injection and `package.preload` fakes over live network or UI automation.
 High-risk areas that require focused coverage:
 
 - HTTP redirect, timeout, cookie, and credential boundaries in
-  `weread/lib/client.lua`;
+  `weink/lib/client.lua`;
 - settings, authentication schema migrations, and split book storage;
 - UTF-8 content decoding, HTML transformation, underlines, and thoughts;
 - downloader cancellation, retry, completion callbacks, and standby guards;

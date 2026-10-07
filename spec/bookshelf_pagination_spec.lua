@@ -41,9 +41,9 @@ for _, name in ipairs({
 }) do
     package.preload[name] = function() return {} end
 end
-package.preload["weread.lib.book_reviews"] = function() return {} end
-package.preload["weread.ui.book_reviews_view"] = function() return {} end
-package.preload["weread.lib.content"] = function() return {} end
+package.preload["weink.lib.book_reviews"] = function() return {} end
+package.preload["weink.ui.book_reviews_view"] = function() return {} end
+package.preload["weink.lib.content"] = function() return {} end
 local cached_covers = {}
 local cover_path_lookups = 0
 local fake_cover_cache = {
@@ -57,18 +57,18 @@ local fake_cover_cache = {
     end,
     prune = function() return 0 end,
 }
-package.preload["weread.lib.cover_cache"] = function()
+package.preload["weink.lib.cover_cache"] = function()
     return {
         new = function() return fake_cover_cache end,
     }
 end
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
-package.preload["weread.lib.protocol"] = function()
+package.preload["weink.lib.protocol"] = function()
     return { is_mp_book = function() return false end }
 end
-package.preload["weread.lib.plugin_util"] = function()
+package.preload["weink.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,
         T = function(text) return text end,
@@ -79,7 +79,7 @@ package.preload["weread.lib.plugin_util"] = function()
 end
 
 local shown = {}
-package.preload["weread.ui.library_view"] = function()
+package.preload["weink.ui.library_view"] = function()
     return {
         show = function(data, callbacks)
             shown[#shown + 1] = { data = data, callbacks = callbacks }
@@ -97,7 +97,7 @@ G_reader_settings = {
     end,
 }
 
-local Library = require("weread.ui.library")
+local Library = require("weink.ui.library")
 local shelf = {}
 for index = 1, 1000 do
     shelf[index] = { bookId = tostring(index), title = "Book " .. tostring(index) }
@@ -226,7 +226,7 @@ host.shelf_cover_subprocess = {
 host.shelf_cover_generation = 4
 host.shelf_cover_job = { pid = 99 }
 host.shelf_cover_pending = { view = unsafe_view, books = {}, options = {} }
-host:onWeReadAccountChanged()
+host:onWeinkAccountChanged()
 expect(host.shelf_view_pages == nil, "account change must reset shelf pages")
 expect(host.shelf_cover_job == nil, "account change must drop the cover job")
 expect(host.shelf_cover_pending == nil, "account change must drop pending cover work")

@@ -21,12 +21,12 @@ end
 
 package.preload["datastorage"] = function()
     return {
-        getSettingsDir = function() return "/tmp/weread-idle-spec" end,
-        getFullDataDir = function() return "/tmp/weread-idle-spec" end,
+        getSettingsDir = function() return "/tmp/weink-idle-spec" end,
+        getFullDataDir = function() return "/tmp/weink-idle-spec" end,
     }
 end
 
-local PathIndex = require("weread.lib.path_index")
+local PathIndex = require("weink.lib.path_index")
 PathIndex.reset()
 
 local Plugin = dofile("main.lua")
@@ -42,11 +42,11 @@ local plugin = setmetatable({
 }, { __index = Plugin })
 plugin:init()
 
-expect(plugin._weread_idle_reader == true, "unmarked book stays idle")
+expect(plugin._weink_idle_reader == true, "unmarked book stays idle")
 expect(plugin.settings == nil, "idle reader does not construct Settings")
-expect(package.loaded["weread.lib.plugin_runtime"] == nil,
+expect(package.loaded["weink.lib.plugin_runtime"] == nil,
     "idle reader does not load plugin_runtime")
-expect(package.loaded["weread.lib.client"] == nil,
+expect(package.loaded["weink.lib.client"] == nil,
     "idle reader does not load the WeRead client")
 
 local settings_touched = false

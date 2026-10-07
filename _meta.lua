@@ -1,4 +1,4 @@
-local I18n = require("weread.lib.i18n")
+local I18n = require("weink.lib.i18n")
 
 local function _(text)
     return I18n.tr(text)
@@ -7,5 +7,5 @@ end
 return {
     fullname = _("Weink"),
     description = _([[Read WeRead books in KOReader, cache chapters, and sync reading progress.]]),
-    version = "2.3.0"
+    version = "2.3.1"
 }

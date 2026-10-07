@@ -61,7 +61,7 @@ package.preload["socket.http"] = function()
         end,
     }
 end
-package.preload["weread.lib.protocol"] = function()
+package.preload["weink.lib.protocol"] = function()
     return {
         USER_AGENT = "WeRead client spec",
         urlencode = function(value)
@@ -72,7 +72,7 @@ package.preload["weread.lib.protocol"] = function()
     }
 end
 
-local Client = require("weread.lib.client")
+local Client = require("weink.lib.client")
 local settings = {
     get = function(_self, key, default)
         if key == "cookies" then

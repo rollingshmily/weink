@@ -3,14 +3,14 @@ package.path = "./?.lua;./?/init.lua;" .. package.path
 package.preload["ui/uimanager"] = function()
     return { show = function() end, close = function() end }
 end
-package.preload["weread.lib.plugin_util"] = function()
+package.preload["weink.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,
         T = function(text) return text end,
     }
 end
 
-local Comment = require("weread.ui.thought_popup.comment")
+local Comment = require("weink.ui.thought_popup.comment")
 
 local checks, failures = 0, 0
 local function expect(value, label)
@@ -79,7 +79,7 @@ do
 end
 
 Comment.setContext({
-    plugin = { _current_weread_book_id = "465030" },
+    plugin = { _current_weink_book_id = "465030" },
     book_id = "465030",
     chapter_uid = 1898,
     range = "10-20",
@@ -96,7 +96,7 @@ local stamped = Comment.attachLocation({ { author = "海客", content = "不是�
     range = "10-20",
     abstract = "银",
 })
-Comment.bind({ _current_weread_book_id = "465030", client = {} })
+Comment.bind({ _current_weink_book_id = "465030", client = {} })
 ctx = Comment.resolve({ items = stamped })
 expect(ctx.plugin ~= nil and ctx.book_id == "465030"
         and ctx.chapter_uid == 1898 and ctx.range == "10-20",

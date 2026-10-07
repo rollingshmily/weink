@@ -13,11 +13,11 @@ package.preload["ui/uimanager"] = function()
         scheduleIn = function(_self, _delay, callback) callback() end,
     }
 end
-package.preload["weread.lib.i18n"] = function()
+package.preload["weink.lib.i18n"] = function()
     return { tr = function(text) return text end }
 end
 
-local Dialog = require("weread.ui.end_of_book_dialog")
+local Dialog = require("weink.ui.end_of_book_dialog")
 
 local callbacks = {
     on_bookshelf = function() end,
@@ -47,7 +47,7 @@ local function expect(value, label)
     end
 end
 
-expect(shown and shown.title == "WeRead · Quick menu",
+expect(shown and shown.title == "Weink · Quick menu",
     "quick menu keeps the requested title")
 local sync_row = shown and shown.buttons[#shown.buttons - 1]
 expect(sync_row and #sync_row == 2,

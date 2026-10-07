@@ -1,12 +1,12 @@
 package.path = "./?.lua;" .. package.path
 
-package.preload["weread.lib.content"] = function()
+package.preload["weink.lib.content"] = function()
     return {}
 end
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return { scoped = function() return { warn = function() end } end }
 end
-package.preload["weread.lib.protocol"] = function()
+package.preload["weink.lib.protocol"] = function()
     return {}
 end
 package.preload["ui/uimanager"] = function()
@@ -15,7 +15,7 @@ end
 local existing = {
     ["/books/fanren - full.epub"] = true,
 }
-package.preload["weread.lib.plugin_util"] = function()
+package.preload["weink.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,
         T = function(text) return text end,
@@ -36,11 +36,11 @@ end
 package.preload["libs/libkoreader-lfs"] = function()
     return { attributes = function() return nil end, mkdir = function() return true end }
 end
-package.preload["weread.lib.book_store"] = function()
+package.preload["weink.lib.book_store"] = function()
     return { load = function() return {} end, save = function() return true, {} end }
 end
 
-local Lifecycle = require("weread.lib.reader_lifecycle")
+local Lifecycle = require("weink.lib.reader_lifecycle")
 
 local checks, failures = 0, 0
 local function expect(value, label)

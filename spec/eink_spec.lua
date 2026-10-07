@@ -8,8 +8,8 @@ local function assert_eq(actual, expected, label)
     end
 end
 
-local Aes = require("weread.lib.aes")
-local Eink = require("weread.lib.eink")
+local Aes = require("weink.lib.aes")
+local Eink = require("weink.lib.eink")
 
 -- AES-128-CBC NIST-style smoke: encrypt with known Python vector.
 do

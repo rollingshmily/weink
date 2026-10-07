@@ -8,12 +8,12 @@ package.preload["ui/uimanager"] = function()
         close = function() end, setDirty = function() end, show = function(_self, widget) shown[#shown + 1] = widget end,
     }
 end
-package.preload["weread.lib.standby_guard"] = function()
+package.preload["weink.lib.standby_guard"] = function()
     return { acquire = function() prevented = prevented + 1; return {} end,
         release = function() allowed = allowed + 1 end }
 end
 package.preload["ui/widget/confirmbox"] = function() return { new = function(_self, args) return args end } end
-package.preload["weread.ui.download_dialog"] = function()
+package.preload["weink.ui.download_dialog"] = function()
     return { new = function(_self, args)
         args.show = function() end; args.close = function() end
         args.setTitle = function(dialog, title)
@@ -30,12 +30,12 @@ package.preload["weread.ui.download_dialog"] = function()
         return args
     end }
 end
-package.preload["weread.lib.content"] = function() return {} end
-package.preload["weread.lib.plugin_util"] = function()
+package.preload["weink.lib.content"] = function() return {} end
+package.preload["weink.lib.plugin_util"] = function()
     return { tr = function(s) return s end, T = function(s, ...) local v = {...}
         return (s:gsub("%%(%d+)", function(i) return tostring(v[tonumber(i)]) end)) end }
 end
-local Controller = require("weread.ui.annotation_sync_controller")
+local Controller = require("weink.ui.annotation_sync_controller")
 local cache, calls, applied = { show_annotations = true }, 0, 0
 local host = {
     _reader_session_gen = 1,

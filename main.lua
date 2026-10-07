@@ -1,5 +1,5 @@
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
-local PathIndex = require("weread.lib.path_index")
+local PathIndex = require("weink.lib.path_index")
 
 local function read_plugin_version()
     local info = debug.getinfo(1, "S")
@@ -20,30 +20,30 @@ local function read_plugin_version()
     return "0.5.0"
 end
 
-local WeReadPlugin = WidgetContainer:extend{
+local WeinkPlugin = WidgetContainer:extend{
     name = "weink",
     is_doc_only = false,
     version = read_plugin_version(),
 }
 
 local function idle_reader(plugin)
-    plugin._weread_idle_reader = true
+    plugin._weink_idle_reader = true
     -- FileManager already mixed reader hooks onto the class. Swallow every
     -- event on this instance so onReadSettings cannot touch nil settings.
     plugin.handleEvent = function() end
 end
 
 local function clear_idle(plugin)
-    plugin._weread_idle_reader = nil
+    plugin._weink_idle_reader = nil
     plugin.handleEvent = nil
 end
 
 local function boot(plugin)
     clear_idle(plugin)
-    require("weread.lib.plugin_runtime").boot(plugin)
+    require("weink.lib.plugin_runtime").boot(plugin)
 end
 
-function WeReadPlugin:init()
+function WeinkPlugin:init()
     local file = self.ui and self.ui.document and self.ui.document.file
     if type(file) == "string" and file ~= "" then
         if not PathIndex.identify(file) then
@@ -54,23 +54,23 @@ function WeReadPlugin:init()
     boot(self)
 end
 
-function WeReadPlugin:openBookshelf()
-    if self._weread_idle_reader or not self.settings then
+function WeinkPlugin:openBookshelf()
+    if self._weink_idle_reader or not self.settings then
         boot(self)
     end
     return self:showBookshelf()
 end
 
-function WeReadPlugin:launch()
+function WeinkPlugin:launch()
     return self:openBookshelf()
 end
 
-function WeReadPlugin:onZenUIReady()
-    if self._weread_idle_reader or not self.settings then
+function WeinkPlugin:onZenUIReady()
+    if self._weink_idle_reader or not self.settings then
         boot(self)
     end
     require("integrations.init").onZenUIReady(self)
     return true
 end
 
-return WeReadPlugin
+return WeinkPlugin

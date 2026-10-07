@@ -5,17 +5,17 @@ package.path = "./?.lua;" .. package.path
 local scheduled = {}
 local thought_db_opens = 0
 
-package.preload["weread.lib.content"] = function()
+package.preload["weink.lib.content"] = function()
     return {}
 end
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return { scoped = function() return {} end }
 end
-package.preload["weread.lib.protocol"] = function()
+package.preload["weink.lib.protocol"] = function()
     return {}
 end
 local thought_popup_cleanup = 0
-package.preload["weread.ui.thought_popup"] = function()
+package.preload["weink.ui.thought_popup"] = function()
     return {
         closeVisible = function() end,
         cleanup = function()
@@ -30,7 +30,7 @@ package.preload["ui/uimanager"] = function()
         end,
     }
 end
-package.preload["weread.lib.plugin_util"] = function()
+package.preload["weink.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,
         T = function(text) return text end,
@@ -40,7 +40,7 @@ package.preload["weread.lib.plugin_util"] = function()
     }
 end
 
-local Lifecycle = require("weread.lib.reader_lifecycle")
+local Lifecycle = require("weink.lib.reader_lifecycle")
 
 local checks, failures = 0, 0
 local function expect(value, label)
@@ -70,7 +70,7 @@ local host = {
     read_report = {
         on_reader_ready = function() end,
     },
-    detectWeReadBook = function() return "book" end,
+    detectWeinkBook = function() return "book" end,
     _teardownThoughtInterception = function() end,
     _installReaderHighlightTapGuard = function() end,
     _setupThoughtInterception = function() end,
@@ -84,7 +84,7 @@ local host = {
 for key, value in pairs(Lifecycle) do
     host[key] = value
 end
-host.detectWeReadBook = function() return "book" end
+host.detectWeinkBook = function() return "book" end
 host.maybePrefetchNextChapter = function() end
 
 host:onReaderReady()

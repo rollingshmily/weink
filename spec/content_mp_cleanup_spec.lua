@@ -14,13 +14,13 @@ end
 package.preload["logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
-package.preload["weread.lib.crypto"] = function()
+package.preload["weink.lib.crypto"] = function()
     return { sha256_hex = function(value) return string.rep("a", 64) end }
 end
-package.preload["weread.lib.reader_state"] = function() return {} end
-package.preload["weread.lib.thoughts"] = function() return {} end
+package.preload["weink.lib.reader_state"] = function() return {} end
+package.preload["weink.lib.thoughts"] = function() return {} end
 
-local Content = require("weread.lib.content")
+local Content = require("weink.lib.content")
 
 local raw = [[
 <h1 data-pm-slice="0 0 []">“人工智能是年轻的事业，这个判断不会错”</h1>

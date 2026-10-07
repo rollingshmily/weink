@@ -29,13 +29,13 @@ package.preload["ui/uimanager"] = function()
         scheduleIn = function(_self, _delay, callback) callback() end,
     }
 end
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return { info = function() end }
 end
-package.preload["weread.ui.thought_popup"] = function()
+package.preload["weink.ui.thought_popup"] = function()
     return { closeVisible = function() end }
 end
-package.preload["weread.lib.protocol"] = function()
+package.preload["weink.lib.protocol"] = function()
     return { is_mp_book = function(book_id) return book_id == "mp-book" end }
 end
 for _, module in ipairs({
@@ -46,14 +46,14 @@ for _, module in ipairs({
         return { tools = { "statistics", "more_tools" } }
     end
 end
-package.preload["weread.lib.plugin_util"] = function()
+package.preload["weink.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,
         T = function(text) return text end,
     }
 end
 
-local Menu = require("weread.ui.menu")
+local Menu = require("weink.ui.menu")
 
 local checks, failures = 0, 0
 local function expect(value, label)
@@ -98,45 +98,45 @@ for key, value in pairs(Menu) do host[key] = value end
 host:onDispatcherRegisterActions()
 expect(registered.weread_show == nil,
     "generic WeRead shortcut action is no longer registered")
-local sync_action = registered.weread_sync_progress
-expect(sync_action and sync_action.event == "WeReadSyncProgress"
-        and sync_action.title == "WeRead · Sync reading progress"
+local sync_action = registered.weink_sync_progress
+expect(sync_action and sync_action.event == "WeinkSyncProgress"
+        and sync_action.title == "Weink · Sync reading progress"
         and sync_action.reader == true,
     "standalone sync action remains available in reader context")
-local quick_action = registered.weread_quick_menu
+local quick_action = registered.weink_quick_menu
 expect(quick_action ~= nil, "quick menu dispatcher action is registered")
-expect(quick_action and quick_action.event == "ShowWeReadQuickMenu",
+expect(quick_action and quick_action.event == "ShowWeinkQuickMenu",
     "quick menu action dispatches the matching reader event")
 expect(quick_action and quick_action.reader == true
         and quick_action.general ~= true,
     "quick menu action remains reader-only")
-expect(quick_action and quick_action.title == "WeRead · Quick menu",
+expect(quick_action and quick_action.title == "Weink · Quick menu",
     "quick menu action has the requested title")
-local toggle_action = registered.weread_toggle_annotations
-expect(toggle_action and toggle_action.event == "ToggleWeReadAnnotations",
+local toggle_action = registered.weink_toggle_annotations
+expect(toggle_action and toggle_action.event == "ToggleWeinkAnnotations",
     "annotation visibility action dispatches the matching reader event")
 expect(toggle_action and toggle_action.reader == true
         and toggle_action.general ~= true,
     "annotation visibility action is reader-only")
 expect(toggle_action
-        and toggle_action.title == "WeRead · Toggle underlines and thoughts",
+        and toggle_action.title == "Weink · Toggle underlines and thoughts",
     "annotation visibility action has a gesture-friendly title")
-local bookshelf_action = registered.weread_bookshelf
-expect(bookshelf_action and bookshelf_action.event == "ShowWeReadBookshelf",
+local bookshelf_action = registered.weink_bookshelf
+expect(bookshelf_action and bookshelf_action.event == "ShowWeinkBookshelf",
     "bookshelf dispatcher action uses the matching event")
 expect(bookshelf_action and bookshelf_action.general == true
         and bookshelf_action.reader ~= true,
     "bookshelf action is grouped with the general WeRead actions")
-expect(bookshelf_action and bookshelf_action.title == "WeRead · Bookshelf",
+expect(bookshelf_action and bookshelf_action.title == "Weink · Bookshelf",
     "bookshelf gesture action has the requested title")
 local general_actions = {
-    weread_reading_statistics = {
-        event = "ShowWeReadReadingStatistics",
-        title = "WeRead · Reading statistics",
+    weink_reading_statistics = {
+        event = "ShowWeinkReadingStatistics",
+        title = "Weink · Reading statistics",
     },
-    weread_search = {
-        event = "ShowWeReadSearch",
-        title = "WeRead · Search",
+    weink_search = {
+        event = "ShowWeinkSearch",
+        title = "Weink · Search",
     },
 }
 expect(registered.weread_local_bookshelf == nil,
@@ -166,7 +166,7 @@ expect(menu_has(main_items_no_doc, "Plugin update"),
     "fork keeps the standalone plugin update menu")
 
 host.ui.document = { file = "/books/local.epub" }
-host.detectWeReadBook = function() return nil end
+host.detectWeinkBook = function() return nil end
 local local_reader_items = host:getMainMenuItems()
 expect(not menu_has(local_reader_items, "Sync progress now")
         and not menu_has(local_reader_items, "Book details")
@@ -174,7 +174,7 @@ expect(not menu_has(local_reader_items, "Sync progress now")
         and menu_has(local_reader_items, "Underlines and thoughts management"),
     "local document menu retained WeRead-only book actions")
 
-host.detectWeReadBook = function() return "book-1" end
+host.detectWeinkBook = function() return "book-1" end
 local weread_reader_items = host:getMainMenuItems()
 expect(menu_has(weread_reader_items, "Sync progress now")
         and menu_has(weread_reader_items, "Book details")
@@ -182,7 +182,7 @@ expect(menu_has(weread_reader_items, "Sync progress now")
         and menu_has(weread_reader_items, "Underlines and thoughts management"),
     "WeRead book menu retained the local-book annotation submenu")
 
-host.detectWeReadBook = function() return "mp-book" end
+host.detectWeinkBook = function() return "mp-book" end
 local mp_reader_items = host:getMainMenuItems()
 expect(not menu_has(mp_reader_items, "Sync progress now")
         and menu_has(mp_reader_items, "Book details")
@@ -191,7 +191,7 @@ expect(not menu_has(mp_reader_items, "Sync progress now")
     "public-account menu exposed unsupported progress or local-book actions")
 
 host.ui.document = nil
-host.detectWeReadBook = nil
+host.detectWeinkBook = nil
 local download_settings
 local cache_management
 for _, item in ipairs(settings_items) do

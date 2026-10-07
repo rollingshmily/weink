@@ -37,7 +37,7 @@ package.preload["libs/libkoreader-lfs"] = function()
     }
 end
 
-local BackgroundWorker = require("weread.lib.background_worker")
+local BackgroundWorker = require("weink.lib.background_worker")
 local checks = 0
 local function expect(value, message)
     checks = checks + 1

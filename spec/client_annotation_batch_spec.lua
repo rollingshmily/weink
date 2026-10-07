@@ -6,10 +6,10 @@ package.preload["socket.http"] = function() return {} end
 package.preload["json"] = function()
     return { encode = function() return "{}" end, decode = function() return {} end }
 end
-package.preload["weread.lib.cookie"] = function() return {} end
-package.preload["weread.lib.protocol"] = function() return {} end
+package.preload["weink.lib.cookie"] = function() return {} end
+package.preload["weink.lib.protocol"] = function() return {} end
 
-local Client = require("weread.lib.client")
+local Client = require("weink.lib.client")
 local client = setmetatable({}, { __index = Client })
 local ranges = {}
 for index = 1, 61 do ranges[index] = tostring(index) end

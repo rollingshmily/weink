@@ -70,19 +70,19 @@ local dispatcher_registered = false
 local menu_registered = false
 local bookshelf_opened = false
 
-package.preload["weread.lib.client"] = function()
+package.preload["weink.lib.client"] = function()
     return { new = function(_self, settings) return { settings = settings } end }
 end
-package.preload["weread.lib.background_worker"] = function()
+package.preload["weink.lib.background_worker"] = function()
     return { new = function(_self, options) return { options = options } end }
 end
-package.preload["weread.lib.downloader"] = function()
+package.preload["weink.lib.downloader"] = function()
     return { new = function(_self, options) return options end }
 end
-package.preload["weread.lib.settings"] = function()
+package.preload["weink.lib.settings"] = function()
     return { new = function() return fake_settings end }
 end
-package.preload["weread.lib.migrations"] = function()
+package.preload["weink.lib.migrations"] = function()
     return {
         run = function(settings, client)
             migrations_ran = settings == fake_settings
@@ -90,15 +90,15 @@ package.preload["weread.lib.migrations"] = function()
         end,
     }
 end
-package.preload["weread.lib.plugin_util"] = function()
+package.preload["weink.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,
     }
 end
-package.preload["weread.lib.eink_qr_login"] = function()
+package.preload["weink.lib.eink_qr_login"] = function()
     return { new = function() return { kind = "eink_qr_login" } end }
 end
-package.preload["weread.lib.read_report"] = function()
+package.preload["weink.lib.read_report"] = function()
     return {
         new = function(_self, options)
             options.maybe_start = function() end
@@ -106,16 +106,16 @@ package.preload["weread.lib.read_report"] = function()
         end,
     }
 end
-package.preload["weread.lib.progress_sync"] = function()
+package.preload["weink.lib.progress_sync"] = function()
     return { new = function(_self, options) return options end }
 end
-package.preload["weread.ui.progress_sync_dialog"] = function()
+package.preload["weink.ui.progress_sync_dialog"] = function()
     return {
         show_choice = function() end,
         notify = function() end,
     }
 end
-package.preload["weread.lib.reader_lifecycle"] = function()
+package.preload["weink.lib.reader_lifecycle"] = function()
     return {
         inherited_feature = function()
             return "reader_lifecycle"
@@ -123,12 +123,12 @@ package.preload["weread.lib.reader_lifecycle"] = function()
     }
 end
 
-package.preload["weread.ui.update"] = function()
+package.preload["weink.ui.update"] = function()
     -- Fork-only module; depends on KOReader UI widgets not present here.
     return {}
 end
 
-package.preload["weread.ui.common"] = function()
+package.preload["weink.ui.common"] = function()
     return {
         showInfo = function() end,
         showTransientInfo = function() end,
@@ -141,20 +141,20 @@ package.preload["weread.ui.common"] = function()
         isNetworkConnected = function() return true end,
     }
 end
-package.preload["weread.ui.menu"] = function()
+package.preload["weink.ui.menu"] = function()
     return {
         onDispatcherRegisterActions = function()
             dispatcher_registered = true
         end,
     }
 end
-package.preload["weread.ui.cache"] = function()
+package.preload["weink.ui.cache"] = function()
     return {}
 end
-package.preload["weread.ui.read_report"] = function()
+package.preload["weink.ui.read_report"] = function()
     return {}
 end
-package.preload["weread.ui.library"] = function()
+package.preload["weink.ui.library"] = function()
     return {
         ensureChaptersLoaded = function() return {} end,
         showBookshelf = function()
@@ -163,12 +163,12 @@ package.preload["weread.ui.library"] = function()
         end,
     }
 end
-package.preload["weread.ui.annotations_controller"] = function()
+package.preload["weink.ui.annotations_controller"] = function()
     return {}
 end
-package.preload["weread.ui.reader_navigation"] = function()
+package.preload["weink.ui.reader_navigation"] = function()
     return {
-        detectWeReadBook = function() return nil end,
+        detectWeinkBook = function() return nil end,
         getChapterInfoFromFile = function() return nil end,
         openProgressTargetChapter = function() return false end,
     }
@@ -203,9 +203,9 @@ expect(plugin:launch() == true and bookshelf_opened,
     "standard third-party launcher entry did not open the bookshelf")
 expect(type(plugin.openBookshelf) == "function",
     "stable bookshelf entry point was not exposed")
-expect(package.loaded["weread.lib.client"] ~= nil,
+expect(package.loaded["weink.lib.client"] ~= nil,
     "namespaced client module was not loaded")
-expect(package.loaded["weread.ui.menu"] ~= nil,
+expect(package.loaded["weink.ui.menu"] ~= nil,
     "namespaced menu module was not loaded")
 
 for _, module_name in ipairs({

@@ -4,19 +4,19 @@ package.path = "./?.lua;" .. package.path
 
 local index_calls = 0
 
-package.preload["weread.lib.content"] = function()
+package.preload["weink.lib.content"] = function()
     return {}
 end
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return { scoped = function() return {} end }
 end
-package.preload["weread.lib.protocol"] = function()
+package.preload["weink.lib.protocol"] = function()
     return {}
 end
 package.preload["ui/uimanager"] = function()
     return {}
 end
-package.preload["weread.lib.plugin_util"] = function()
+package.preload["weink.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,
         T = function(text) return text end,
@@ -26,7 +26,7 @@ package.preload["weread.lib.plugin_util"] = function()
     }
 end
 
-local Lifecycle = require("weread.lib.reader_lifecycle")
+local Lifecycle = require("weink.lib.reader_lifecycle")
 
 local checks, failures = 0, 0
 local function expect(value, label)
@@ -62,9 +62,9 @@ for key, value in pairs(Lifecycle) do
     host[key] = value
 end
 
-expect(host:detectWeReadBook() == "book",
+expect(host:detectWeinkBook() == "book",
     "raw path index detects the current flat EPUB")
-expect(host:detectWeReadBook() == "book",
+expect(host:detectWeinkBook() == "book",
     "cached path detection returns the current book")
 expect(index_calls == 1,
     "the same document path is indexed only once")
@@ -92,7 +92,7 @@ local local_host = {
 for key, value in pairs(Lifecycle) do
     local_host[key] = value
 end
-expect(local_host:detectWeReadBook() == nil,
+expect(local_host:detectWeinkBook() == nil,
     "files outside cache/meta are not WeRead books")
 expect(local_books_loads == 0,
     "local documents do not hydrate the WeRead book table")

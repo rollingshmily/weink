@@ -7,7 +7,7 @@ local function read(path)
     return data
 end
 
-local library = read("weread/ui/library.lua")
+local library = read("weink/ui/library.lua")
 assert(library:find("list_type = 8", 1, true),
     "recommended reviews must use APK BOOK_WONDERFUL listType=8")
 assert(library:find("review_type = 4", 1, true),
@@ -17,7 +17,7 @@ assert(library:find("list_type = 3", 1, true),
 assert(not library:find('mode == "latest" and 3 or 1', 1, true),
     "recommended reviews must not use listType=1 (own underlines)")
 
-local client = read("weread/lib/client.lua")
+local client = read("weink/lib/client.lua")
 assert(client:find("params.type = review_type", 1, true),
     "client must pass APK review type to /review/list")
 

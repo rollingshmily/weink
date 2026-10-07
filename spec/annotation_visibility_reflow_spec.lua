@@ -2,25 +2,25 @@
 
 package.path = "./?.lua;" .. package.path
 
-package.preload["weread.lib.annotations"] = function() return {} end
-package.preload["weread.lib.content"] = function() return {} end
-package.preload["weread.ui.download_dialog"] = function() return {} end
+package.preload["weink.lib.annotations"] = function() return {} end
+package.preload["weink.lib.content"] = function() return {} end
+package.preload["weink.ui.download_dialog"] = function() return {} end
 package.preload["ui/event"] = function()
     return { new = function() return {} end }
 end
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return { warn = function() end, info = function() end }
 end
-package.preload["weread.lib.thought_db"] = function() return {} end
-package.preload["weread.ui.thought_popup"] = function()
+package.preload["weink.lib.thought_db"] = function() return {} end
+package.preload["weink.ui.thought_popup"] = function()
     return { closeVisible = function() end }
 end
-package.preload["weread.ui.thought_popup.popup_config"] = function() return {} end
+package.preload["weink.ui.thought_popup.popup_config"] = function() return {} end
 package.preload["ui/time"] = function() return { now = function() return 0 end } end
 package.preload["ui/uimanager"] = function()
     return { setDirty = function() end, show = function() end }
 end
-package.preload["weread.lib.plugin_util"] = function()
+package.preload["weink.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,
         T = function(text) return text end,
@@ -31,7 +31,7 @@ package.preload["weread.lib.plugin_util"] = function()
     }
 end
 
-local Controller = require("weread.ui.annotations_controller")
+local Controller = require("weink.ui.annotations_controller")
 
 local checks, failures = 0, 0
 local function expect(value, label)
@@ -56,7 +56,7 @@ local host = {
         setEnabled = function() end,
     },
     _usesUnifiedAnnotations = function() return true end,
-    detectWeReadBook = function() return true end,
+    detectWeinkBook = function() return true end,
 }
 for key, value in pairs(Controller) do host[key] = value end
 

@@ -3,10 +3,10 @@
 package.path = "./?.lua;" .. package.path
 
 local messages = {}
-package.preload["weread.lib.i18n"] = function()
+package.preload["weink.lib.i18n"] = function()
     return { tr = function(text) return text end }
 end
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return {
         info = function(...)
             messages[#messages + 1] = { ... }
@@ -21,7 +21,7 @@ package.preload["ffi/util"] = function()
     return { template = function(text) return text end }
 end
 
-local PluginUtil = require("weread.lib.plugin_util")
+local PluginUtil = require("weink.lib.plugin_util")
 
 local checks, failures = 0, 0
 local function expect(value, label)

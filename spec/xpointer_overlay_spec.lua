@@ -6,7 +6,7 @@ local function expect(condition, message)
     if not condition then error(message or ("check " .. checks .. " failed")) end
 end
 
-local Overlay = require("weread.ui.xpointer_overlay")
+local Overlay = require("weink.ui.xpointer_overlay")
 
 local box_calls = 0
 local positions = {
@@ -131,15 +131,15 @@ package.preload["ui/widget/inputdialog"] = function()
         return options
     end }
 end
-package.preload["weread.lib.content"] = function() return {} end
-package.preload["weread.lib.external_annotations"] = function()
+package.preload["weink.lib.content"] = function() return {} end
+package.preload["weink.lib.external_annotations"] = function()
     return {
         normalize_search = function()
             return { { book_id = "book-1", title = "测试书", author = "作者" } }
         end,
     }
 end
-package.preload["weread.lib.plugin_util"] = function()
+package.preload["weink.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,
         T = function(text, ...)
@@ -151,7 +151,7 @@ package.preload["weread.lib.plugin_util"] = function()
     }
 end
 local shown_opts
-package.preload["weread.ui.thought_popup"] = function()
+package.preload["weink.ui.thought_popup"] = function()
     return {
         show = function(opts)
             shown_opts = opts
@@ -169,7 +169,7 @@ package.preload["device"] = function()
         },
     }
 end
-local Controller = require("weread.ui.xpointer_overlay_controller")
+local Controller = require("weink.ui.xpointer_overlay_controller")
 local invalidations = 0
 local host = {
     _xpointer_overlay = {

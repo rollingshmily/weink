@@ -1,7 +1,7 @@
 package.path = "./?.lua;./?/init.lua;" .. package.path
 
 package.preload["libs/libkoreader-lfs"] = function() return require("lfs") end
-local ArticleCache = require("weread.lib.article_cache")
+local ArticleCache = require("weink.lib.article_cache")
 local lfs = require("lfs")
 local checks = 0
 local function expect(condition, message)

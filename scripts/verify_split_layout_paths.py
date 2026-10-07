@@ -8,11 +8,11 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CONTENT = (ROOT / "weread/lib/content.lua").read_text(encoding="utf-8")
-BOOK_STORE = (ROOT / "weread/lib/book_store.lua").read_text(encoding="utf-8")
-SETTINGS = (ROOT / "weread/lib/settings.lua").read_text(encoding="utf-8")
-CACHE_UI = (ROOT / "weread/ui/cache.lua").read_text(encoding="utf-8")
-MENU = (ROOT / "weread/ui/menu.lua").read_text(encoding="utf-8")
+CONTENT = (ROOT / "weink/lib/content.lua").read_text(encoding="utf-8")
+BOOK_STORE = (ROOT / "weink/lib/book_store.lua").read_text(encoding="utf-8")
+SETTINGS = (ROOT / "weink/lib/settings.lua").read_text(encoding="utf-8")
+CACHE_UI = (ROOT / "weink/ui/cache.lua").read_text(encoding="utf-8")
+MENU = (ROOT / "weink/ui/menu.lua").read_text(encoding="utf-8")
 
 def must(cond: bool, msg: str) -> None:
     if not cond:

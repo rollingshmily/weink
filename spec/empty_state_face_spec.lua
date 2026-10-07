@@ -129,10 +129,10 @@ for _, name in ipairs({
     package.preload[name] = widget_module
 end
 
-package.preload["weread.lib.i18n"] = function()
+package.preload["weink.lib.i18n"] = function()
     return { tr = function(text) return text end }
 end
-package.preload["weread.lib.book_reviews"] = function()
+package.preload["weink.lib.book_reviews"] = function()
     return {
         format_date = function() return "" end,
         format_rating = tostring,
@@ -140,7 +140,7 @@ package.preload["weread.lib.book_reviews"] = function()
     }
 end
 
-local LibraryView = require("weread.ui.library_view")
+local LibraryView = require("weink.ui.library_view")
 local ok, error_message = pcall(function()
     LibraryView.show({ mode = "books", books = {}, accounts = {} }, {})
 end)
@@ -160,7 +160,7 @@ expect(ok and favorites_view._tab_buttons[1].width == 200
 expect(ok and #favorites_view._action_secondary == 1,
     "article shelf refresh button missing")
 
-local BookReviewsView = require("weread.ui.book_reviews_view")
+local BookReviewsView = require("weink.ui.book_reviews_view")
 ok, error_message = pcall(function()
     BookReviewsView.show({
         book_title = "Book",

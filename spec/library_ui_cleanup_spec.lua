@@ -26,20 +26,20 @@ for _, name in ipairs({
 }) do
     package.preload[name] = function() return {} end
 end
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
-package.preload["weread.lib.book_reviews"] = function()
+package.preload["weink.lib.book_reviews"] = function()
     return { format_date = function() return "" end }
 end
-package.preload["weread.ui.book_reviews_view"] = function() return {} end
-package.preload["weread.lib.content"] = function()
+package.preload["weink.ui.book_reviews_view"] = function() return {} end
+package.preload["weink.lib.content"] = function()
     return { load_catalog_cache = function() return nil end }
 end
-package.preload["weread.lib.protocol"] = function()
+package.preload["weink.lib.protocol"] = function()
     return { is_mp_book = function() return false end }
 end
-package.preload["weread.lib.plugin_util"] = function()
+package.preload["weink.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,
         T = function(text) return text end,
@@ -51,14 +51,14 @@ end
 
 local detail_view = { id = "detail" }
 local chapter_view = { id = "chapters" }
-package.preload["weread.ui.book_detail_view"] = function()
+package.preload["weink.ui.book_detail_view"] = function()
     return { show = function() return detail_view end }
 end
-package.preload["weread.ui.chapter_list_view"] = function()
+package.preload["weink.ui.chapter_list_view"] = function()
     return { show = function() return chapter_view end }
 end
 
-local Library = require("weread.ui.library")
+local Library = require("weink.ui.library")
 local books = {}
 local opened
 local host = {

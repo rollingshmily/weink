@@ -13,51 +13,51 @@ Weink is an e-ink KOReader client for WeRead (微信读书) books and MP article
 ## Language
 
 - Code, variable names, commit messages: English
-- User-facing strings: wrapped in `_()` for i18n, Chinese translations in `weread/lib/i18n.lua`
+- User-facing strings: wrapped in `_()` for i18n, Chinese translations in `weink/lib/i18n.lua`
 - Communication with user: Simplified Chinese (简体中文)
 
 ## Architecture
 
 ```
 main.lua                       Plugin entry, dependency construction, and module composition
-weread/lib/mixin.lua          Collision-safe composition of feature methods into the plugin class
-weread/lib/migrations.lua     Settings and per-book storage migrations
-weread/lib/plugin_util.lua    Shared translation, logging, error, timing, and file helpers
-weread/lib/reader_lifecycle.lua KOReader lifecycle and reader-state orchestration
-weread/lib/client.lua         HTTP client (eink APIs on i.weread.qq.com)
-weread/lib/book_store.lua     Per-book metadata, reading-state, and article-list persistence
-weread/lib/content.lua        Eink ZIP download, EPUB/HTML generation
-weread/lib/footnotes.lua      Network-free book-footnote scanning, indexing, conversion, and validation
-weread/lib/crypto.lua         SHA-256, MD5 (pure Lua)
-weread/lib/downloader.lua     Book/chapter download engine (state machine + standby guard)
-weread/lib/i18n.lua           Chinese translations (zh table, _() wrapper)
-weread/lib/position_mapper.lua Pure KOReader ↔ WeRead chapter/offset mapping
-weread/lib/external_annotations_db.lua Per-local-book SQLite annotation storage and migration
-weread/lib/progress_sync.lua  Automatic progress-sync state machine and safety gate
-weread/lib/read_report.lua    Reading-report state machine, context refresh, retries
-weread/lib/settings.lua       Settings persistence via KOReader LuaSettings
-weread/lib/protocol.lua       WeRead protocol utilities (encoding, signing, URL helpers)
-weread/ui/menu.lua            Main menu and settings menu composition
-weread/ui/update.lua          Plugin self-update menu and install UI flow
-weread/lib/updater.lua        GitHub release/branch update client with proxy fallback
-weread/ui/common.lua          Shared dialog, network-task, and account UI helpers
-weread/ui/cache.lua           Cache settings, directory selection, scan, and cleanup flows
-weread/ui/library.lua         Bookshelf, book, chapter, public-account, and search flows
-weread/ui/read_report.lua     Reading-report settings, target picker, and statistics flow
-weread/ui/annotations_controller.lua Annotation visibility and thought-link interaction
-weread/ui/reader_navigation.lua End-of-book navigation integration
-weread/ui/download_dialog.lua Custom download progress dialog with cancel button
-weread/ui/progress_sync_dialog.lua Progress conflict and sync-result dialogs
-weread/ui/thought_popup.lua   Native underline/thought TextViewer with previous/next paging
+weink/lib/mixin.lua          Collision-safe composition of feature methods into the plugin class
+weink/lib/migrations.lua     Settings and per-book storage migrations
+weink/lib/plugin_util.lua    Shared translation, logging, error, timing, and file helpers
+weink/lib/reader_lifecycle.lua KOReader lifecycle and reader-state orchestration
+weink/lib/client.lua         HTTP client (eink APIs on i.weread.qq.com)
+weink/lib/book_store.lua     Per-book metadata, reading-state, and article-list persistence
+weink/lib/content.lua        Eink ZIP download, EPUB/HTML generation
+weink/lib/footnotes.lua      Network-free book-footnote scanning, indexing, conversion, and validation
+weink/lib/crypto.lua         SHA-256, MD5 (pure Lua)
+weink/lib/downloader.lua     Book/chapter download engine (state machine + standby guard)
+weink/lib/i18n.lua           Chinese translations (zh table, _() wrapper)
+weink/lib/position_mapper.lua Pure KOReader ↔ WeRead chapter/offset mapping
+weink/lib/external_annotations_db.lua Per-local-book SQLite annotation storage and migration
+weink/lib/progress_sync.lua  Automatic progress-sync state machine and safety gate
+weink/lib/read_report.lua    Reading-report state machine, context refresh, retries
+weink/lib/settings.lua       Settings persistence via KOReader LuaSettings
+weink/lib/protocol.lua       WeRead protocol utilities (encoding, signing, URL helpers)
+weink/ui/menu.lua            Main menu and settings menu composition
+weink/ui/update.lua          Plugin self-update menu and install UI flow
+weink/lib/updater.lua        GitHub release/branch update client with proxy fallback
+weink/ui/common.lua          Shared dialog, network-task, and account UI helpers
+weink/ui/cache.lua           Cache settings, directory selection, scan, and cleanup flows
+weink/ui/library.lua         Bookshelf, book, chapter, public-account, and search flows
+weink/ui/read_report.lua     Reading-report settings, target picker, and statistics flow
+weink/ui/annotations_controller.lua Annotation visibility and thought-link interaction
+weink/ui/reader_navigation.lua End-of-book navigation integration
+weink/ui/download_dialog.lua Custom download progress dialog with cancel button
+weink/ui/progress_sync_dialog.lua Progress conflict and sync-result dialogs
+weink/ui/thought_popup.lua   Native underline/thought TextViewer with previous/next paging
 ```
 
 ## Key Conventions
 
 ### Module Namespace
 
-- Keep every project-owned Lua module under the `weread/` namespace directory.
-- Put non-UI modules in `weread/lib/` and load them with `require("weread.lib.<module>")`.
-- Put UI and presentation modules in `weread/ui/` and load them with `require("weread.ui.<module>")`.
+- Keep every project-owned Lua module under the `weink/` namespace directory.
+- Put non-UI modules in `weink/lib/` and load them with `require("weink.lib.<module>")`.
+- Put UI and presentation modules in `weink/ui/` and load them with `require("weink.ui.<module>")`.
 - Do not add project-owned modules under root-level `lib/` or `ui/`, and do not use bare `lib.*` or `ui.*` module keys. KOReader-owned imports such as `require("ui/widget/menu")` are not affected.
 - Keep only KOReader plugin entry files such as `main.lua` and `_meta.lua` at the plugin root.
 
@@ -97,12 +97,12 @@ end)
 ### Translation Pattern
 
 ```lua
-local PluginUtil = require("weread.lib.plugin_util")
+local PluginUtil = require("weink.lib.plugin_util")
 local _ = PluginUtil.tr
 _("English key")                    -- simple
 T(_("Template %1"), value)          -- with substitution (ffi/util.template)
 
--- In weread/lib/i18n.lua, add to zh table:
+-- In weink/lib/i18n.lua, add to zh table:
 ["English key"] = "中文翻译",
 ```
 
@@ -114,14 +114,14 @@ Use `_i` (not `_`) in `for _i, item in ipairs(...)` to avoid shadowing the `_()`
 
 Whenever a menu item is added, removed, renamed, or moved:
 
-- Update the menu definition in `weread/ui/menu.lua` (or the owning feature UI module)
-- Add, rename, or remove the corresponding translation entry in `weread/lib/i18n.lua`; do not leave unused menu translation keys behind
+- Update the menu definition in `weink/ui/menu.lua` (or the owning feature UI module)
+- Add, rename, or remove the corresponding translation entry in `weink/lib/i18n.lua`; do not leave unused menu translation keys behind
 - Keep the menu tree in `README.md` in sync
 - Search all three files for the old and new labels before considering the change complete
 
 ## Auth and APIs
 
-Login is eink QR only (`weread/lib/eink_qr_login.lua`). Production APIs use `vid` + `accessToken` against `i.weread.qq.com`. Public WeChat article fetch (`get_public_text` / mp.weixin.qq.com) stays. Do not restore web Cookie, Skill `api_key`, or `/web/book/chapter/*` shards.
+Login is eink QR only (`weink/lib/eink_qr_login.lua`). Production APIs use `vid` + `accessToken` against `i.weread.qq.com`. Public WeChat article fetch (`get_public_text` / mp.weixin.qq.com) stays. Do not restore web Cookie, Skill `api_key`, or `/web/book/chapter/*` shards.
 
 ## WeRead API Integration Rules
 
@@ -152,7 +152,7 @@ rg -n "wrk-|wr_skey[=]|wr_rt[=]|wr_vid[=]|ptcz[=]|x-wrpa|thirdwx" -S .
 
 ## Reference Docs
 
-- `docs/weread-annotations-flow.md` — underline/thought download → embed → tap-to-display flow
-- `docs/weread-eink-upload.md` — eink highlight/thought upload contract
+- `docs/weink-annotations-flow.md` — underline/thought download → embed → tap-to-display flow
+- `docs/weink-eink-upload.md` — eink highlight/thought upload contract
 - `docs/annotations-overlay.md` — annotation overlay architecture, invalidation and limits
 - `docs/releasing.md` / `docs/testing.md` — release packaging and the three test layers

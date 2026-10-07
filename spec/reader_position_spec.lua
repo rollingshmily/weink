@@ -1,7 +1,7 @@
 -- Pure reader-coordinate tests: no network/account or filesystem mutation.
 package.path = "./?.lua;" .. package.path
-local Reader = require("weread.lib.reader_position")
-local Mapper = require("weread.lib.position_mapper")
+local Reader = require("weink.lib.reader_position")
+local Mapper = require("weink.lib.position_mapper")
 local checks = 0
 local function eq(a, b, label)
     checks = checks + 1

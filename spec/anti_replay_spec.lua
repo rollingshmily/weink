@@ -9,7 +9,7 @@ local function assert_eq(actual, expected, label)
     end
 end
 
-local AntiReplay = require("weread.lib.anti_replay")
+local AntiReplay = require("weink.lib.anti_replay")
 local bit = require("bit")
 
 assert_eq(AntiReplay.SALT, "5a6f1", "salt matches libencrypt .rodata 0xB274")

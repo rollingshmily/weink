@@ -1,4 +1,4 @@
--- Lightweight pure-logic checks for weread.lib.updater helpers.
+-- Lightweight pure-logic checks for weink.lib.updater helpers.
 -- Run with: luajit spec/updater_spec.lua
 
 package.path = "./?.lua;./?/init.lua;" .. package.path
@@ -102,7 +102,7 @@ package.preload["logger"] = function()
     }
 end
 
-package.preload["weread.lib.plugin_util"] = function()
+package.preload["weink.lib.plugin_util"] = function()
     return {
         LOG_MODULE = "[WeRead]",
         tr = function(text)
@@ -118,7 +118,7 @@ package.preload["ffi/archiver"] = function()
     error("archiver unavailable in unit test")
 end
 
-local Updater = require("weread.lib.updater")
+local Updater = require("weink.lib.updater")
 
 local function assert_eq(actual, expected, label)
     if actual ~= expected then

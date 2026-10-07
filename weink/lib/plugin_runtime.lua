@@ -1,0 +1,272 @@
+-- Full WeRead plugin boot. Loaded only for FileManager and WeRead documents.
+
+local Event = require("ui/event")
+local logger = require("weink.lib.logger")
+local UIManager = require("ui/uimanager")
+
+local Client = require("weink.lib.client")
+local BackgroundWorker = require("weink.lib.background_worker")
+local Content = require("weink.lib.content")
+local Downloader = require("weink.lib.downloader")
+local ExternalAnnotationsDB = require("weink.lib.external_annotations_db")
+local Integrations = require("integrations.init")
+local LibraryDB = require("weink.lib.library_db")
+local Mixin = require("weink.lib.mixin")
+local Migrations = require("weink.lib.migrations")
+local PluginUtil = require("weink.lib.plugin_util")
+local ProgressSync = require("weink.lib.progress_sync")
+local ProgressSyncDialog = require("weink.ui.progress_sync_dialog")
+local EinkQRLogin = require("weink.lib.eink_qr_login")
+local ReadReport = require("weink.lib.read_report")
+local Settings = require("weink.lib.settings")
+
+local _ = PluginUtil.tr
+
+local M = {
+    mixins_applied = false,
+    services = nil,
+}
+
+local function apply_mixins(plugin)
+    if M.mixins_applied then
+        return
+    end
+    local mt = getmetatable(plugin)
+    local class = mt and mt.__index or plugin
+    if type(class) ~= "table" then
+        class = plugin
+    end
+    Mixin.apply(class, {
+        (require("weink.ui.common")),
+        (require("weink.ui.menu")),
+        (require("weink.ui.update")),
+        (require("weink.ui.cache")),
+        (require("weink.ui.read_report")),
+        (require("weink.ui.library")),
+        (require("weink.ui.annotations_controller")),
+        (require("weink.ui.xpointer_overlay_controller")),
+        (require("weink.ui.annotation_sync_controller")),
+        (require("weink.ui.reader_navigation")),
+        (require("weink.lib.reader_lifecycle")),
+    })
+    M.mixins_applied = true
+end
+
+local function bind_session_services(plugin, options)
+    options = options or {}
+    plugin.downloader = Downloader:new{
+        client = plugin.client,
+        settings = plugin.settings,
+        background_worker = plugin.prefetch_worker,
+        show_info       = function(text) plugin:showInfo(text) end,
+        show_transient  = function(text, timeout) plugin:showTransientInfo(text, timeout) end,
+        refresh_ui      = function() plugin:refreshUI() end,
+        refresh_shelf   = function() plugin:refreshShelfCacheIndicators() end,
+        open_file       = function(path) plugin:openFile(path) end,
+        safe_callback   = function(label, fn) return plugin:safeCallback(label, fn) end,
+        require_login   = function() return plugin:requireLogin() end,
+        run_online_task = function(label, fn)
+            return plugin:runOnlineTask(label, fn)
+        end,
+        is_connected = function()
+            return plugin:isNetworkConnected()
+        end,
+    }
+    if options.recover ~= false and plugin.downloader.recover then
+        plugin.downloader:recover()
+    end
+    plugin.eink_qr_login = EinkQRLogin:new(plugin, plugin.client, plugin.settings)
+    plugin.read_report = ReadReport:new{
+        settings = plugin.settings,
+        client = plugin.client,
+        library_db = plugin.library_db,
+        scheduler = UIManager,
+        get_document = function()
+            return plugin.ui and plugin.ui.document
+        end,
+        detect_book = function()
+            return plugin:detectWeinkBook()
+        end,
+        position_provider = function(book_id)
+            if not plugin.progress_sync then
+                return nil, "progress_sync_initializing", true
+            end
+            return plugin.progress_sync:position_for_report(book_id)
+        end,
+        is_online = function()
+            return plugin:isNetworkConnected()
+        end,
+    }
+    plugin.progress_sync = ProgressSync:new{
+        settings = plugin.settings,
+        client = plugin.client,
+        scheduler = UIManager,
+        get_document = function()
+            return plugin.ui and plugin.ui.document
+        end,
+        get_footer = function()
+            return plugin.ui and plugin.ui.view and plugin.ui.view.footer
+        end,
+        detect_book = function()
+            return plugin:detectWeinkBook()
+        end,
+        get_book = function(book_id)
+            return plugin.settings:get("books", {})[tostring(book_id)]
+        end,
+        get_chapters = function(book)
+            return plugin:ensureChaptersLoaded(book)
+        end,
+        refresh_catalog = function(book_id)
+            local book = plugin.settings:get("books", {})[tostring(book_id)]
+            if type(book) ~= "table" then
+                return nil, "book_not_found"
+            end
+            local ok, chapters_or_err = pcall(function()
+                return Content.fetch_catalog(plugin.client, book)
+            end)
+            if not ok then
+                return nil, chapters_or_err
+            end
+            local chapters = chapters_or_err
+            if type(chapters) ~= "table" or #chapters == 0 then
+                return nil, "catalog_unavailable"
+            end
+            local cache_ok, cache_err = Content.save_catalog_cache(
+                plugin.client, plugin.settings, book, chapters)
+            if not cache_ok then
+                logger.warn("save chapter catalog cache failed:",
+                    PluginUtil.log_error(cache_err))
+            end
+            if plugin.library_db then
+                plugin.library_db:putChapters(book_id, chapters)
+            end
+            return chapters
+        end,
+        get_file_context = function(book, path)
+            return plugin:getChapterInfoFromFile(book, path)
+        end,
+        run_online = function(_kind, callback, run_options)
+            return plugin:runOnlineTask(_("Sync progress"), callback, nil, run_options)
+        end,
+        upload_position = function(book_id, position, elapsed_seconds)
+            return plugin.read_report:upload_position(
+                book_id, position, elapsed_seconds)
+        end,
+        build_upload_outcome = function(book_id, position, elapsed_seconds)
+            return plugin.read_report:build_position_upload_outcome(
+                book_id, position, elapsed_seconds)
+        end,
+        apply_upload_outcome = function(book_id, outcome)
+            return plugin.read_report:apply_position_upload_outcome(
+                book_id, outcome)
+        end,
+        goto_fraction = function(fraction)
+            -- ReaderRolling:onGotoPercent accepts fractional percentages;
+            -- _gotoPercent scales directly to page/position before pagination.
+            local percent = math.max(0, math.min(1, tonumber(fraction) or 0)) * 100
+            return pcall(function()
+                if plugin.ui and plugin.ui.rolling
+                    and plugin.ui.rolling.onGotoPercent then
+                    plugin.ui.rolling:onGotoPercent(percent)
+                elseif plugin.ui then
+                    plugin.ui:handleEvent(Event:new("GotoPercent", percent))
+                else
+                    error("reader unavailable")
+                end
+            end)
+        end,
+        goto_xpointer = function(xpointer)
+            return pcall(function()
+                if plugin.ui and plugin.ui.rolling and plugin.ui.rolling.onGotoXPointer then
+                    plugin.ui.rolling:onGotoXPointer(xpointer)
+                elseif plugin.ui then
+                    plugin.ui:handleEvent(Event:new("GotoXPointer", xpointer))
+                else
+                    error("reader unavailable")
+                end
+            end)
+        end,
+        open_chapter = function(book, chapter)
+            return plugin:openProgressTargetChapter(book, chapter)
+        end,
+        is_online = function()
+            return plugin:isNetworkConnected()
+        end,
+        on_choice = function(context)
+            ProgressSyncDialog.show_choice(context)
+        end,
+        notify = function(code, data)
+            ProgressSyncDialog.notify(code, data)
+        end,
+    }
+    plugin:onDispatcherRegisterActions()
+    if plugin.ui and plugin.ui.menu and plugin.ui.menu.registerToMainMenu then
+        plugin.ui.menu:registerToMainMenu(plugin)
+    end
+    plugin.integrations = Integrations
+    plugin.integrations.register(plugin)
+    plugin._reader_session_gen = 0
+end
+
+function M.boot(plugin)
+    apply_mixins(plugin)
+
+    if M.services then
+        plugin.settings = M.services.settings
+        plugin.external_annotations_db = M.services.external_annotations_db
+        plugin.library_db = M.services.library_db
+        plugin.client = M.services.client
+        plugin.prefetch_worker = M.services.prefetch_worker
+        bind_session_services(plugin, { recover = false })
+        logger.info("initialized:", "version=", plugin.version, "reused=true")
+        return
+    end
+
+    math.randomseed(os.time())
+    plugin.settings = Settings:new()
+    if type(PluginUtil.set_perf_enabled) == "function" then
+        local advanced = plugin.settings:get("advanced", {})
+        PluginUtil.set_perf_enabled(advanced.developer_logs == true)
+    end
+    plugin.external_annotations_db = ExternalAnnotationsDB:new(plugin.settings)
+    plugin.library_db = LibraryDB:new(plugin.settings)
+    plugin.client = Client:new(plugin.settings)
+    plugin.prefetch_worker = BackgroundWorker:new{
+        temp_dir = plugin.settings.data_dir .. "/workers",
+        min_available_kb = 128 * 1024,
+    }
+    Migrations.run(plugin.settings, plugin.client)
+    plugin.external_annotations_db:migrateLegacySettings()
+    bind_session_services(plugin, { recover = true })
+    M.services = {
+        settings = plugin.settings,
+        external_annotations_db = plugin.external_annotations_db,
+        library_db = plugin.library_db,
+        client = plugin.client,
+        prefetch_worker = plugin.prefetch_worker,
+    }
+    if plugin.getUpdater then
+        local updater_ok, updater_result, updater_err = pcall(function()
+            return plugin:getUpdater():cleanup_backup()
+        end)
+        if not updater_ok then
+            logger.warn("updater backup recovery failed:", tostring(updater_result))
+        elseif updater_result == false then
+            logger.warn("updater backup recovery failed:", tostring(updater_err))
+        end
+    end
+    local read_report = plugin.settings:get("read_report")
+    if read_report.enabled
+        and read_report.mode == "manual"
+        and read_report.book_id ~= ""
+        and read_report.report_on_open == false then
+        plugin.read_report:maybe_start("plugin_start")
+    end
+    plugin._reader_session_gen = 0
+    logger.info("initialized:", "version=", plugin.version)
+    if plugin.maybeCheckPluginUpdateOnStart then
+        plugin:maybeCheckPluginUpdateOnStart()
+    end
+end
+
+return M

@@ -45,7 +45,7 @@ preload("ui/widget/container/topcontainer", Top)
 local Focus = Widget:extend{}
 function Focus:init() end
 preload("ui/widget/focusmanager", Focus)
-preload("weread.ui.focus_nav", {
+preload("weink.ui.focus_nav", {
     apply = function(view, rows) view.layout = rows end,
     initialFocus = function(view, x, y) view.selected = { x = x, y = y } end,
 })
@@ -60,7 +60,7 @@ preload("ui/widget/button", Button)
 local shown
 preload("ui/uimanager", { show = function(_self, view) shown = view end, close = function() end,
     setDirty = function() end })
-local View = require("weread.ui.own_notes_view")
+local View = require("weink.ui.own_notes_view")
 local long = string.rep("一段很长的原文和想法。\n", 600)
 for _, width in ipairs({ 600, 900, 1200 }) do
     screen_w = width; scale = width / 600

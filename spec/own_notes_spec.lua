@@ -4,7 +4,7 @@ local function expect(value, label)
     checks = checks + 1
     assert(value, label)
 end
-local Notes = require("weread.lib.own_notes")
+local Notes = require("weink.lib.own_notes")
 local function review(rid, vid, book, kind)
     return { review = { review = { reviewId = rid, author = { userVid = vid or "me" },
         bookId = book or "b", type = kind or 1, chapterUid = 7, abstract = "quote", content = "thought",
@@ -45,8 +45,8 @@ package.preload["ltn12"] = function() return {} end
 package.preload["socketutil"] = function() return {} end
 package.preload["socket.http"] = function() return {} end
 package.preload["json"] = function() return { encode = function() return "{}" end } end
-package.preload["weread.lib.logger"] = function() return { info = function() end, warn = function() end } end
-local Client = require("weread.lib.client")
+package.preload["weink.lib.logger"] = function() return { info = function() end, warn = function() end } end
+local Client = require("weink.lib.client")
 local requests, posted, active_vid, response = {}, {}, "me", { succ = 1 }
 local client = setmetatable({}, { __index = Client })
 function client:eink_credentials() return active_vid end
@@ -87,16 +87,16 @@ package.preload["ui/uimanager"] = function() return {
     show = function(_self, widget) shown[#shown + 1] = widget end,
     close = function(_self, widget) widget.closed = true end,
 } end
-package.preload["weread.ui.own_notes_view"] = function() return { show = function(args)
+package.preload["weink.ui.own_notes_view"] = function() return { show = function(args)
     menus[#menus + 1] = args
     return args
 end } end
 package.preload["ui/widget/confirmbox"] = function() return { new = function(_self, args) return args end } end
-package.preload["weread.lib.plugin_util"] = function() return {
+package.preload["weink.lib.plugin_util"] = function() return {
     tr = function(s) return s end, display_error = tostring,
     T = function(s, ...) local v = {...}; return (s:gsub("%%(%d)", function(i) return tostring(v[tonumber(i)]) end)) end,
 } end
-local UI = require("weread.ui.own_notes")
+local UI = require("weink.ui.own_notes")
 local binding, book_reads, thought_reads = { book_id = "b", title = "Test book" }, 0, 0
 local host = { ui = { document = { file = "book.epub" } }, client = client }
 function host:_annotationBinding() return binding end

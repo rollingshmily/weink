@@ -36,29 +36,29 @@ package.preload["ffi/util"] = function()
         purgeDir = function() return true end,
     }
 end
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
-package.preload["weread.lib.i18n"] = function() return { tr = function(text) return text end } end
-package.preload["weread.lib.protocol"] = function()
+package.preload["weink.lib.i18n"] = function() return { tr = function(text) return text end } end
+package.preload["weink.lib.protocol"] = function()
     return { normalize_cover_url = function() return nil end, reader_url = function() return "https://reader" end }
 end
-package.preload["weread.lib.footnotes"] = function()
+package.preload["weink.lib.footnotes"] = function()
     return { scan_chapter = function() error("no footnotes") end,
         build_book_index = function() return {} end,
         transform_chapter = function(html) return html, {} end,
         validate = function() return true end, has_converted = function() return false end,
         FOOTNOTES_CSS = "" }
 end
-package.preload["weread.lib.thoughts"] = function() return {} end
-package.preload["weread.ui.download_dialog"] = function()
+package.preload["weink.lib.thoughts"] = function() return {} end
+package.preload["weink.ui.download_dialog"] = function()
     return { new = function(_self, options)
         options.show = function() end; options.close = function() end
         options.setTitle = function() end; options.reportProgress = function() end
         return options
     end }
 end
-package.preload["weread.lib.content"] = function()
+package.preload["weink.lib.content"] = function()
     return {
         create_download_workspace = function()
             local path = root .. "/workspace"
@@ -110,7 +110,7 @@ local settings = {
     end,
     set = function() end, flush = function() end,
 }
-local Downloader = require("weread.lib.downloader")
+local Downloader = require("weink.lib.downloader")
 local downloader = Downloader:new{
     client = fake_client, settings = settings,
     require_login = function() return true end,

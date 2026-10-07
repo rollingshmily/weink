@@ -6,7 +6,7 @@ package.path = "./?.lua;" .. package.path
 
 local cached_catalog
 local saved_catalog
-package.preload["weread.lib.content"] = function()
+package.preload["weink.lib.content"] = function()
     return {
         load_catalog_cache = function(_client, _settings, book)
             if cached_catalog then book.chapters = cached_catalog end
@@ -19,7 +19,7 @@ package.preload["weread.lib.content"] = function()
     }
 end
 
-package.preload["weread.lib.protocol"] = function()
+package.preload["weink.lib.protocol"] = function()
     return {
         e = function(value) return "e:" .. tostring(value) end,
         reader_url = function(book_id)
@@ -31,7 +31,7 @@ package.preload["weread.lib.protocol"] = function()
     }
 end
 
-local ReadReport = require("weread.lib.read_report")
+local ReadReport = require("weink.lib.read_report")
 
 local failures, checks = 0, 0
 local current_test

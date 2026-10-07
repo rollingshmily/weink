@@ -2,7 +2,7 @@
 package.path = "./?.lua;" .. package.path
 local checks = 0
 local function expect(value, label) checks = checks + 1; assert(value, label) end
-local Reviews = require("weread.lib.book_reviews")
+local Reviews = require("weink.lib.book_reviews")
 local function rows(count, empty, start)
     local result = {}
     for i = (start or 1), count do
@@ -68,20 +68,20 @@ expect(empty_delta.next_synckey == 20 and empty_delta.visible_count == 0,
 
 -- Test actual library flow, per-tab caches, retries and no tight request loops.
 local function empty_module() return {} end
-for _, name in ipairs({ "weread.ui.chapter_list_view", "ui/widget/buttondialog", "ui/widget/confirmbox",
-    "weread.lib.content", "ui/widget/infomessage", "ui/widget/inputdialog", "ui/widget/progressbardialog",
-    "ui/widget/textviewer", "weread.lib.protocol" }) do package.preload[name] = empty_module end
-package.preload["weread.lib.logger"] = function() return { err = function() end } end
-package.preload["weread.lib.plugin_util"] = function() return {
+for _, name in ipairs({ "weink.ui.chapter_list_view", "ui/widget/buttondialog", "ui/widget/confirmbox",
+    "weink.lib.content", "ui/widget/infomessage", "ui/widget/inputdialog", "ui/widget/progressbardialog",
+    "ui/widget/textviewer", "weink.lib.protocol" }) do package.preload[name] = empty_module end
+package.preload["weink.lib.logger"] = function() return { err = function() end } end
+package.preload["weink.lib.plugin_util"] = function() return {
     tr = function(s) return s end, log_error = tostring, display_error = tostring,
     T = function(s, ...) local v = {...}; return (s:gsub("%%(%d)", function(i) return tostring(v[tonumber(i)]) end)) end,
 } end
 local views = {}
-package.preload["weread.ui.book_reviews_view"] = function() return { show = function(data, callbacks)
+package.preload["weink.ui.book_reviews_view"] = function() return { show = function(data, callbacks)
     local view = { data = data, callbacks = callbacks }; views[#views + 1] = view; return view
 end } end
 package.preload["ui/uimanager"] = function() return { close = function(_self, view) view.closed = true end } end
-local Library = require("weread.ui.library")
+local Library = require("weink.ui.library")
 local tasks, notices = {}, {}
 local host = setmetatable({ client = client }, { __index = Library })
 function host:requireLogin() return true end
@@ -122,7 +122,7 @@ package.preload["ltn12"] = empty_module
 package.preload["socketutil"] = empty_module
 package.preload["socket.http"] = empty_module
 package.preload["json"] = empty_module
-local Client = require("weread.lib.client")
+local Client = require("weink.lib.client")
 local api = setmetatable({}, { __index = Client })
 local path, params
 function api:eink_json(p, q) path, params = p, q; return {} end

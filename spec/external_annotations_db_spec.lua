@@ -126,7 +126,7 @@ local function remove_file(path)
     return true
 end
 
-local DB = require("weread.lib.external_annotations_db")
+local DB = require("weink.lib.external_annotations_db")
 local legacy = {
     schema_version = 1,
     documents = {

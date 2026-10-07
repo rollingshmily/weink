@@ -50,14 +50,14 @@ package.preload["ffi/util"] = function()
         end,
     }
 end
-package.preload["weread.lib.content"] = function()
+package.preload["weink.lib.content"] = function()
     return {
         fetch_single_chapter_source = function()
             error("injected transient timeout")
         end,
     }
 end
-package.preload["weread.ui.download_dialog"] = function()
+package.preload["weink.ui.download_dialog"] = function()
     return {
         new = function(_self, options)
             return {
@@ -70,20 +70,20 @@ package.preload["weread.ui.download_dialog"] = function()
         end,
     }
 end
-package.preload["weread.lib.i18n"] = function()
+package.preload["weink.lib.i18n"] = function()
     return { tr = function(text) return text end }
 end
-package.preload["weread.lib.thoughts"] = function()
+package.preload["weink.lib.thoughts"] = function()
     return { is_download_enabled = function() return false end }
 end
-package.preload["weread.lib.protocol"] = function()
+package.preload["weink.lib.protocol"] = function()
     return {
         normalize_cover_url = function(value) return value end,
         reader_url = function(book_id) return "https://reader/" .. tostring(book_id) end,
     }
 end
 
-local Downloader = require("weread.lib.downloader")
+local Downloader = require("weink.lib.downloader")
 
 local completions = {}
 local messages = {}

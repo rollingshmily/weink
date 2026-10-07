@@ -1,4 +1,4 @@
-# WeRead annotation overlay (reflowable documents)
+# Weink annotation overlay (reflowable documents)
 
 Plugin-owned annotation layer that projects WeRead underlines and thoughts onto
 reflowable CREngine documents without modifying the source book or KOReader's
@@ -10,7 +10,7 @@ own notes.
   the book's `.sdr` list, so clearing or re-syncing WeRead data cannot touch the
   reader's own highlights.
 - Each local book gets an isolated SQLite database under
-  `<KOReader data>/weread/external-annotations/`, keyed by file path. Moving or
+  `<KOReader data>/weink/external-annotations/`, keyed by file path. Moving or
   replacing a book requires matching it again.
 - Coordinates are stored as XPointer ranges. `Store.documentKey` mixes path,
   file size, mtime and the CREngine revision, so a replaced file or an engine

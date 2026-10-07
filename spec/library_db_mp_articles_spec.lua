@@ -11,7 +11,7 @@ local function expect(condition, message)
     end
 end
 
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
 
@@ -139,7 +139,7 @@ package.preload["lua-ljsqlite3/init"] = function()
     }
 end
 
-local LibraryDB = require("weread.lib.library_db")
+local LibraryDB = require("weink.lib.library_db")
 local tmp_dir = os.tmpname() .. "-lib-mp"
 os.remove(tmp_dir)
 

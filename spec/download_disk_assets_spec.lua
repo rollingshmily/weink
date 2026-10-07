@@ -9,9 +9,9 @@ end
 package.preload["logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
-package.preload["weread.lib.crypto"] = function() return {} end
-package.preload["weread.lib.reader_state"] = function() return {} end
-package.preload["weread.lib.protocol"] = function()
+package.preload["weink.lib.crypto"] = function() return {} end
+package.preload["weink.lib.reader_state"] = function() return {} end
+package.preload["weink.lib.protocol"] = function()
     return {
         reader_url = function(book_id, chapter_uid)
             return "https://weread.qq.com/reader/" .. tostring(book_id)
@@ -19,7 +19,7 @@ package.preload["weread.lib.protocol"] = function()
         end,
     }
 end
-package.preload["weread.lib.thoughts"] = function() return {} end
+package.preload["weink.lib.thoughts"] = function() return {} end
 package.preload["bit"] = function()
     return { rshift = function(value, bits) return math.floor(value / 2 ^ bits) end }
 end
@@ -111,7 +111,7 @@ package.preload["lfs"] = function()
     }
 end
 
-local Content = require("weread.lib.content")
+local Content = require("weink.lib.content")
 
 local root = os.tmpname()
 os.remove(root)

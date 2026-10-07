@@ -2,14 +2,14 @@
 
 package.path = "./?.lua;" .. package.path
 
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return { info = function() end }
 end
-package.preload["weread.lib.annotations"] = function()
+package.preload["weink.lib.annotations"] = function()
     return {}
 end
 
-local Thoughts = require("weread.lib.thoughts")
+local Thoughts = require("weink.lib.thoughts")
 
 local checks, failures = 0, 0
 local function expect(value, label)

@@ -5,15 +5,15 @@ local captured
 local generic = { new = function() return {} end }
 local stubs = {
     ["ui/event"] = { new = function(_, name, percent) return { name = name, percent = percent } end },
-    ["weread.lib.progress_sync"] = { new = function(_, options) captured = options; return {} end },
-    ["weread.lib.plugin_util"] = { tr = function(v) return v end },
-    ["weread.lib.logger"] = { info = function() end },
+    ["weink.lib.progress_sync"] = { new = function(_, options) captured = options; return {} end },
+    ["weink.lib.plugin_util"] = { tr = function(v) return v end },
+    ["weink.lib.logger"] = { info = function() end },
     ["integrations.init"] = { register = function() end },
 }
 -- All boot services except the runtime under test are isolated (no settings,
 -- accounts, filesystem writes or network are touched).
 _G.require = function(name) return stubs[name] or generic end
-local Runtime = dofile("weread/lib/plugin_runtime.lua")
+local Runtime = dofile("weink/lib/plugin_runtime.lua")
 _G.require = original_require
 Runtime.mixins_applied = true
 Runtime.services = {}

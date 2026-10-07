@@ -29,7 +29,7 @@ end
 package.preload["json"] = function()
     return { encode = encode, decode = function(value) return assert(loadstring("return " .. value))() end }
 end
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
 local paths, legacy_entries, legacy_checkpoints = {}, {}, {}
@@ -81,10 +81,10 @@ function legacy:open(book, create)
 end
 function legacy:getDocument(path) return legacy_entries[path] end
 function legacy:getSyncCheckpoint(path) return legacy_checkpoints[path] end
-package.preload["weread.lib.external_annotations_db"] = function()
+package.preload["weink.lib.external_annotations_db"] = function()
     return { new = function() return legacy end }
 end
-local Store = require("weread.lib.annotation_store")
+local Store = require("weink.lib.annotation_store")
 return {
     new = function() return Store:new({}) end,
     legacy_entries = legacy_entries, legacy_checkpoints = legacy_checkpoints,

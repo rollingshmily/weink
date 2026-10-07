@@ -1,10 +1,10 @@
 package.path = "./?.lua;./?/init.lua;" .. package.path
 
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
-package.preload["weread.lib.aes"] = function() return {} end
-package.preload["weread.lib.epub_path"] = function() return {} end
+package.preload["weink.lib.aes"] = function() return {} end
+package.preload["weink.lib.epub_path"] = function() return {} end
 package.preload["bit"] = function()
     return {
         band = function() return 0 end,
@@ -16,7 +16,7 @@ package.preload["bit"] = function()
 end
 package.preload["ffi"] = function() return { cdef = function() end } end
 
-local Upload = require("weread.lib.eink_annotation_upload")
+local Upload = require("weink.lib.eink_annotation_upload")
 
 local checks, failures = 0, 0
 local function expect(value, label)
@@ -28,10 +28,10 @@ local function expect(value, label)
 end
 
 do
-    local Source = require("weread.lib.annotation_source")
+    local Source = require("weink.lib.annotation_source")
     local zip_calls = 0
     local plugin = {
-        _current_weread_book_id = "465030",
+        _current_weink_book_id = "465030",
         client = {
             can_eink_download = function() return true end,
             eink_download_zip = function()
@@ -76,7 +76,7 @@ end
 do
     local zip_calls = 0
     local plugin = {
-        _current_weread_book_id = "465030",
+        _current_weink_book_id = "465030",
         client = {
             can_eink_download = function() return true end,
             eink_download_zip = function()
@@ -110,7 +110,7 @@ end
 do
     local posted = {}
     local plugin = {
-        _current_weread_book_id = "465030",
+        _current_weink_book_id = "465030",
         client = {
             can_eink_download = function() return true end,
             eink_add_bookmark = function(_self, payload)
@@ -149,7 +149,7 @@ end
 
 do
     local plugin = {
-        _current_weread_book_id = "465030",
+        _current_weink_book_id = "465030",
         client = {
             can_eink_download = function() return false end,
             eink_add_bookmark = function()
@@ -164,7 +164,7 @@ end
 do
     local deleted = {}
     local plugin = {
-        _current_weread_book_id = "465030",
+        _current_weink_book_id = "465030",
         client = {
             can_eink_download = function() return true end,
             eink_delete_review = function(_self, review_id)
@@ -197,7 +197,7 @@ do
     }
     local plugin = {
         ui = { annotation = annotation },
-        _current_weread_book_id = nil,
+        _current_weink_book_id = nil,
         client = {
             can_eink_download = function() return false end,
         },

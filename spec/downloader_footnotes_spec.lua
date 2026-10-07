@@ -50,20 +50,20 @@ package.preload["ffi/util"] = function()
         end,
     }
 end
-package.preload["weread.lib.content"] = function() return {} end
-package.preload["weread.ui.download_dialog"] = function() return {} end
-package.preload["weread.lib.i18n"] = function()
+package.preload["weink.lib.content"] = function() return {} end
+package.preload["weink.ui.download_dialog"] = function() return {} end
+package.preload["weink.lib.i18n"] = function()
     return { tr = function(text) return text end }
 end
-package.preload["weread.lib.thoughts"] = function()
+package.preload["weink.lib.thoughts"] = function()
     return { is_download_enabled = function() return false end }
 end
-package.preload["weread.lib.protocol"] = function()
+package.preload["weink.lib.protocol"] = function()
     return { normalize_cover_url = function(value) return value end }
 end
 
-local Footnotes = require("weread.lib.footnotes")
-local Downloader = require("weread.lib.downloader")
+local Footnotes = require("weink.lib.footnotes")
+local Downloader = require("weink.lib.downloader")
 
 local source_chapter = {
     chapterUid = 1, chapterIdx = 1, files = { "Text/chapter1.xhtml" },

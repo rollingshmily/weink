@@ -36,10 +36,10 @@ package.preload["ffi/util"] = function()
         end,
     }
 end
-package.preload["weread.lib.content"] = function()
+package.preload["weink.lib.content"] = function()
     return {}
 end
-package.preload["weread.ui.download_dialog"] = function()
+package.preload["weink.ui.download_dialog"] = function()
     return {
         new = function(_self, options)
             options.show = function() end
@@ -49,13 +49,13 @@ package.preload["weread.ui.download_dialog"] = function()
         end,
     }
 end
-package.preload["weread.lib.i18n"] = function()
+package.preload["weink.lib.i18n"] = function()
     return { tr = function(text) return text end }
 end
-package.preload["weread.lib.thoughts"] = function() return {} end
-package.preload["weread.lib.protocol"] = function() return {} end
+package.preload["weink.lib.thoughts"] = function() return {} end
+package.preload["weink.lib.protocol"] = function() return {} end
 
-local Downloader = require("weread.lib.downloader")
+local Downloader = require("weink.lib.downloader")
 
 local checks, failures = 0, 0
 local function expect(value, label)

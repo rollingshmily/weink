@@ -4,13 +4,13 @@ package.path = "./?.lua;" .. package.path
 
 local existing = {}
 local logs = {}
-package.preload["weread.lib.content"] = function()
+package.preload["weink.lib.content"] = function()
     return {
         catalog_cache_path = function() return "/cache/catalog.json" end,
         save_catalog_cache = function() return true end,
     }
 end
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return {
         scoped = function()
             return {
@@ -20,13 +20,13 @@ package.preload["weread.lib.logger"] = function()
         end,
     }
 end
-package.preload["weread.lib.protocol"] = function()
+package.preload["weink.lib.protocol"] = function()
     return { is_mp_book = function(book_id) return book_id == "mp-book" end }
 end
 package.preload["ui/uimanager"] = function()
     return { scheduleIn = function() end }
 end
-package.preload["weread.lib.plugin_util"] = function()
+package.preload["weink.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,
         T = function(text, ...)
@@ -41,7 +41,7 @@ package.preload["weread.lib.plugin_util"] = function()
     }
 end
 
-local Lifecycle = require("weread.lib.reader_lifecycle")
+local Lifecycle = require("weink.lib.reader_lifecycle")
 
 local checks, failures = 0, 0
 local function expect(value, label)
@@ -98,12 +98,12 @@ local host = {
     showTransientInfo = function(_self, text, timeout)
         notices[#notices + 1] = { text, timeout }
     end,
-    detectWeReadBook = function() return nil end,
+    detectWeinkBook = function() return nil end,
     requireLogin = function() return true end,
     progress_sync = { sync_now = function() end },
 }
 for key, value in pairs(Lifecycle) do host[key] = value end
-host.detectWeReadBook = function() return nil end
+host.detectWeinkBook = function() return nil end
 
 local open_document_prefetch = 0
 host.maybePrefetchOpenDocumentAnnotations = function()
@@ -172,7 +172,7 @@ expect(host:getFullBookCachePath(legacy_single) == "/cache/one.epub",
     "legacy combined EPUB remains a full-book cache")
 
 notices = {}
-expect(not host:onWeReadSyncProgress(),
+expect(not host:onWeinkSyncProgress(),
     "standalone sync gesture rejects a local document")
 expect(notices[1] and notices[1][2] == 1,
     "standalone sync gesture explains missing WeRead context")

@@ -17,14 +17,14 @@ if not has_bit then
         }
     end
 end
-package.preload["weread.lib.crypto"] = function()
+package.preload["weink.lib.crypto"] = function()
     return {
         md5_hex = function() return "0123456789abcdef0123456789abcdef" end,
         sha256_hex = function(value) return "sha256:" .. tostring(value) end,
     }
 end
 
-local WeRead = require("weread.lib.protocol")
+local WeRead = require("weink.lib.protocol")
 local checks = 0
 local function eq(got, want, label)
     checks = checks + 1

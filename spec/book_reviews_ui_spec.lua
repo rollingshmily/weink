@@ -43,7 +43,7 @@ preload("ui/widget/container/topcontainer", Top)
 local Focus = Widget:extend{}
 function Focus:init() end
 preload("ui/widget/focusmanager", Focus)
-preload("weread.ui.focus_nav", {
+preload("weink.ui.focus_nav", {
     apply = function(view, rows) view.layout = rows end,
     initialFocus = function(view, x, y) view.selected = { x = x, y = y } end,
 })
@@ -57,8 +57,8 @@ end
 preload("ui/widget/button", Button)
 local shown
 preload("ui/uimanager", { show = function(_self, view) shown = view end, close = function() end })
-local Reviews = require("weread.lib.book_reviews")
-local View = require("weread.ui.book_reviews_view")
+local Reviews = require("weink.lib.book_reviews")
+local View = require("weink.ui.book_reviews_view")
 local result = Reviews.normalize_list({ reviews = {
     { type = 4, content = "好", author = { nick = "A" }, star = 100, createTime = 1700000000 },
     { type = 4, content = "千言万语，汇成一句：鲁迅不愧是鲁迅！", author = { nick = "B" } },

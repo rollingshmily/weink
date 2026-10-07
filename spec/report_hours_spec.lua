@@ -9,7 +9,7 @@ local function assert_eq(actual, expected, label)
     end
 end
 
-local Hours = require("weread.lib.report_hours")
+local Hours = require("weink.lib.report_hours")
 
 -- hourBeginTime() floors on the GMT+8 wall clock.
 -- 2026-10-07 08:40:00 +08:00 == 2026-10-07 00:40:00 UTC == 1791333600.

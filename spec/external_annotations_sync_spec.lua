@@ -1,8 +1,8 @@
 -- Shared-book pipeline regressions, using the actual locator and SQLite store.
 package.path = "./?.lua;" .. package.path
 local helper = require("spec.helpers.annotation_test_store")
-local Sync = require("weread.lib.annotation_sync")
-local External = require("weread.lib.external_annotations")
+local Sync = require("weink.lib.annotation_sync")
+local External = require("weink.lib.external_annotations")
 local calls, matched = {}, {}
 local empty, fail_batch = false, false
 local client = {
@@ -136,7 +136,7 @@ for _ = 1, 50 do
     if done then break end
 end
 assert(type(race_error) == "string"
-    and race_error:find("__weread_annotation_cancelled__", 1, true),
+    and race_error:find("__weink_annotation_cancelled__", 1, true),
     "cancelled annotation response must abort before persistence")
 assert(not race_store:get("race", "batch", "1:1"),
     "cancelled annotation response wrote a stale batch")

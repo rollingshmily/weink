@@ -20,15 +20,15 @@ package.preload["json"] = function()
         decode = function() return {} end,
     }
 end
-package.preload["weread.lib.cookie"] = function() return {} end
-package.preload["weread.lib.protocol"] = function()
+package.preload["weink.lib.cookie"] = function() return {} end
+package.preload["weink.lib.protocol"] = function()
     return { urlencode = function(value) return tostring(value) end }
 end
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
 
-local Client = require("weread.lib.client")
+local Client = require("weink.lib.client")
 
 local checks, failures = 0, 0
 local function expect(value, label)

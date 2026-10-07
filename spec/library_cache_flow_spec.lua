@@ -3,10 +3,10 @@ package.path = "./?.lua;" .. package.path
 local existing_paths = {}
 local catalog_save_count = 0
 local function empty_module() return {} end
-package.preload["weread.lib.book_reviews"] = function()
+package.preload["weink.lib.book_reviews"] = function()
     return { format_date = function() return "" end }
 end
-package.preload["weread.ui.book_reviews_view"] = empty_module
+package.preload["weink.ui.book_reviews_view"] = empty_module
 package.preload["ui/widget/buttondialog"] = empty_module
 package.preload["ui/widget/confirmbox"] = empty_module
 package.preload["ui/widget/infomessage"] = empty_module
@@ -16,13 +16,13 @@ package.preload["ui/widget/textviewer"] = empty_module
 package.preload["ui/uimanager"] = function()
     return { scheduleIn = function(_self, _delay, callback) callback() end }
 end
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
-package.preload["weread.lib.protocol"] = function()
+package.preload["weink.lib.protocol"] = function()
     return { is_mp_book = function() return false end }
 end
-package.preload["weread.lib.plugin_util"] = function()
+package.preload["weink.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,
         T = function(text, ...) return text end,
@@ -33,7 +33,7 @@ package.preload["weread.lib.plugin_util"] = function()
 end
 
 local fetched_chapters = { { chapterUid = 7, title = "Cached chapter" } }
-package.preload["weread.lib.content"] = function()
+package.preload["weink.lib.content"] = function()
     return {
         fetch_catalog = function() return fetched_chapters end,
         catalog_cache_path = function() return "/cache/42/catalog.json" end,
@@ -45,7 +45,7 @@ package.preload["weread.lib.content"] = function()
     }
 end
 
-local Library = require("weread.ui.library")
+local Library = require("weink.ui.library")
 local checks = 0
 local function expect(condition, message)
     checks = checks + 1

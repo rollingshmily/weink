@@ -44,9 +44,9 @@ end
 package.preload["ui/geometry"] = function() return class() end
 package.preload["ui/gesturerange"] = function() return class() end
 package.preload["ui/widget/container/inputcontainer"] = function() return class() end
-package.preload["weread.ui.thought_popup.pages"] = function() return {} end
-package.preload["weread.ui.thought_popup.page_viewport"] = function() return class() end
-package.preload["weread.lib.plugin_util"] = function()
+package.preload["weink.ui.thought_popup.pages"] = function() return {} end
+package.preload["weink.ui.thought_popup.page_viewport"] = function() return class() end
+package.preload["weink.lib.plugin_util"] = function()
     return { tr = function(text) return text end }
 end
 package.preload["ui/size"] = function()
@@ -69,7 +69,7 @@ package.preload["ui/widget/container/widgetcontainer"] = function()
     return { free = function() end }
 end
 
-local CenterWidget = require("weread.ui.thought_popup.center_widget")
+local CenterWidget = require("weink.ui.thought_popup.center_widget")
 local failures, checks = 0, 0
 local function eq(got, want, label)
     checks = checks + 1

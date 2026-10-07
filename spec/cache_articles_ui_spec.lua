@@ -19,21 +19,21 @@ package.preload["ui/uimanager"] = function()
         close = function() end,
     }
 end
-package.preload["weread.lib.article_cache"] = function()
+package.preload["weink.lib.article_cache"] = function()
     return {
         snapshot = function() return { size = 2048, count = 2, files = { "a", "b" } } end,
         clear = function() return true end,
     }
 end
-package.preload["weread.lib.content"] = function() return {} end
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.content"] = function() return {} end
+package.preload["weink.lib.logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
-package.preload["weread.lib.scan"] = function() return {} end
-package.preload["weread.lib.protocol"] = function()
+package.preload["weink.lib.scan"] = function() return {} end
+package.preload["weink.lib.protocol"] = function()
     return { is_mp_book = function(id) return tostring(id):match("^MP_WXS_") ~= nil end }
 end
-package.preload["weread.lib.plugin_util"] = function()
+package.preload["weink.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,
         T = function(text, value) return text:gsub("%%1", tostring(value)) end,
@@ -42,7 +42,7 @@ package.preload["weread.lib.plugin_util"] = function()
     }
 end
 
-local Cache = require("weread.ui.cache")
+local Cache = require("weink.ui.cache")
 local cleared_lists, saved = 0, 0
 local host_items
 local host = {

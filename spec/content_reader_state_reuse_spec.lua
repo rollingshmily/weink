@@ -1,14 +1,14 @@
 package.path = "./?.lua;" .. package.path
 
-package.preload["weread.lib.crypto"] = function() return {} end
-package.preload["weread.lib.protocol"] = function()
+package.preload["weink.lib.crypto"] = function() return {} end
+package.preload["weink.lib.protocol"] = function()
     return {
         reader_url = function(book_id, chapter_uid)
             return "https://reader/" .. tostring(book_id) .. "/" .. tostring(chapter_uid or "")
         end,
     }
 end
-package.preload["weread.lib.thoughts"] = function() return {} end
+package.preload["weink.lib.thoughts"] = function() return {} end
 package.preload["logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
@@ -17,7 +17,7 @@ package.preload["socket"] = function() return { sleep = function() end } end
 package.preload["ffi/util"] = function() return {} end
 
 local zip_calls = 0
-package.preload["weread.lib.eink"] = function()
+package.preload["weink.lib.eink"] = function()
     return {
         build_chapters_param = function(uids) return table.concat(uids, "-") end,
         files_to_chapter_bodies = function(files, chapters)
@@ -31,7 +31,7 @@ package.preload["weread.lib.eink"] = function()
     }
 end
 
-local Content = require("weread.lib.content")
+local Content = require("weink.lib.content")
 Content.ensure_eink_chapter_files = function(_client, _book, chapters)
     return chapters
 end

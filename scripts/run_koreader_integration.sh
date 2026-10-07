@@ -30,7 +30,7 @@ if [[ "$actual_commit" != "$KOREADER_TESTED_COMMIT" ]]; then
 fi
 
 plugin_target="$koreader_dir/plugins/weink.koplugin"
-spec_target="$koreader_dir/spec/unit/weread_plugin_spec.lua"
+spec_target="$koreader_dir/spec/unit/weink_plugin_spec.lua"
 if [[ -e "$plugin_target" || -L "$plugin_target" ]]; then
     echo "error: integration target already exists: $plugin_target" >&2
     exit 1
@@ -47,7 +47,7 @@ cleanup() {
 trap cleanup EXIT
 
 ln -s "$plugin_dir" "$plugin_target"
-cp "$plugin_dir/spec/koreader/weread_plugin_spec.lua" "$spec_target"
+cp "$plugin_dir/spec/koreader/weink_plugin_spec.lua" "$spec_target"
 
 if [[ "${KOREADER_SKIP_FETCH:-0}" != "1" ]]; then
     make -C "$koreader_dir" fetchthirdparty
@@ -56,4 +56,4 @@ fi
 cd "$koreader_dir"
 make base
 ./base/utils/fake_tty.py make --assume-old=base testfront \
-    T="--busted -- spec/front/unit/weread_plugin_spec.lua"
+    T="--busted -- spec/front/unit/weink_plugin_spec.lua"

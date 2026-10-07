@@ -1,6 +1,6 @@
 package.path = "./?.lua;" .. package.path
 
-local PathIndex = require("weread.lib.path_index")
+local PathIndex = require("weink.lib.path_index")
 PathIndex.reset()
 
 local checks, failures = 0, 0

@@ -10,7 +10,7 @@ G_reader_settings = {
 }
 local gettext = { current_lang = "zh_CN" }
 package.loaded["gettext"] = gettext
-local I18n = require("weread.lib.i18n")
+local I18n = require("weink.lib.i18n")
 
 assert(I18n.tr("Bookshelf") == "书架", "automatic Chinese locale must translate plugin menus")
 local meta = require("_meta")

@@ -62,7 +62,7 @@ end
 
 local saved_books = {}
 local minimal_index_checked = false
-package.preload["weread.lib.book_store"] = function()
+package.preload["weink.lib.book_store"] = function()
     return {
         load = function(_settings, book_id, index)
             return {
@@ -82,13 +82,13 @@ package.preload["weread.lib.book_store"] = function()
     }
 end
 
-local Settings = require("weread.lib.settings")
+local Settings = require("weink.lib.settings")
 local settings = Settings:new()
 
-expect(settings.data_dir == "/data/weread", "data directory was wrong")
-expect(settings.cache_dir == "/data/weread/cache", "default cache directory was wrong")
-expect(created_dirs[1] == "/data/weread"
-    and created_dirs[2] == "/data/weread/cache",
+expect(settings.data_dir == "/data/weink", "data directory was wrong")
+expect(settings.cache_dir == "/data/weink/cache", "default cache directory was wrong")
+expect(created_dirs[1] == "/data/weink"
+    and created_dirs[2] == "/data/weink/cache",
     "settings directories were not initialized")
 expect(values.api_key == "" and next(values.cookies) == nil
     and values.wr_ticket == "" and values.wr_wrpa == "",
@@ -219,7 +219,7 @@ expect(settings:set_download_dir("/external/books") == "/external/books",
     "custom download directory was not selected")
 expect(values.download_dir == "/external/books",
     "custom download directory was not persisted")
-expect(settings:set_download_dir("") == "/data/weread/cache",
+expect(settings:set_download_dir("") == "/data/weink/cache",
     "download directory did not reset to default")
 
 settings:reset_account()

@@ -1,18 +1,18 @@
--- Optional ZenUI Home widget. ZenUI navbar discovery uses WeReadPlugin:launch().
+-- Optional ZenUI Home widget. ZenUI navbar discovery uses WeinkPlugin:launch().
 
-local logger = require("weread.lib.logger")
-local _ = require("weread.lib.plugin_util").tr
+local logger = require("weink.lib.logger")
+local _ = require("weink.lib.plugin_util").tr
 
 local source = debug.getinfo(1, "S").source or ""
 local integration_dir = source:sub(1, 1) == "@"
     and source:sub(2):match("^(.*)/[^/]+$") or nil
 local icon_path = integration_dir
-    and integration_dir:gsub("/integrations$", "") .. "/icons/weread-w-book.svg"
+    and integration_dir:gsub("/integrations$", "") .. "/icons/weink-w-book.svg"
     or nil
 
 local Integration = {
     name = "zenui",
-    item_id = "weread.bookshelf",
+    item_id = "weink.bookshelf",
     registered = false,
     plugin = nil,
 }
@@ -20,7 +20,7 @@ local Integration = {
 function Integration:_livePlugin()
     local file_manager = package.loaded["apps/filemanager/filemanager"]
     local fm = file_manager and file_manager.instance
-    if fm and type(fm.weread) == "table" then return fm.weread end
+    if fm and type(fm.weink) == "table" then return fm.weink end
     return self.plugin
 end
 
@@ -43,7 +43,7 @@ function Integration:_installIcon()
             return false
         end
         return ffiutil.copyFile(icon_path,
-            icons_dir .. "/weread-w-book.svg") == true
+            icons_dir .. "/weink-w-book.svg") == true
     end)
     return ok and result == true
 end
@@ -67,7 +67,7 @@ function Integration:_buildWidget(ctx)
     local height = math.max(1, tonumber(ctx and ctx.height)
         or Screen:scaleBySize(96))
     local label = TextWidget:new{
-        text = _("WeRead"),
+        text = _("Weink"),
         face = Font:getFace("cfont", Screen:scaleBySize(18)),
         bold = true,
     }
@@ -100,7 +100,7 @@ function Integration:_buildWidget(ctx)
     local tap = InputContainer:new{
         dimen = Geom:new{ w = width, h = height },
         ges_events = {
-            TapWeRead = {
+            TapWeink = {
                 GestureRange:new{
                     ges = "tap",
                     range = Geom:new{
@@ -109,7 +109,7 @@ function Integration:_buildWidget(ctx)
                     },
                 },
             },
-            HoldWeRead = {
+            HoldWeink = {
                 GestureRange:new{
                     ges = "hold",
                     range = Geom:new{
@@ -121,7 +121,7 @@ function Integration:_buildWidget(ctx)
         },
         body,
     }
-    tap.onTapWeRead = function(tap_self, _arg, ges)
+    tap.onTapWeink = function(tap_self, _arg, ges)
         if not (tap_self.dimen and ges and ges.pos
                 and tap_self.dimen:contains(ges.pos)) then
             return false
@@ -129,7 +129,7 @@ function Integration:_buildWidget(ctx)
         if ctx and ctx.openTopMenu and ctx.openTopMenu(ges) then return true end
         return self:_openBookshelf()
     end
-    tap.onHoldWeRead = function(tap_self, _arg, ges)
+    tap.onHoldWeink = function(tap_self, _arg, ges)
         if not (tap_self.dimen and ges and ges.pos
                 and tap_self.dimen:contains(ges.pos)) then
             return false
@@ -150,7 +150,7 @@ function Integration:_tryRegister()
     local result = register(self.item_id, function(ctx)
         return self:_buildWidget(ctx)
     end, {
-        label = _("WeRead"),
+        label = _("Weink"),
         size = {
             preferred_pct = 0.14,
             min_pct = 0.10,
@@ -159,7 +159,7 @@ function Integration:_tryRegister()
     })
     self.registered = result ~= false
     if self.registered then
-        logger.info("weread: registered ZenUI bookshelf widget")
+        logger.info("weink: registered ZenUI bookshelf widget")
     end
     return self.registered
 end

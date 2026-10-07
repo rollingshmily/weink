@@ -1,6 +1,6 @@
 -- Optional integrations with third-party KOReader interfaces.
 
-local logger = require("weread.lib.logger")
+local logger = require("weink.lib.logger")
 
 local Integrations = {}
 local modules = {
@@ -13,7 +13,7 @@ function Integrations.register(plugin)
             integration:register(plugin)
         end)
         if not ok then
-            logger.warn("weread: failed to register integration:",
+            logger.warn("weink: failed to register integration:",
                 integration.name, tostring(err))
         end
     end
@@ -26,7 +26,7 @@ function Integrations.onZenUIReady(plugin)
                 integration:onZenUIReady(plugin)
             end)
             if not ok then
-                logger.warn("weread: ZenUIReady integration failed:",
+                logger.warn("weink: ZenUIReady integration failed:",
                     integration.name, tostring(err))
             end
         end

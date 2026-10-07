@@ -2,10 +2,10 @@
 
 package.path = "./?.lua;./?/init.lua;" .. package.path
 
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
-package.preload["weread.lib.plugin_util"] = function()
+package.preload["weink.lib.plugin_util"] = function()
     return { tr = function(text) return text end }
 end
 
@@ -35,11 +35,11 @@ _G.__ZEN_UI_REGISTER_HOME_ITEM = function(id, builder, options)
 end
 
 expect(ZenUI:onZenUIReady(plugin) == true,
-    "ZenUIReady did not register the WeRead Home widget")
-expect(registered_id == "weread.bookshelf"
+    "ZenUIReady did not register the Weink Home widget")
+expect(registered_id == "weink.bookshelf"
     and type(registered_builder) == "function",
     "ZenUI registration used the wrong item descriptor")
-expect(registered_options.label == "WeRead",
+expect(registered_options.label == "Weink",
     "ZenUI registration used the wrong label")
 expect(ZenUI:_openBookshelf() == true and opened == 1,
     "ZenUI entry did not call the stable bookshelf method")

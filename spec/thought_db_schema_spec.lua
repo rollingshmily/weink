@@ -18,11 +18,11 @@ end
 package.preload["libs/libkoreader-lfs"] = function()
     return { mkdir = function() end }
 end
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return { warn = function() end, info = function() end }
 end
 
-local ThoughtDB = require("weread.lib.thought_db")
+local ThoughtDB = require("weink.lib.thought_db")
 
 local checks, failures = 0, 0
 local function expect(value, label)

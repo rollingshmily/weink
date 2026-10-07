@@ -11,8 +11,8 @@ package.loaded["ffi/util"] = { template = function(text, ...)
     local args = { ... }
     return (text:gsub("%%(%d)", function(index) return tostring(args[tonumber(index)]) end))
 end }
-package.loaded["weread.lib.i18n"] = { tr = function(text) return text end }
-local Dialog = require("weread.ui.progress_sync_dialog")
+package.loaded["weink.lib.i18n"] = { tr = function(text) return text end }
+local Dialog = require("weink.ui.progress_sync_dialog")
 local function contains(fragment)
     checks = checks + 1
     assert(shown and shown.text:find(fragment, 1, true), fragment)

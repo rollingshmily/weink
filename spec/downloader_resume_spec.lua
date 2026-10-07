@@ -34,17 +34,17 @@ package.preload["ffi/util"] = function()
         purgeDir = function() return true end,
     }
 end
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return { info = function() end, warn = function() end, err = function() end }
 end
-package.preload["weread.lib.i18n"] = function() return { tr = function(text) return text end } end
-package.preload["weread.lib.protocol"] = function()
+package.preload["weink.lib.i18n"] = function() return { tr = function(text) return text end } end
+package.preload["weink.lib.protocol"] = function()
     return {
         normalize_cover_url = function() return nil end,
         reader_url = function(book_id) return "https://reader/" .. tostring(book_id) end,
     }
 end
-package.preload["weread.lib.footnotes"] = function()
+package.preload["weink.lib.footnotes"] = function()
     return {
         scan_chapter = function() error("no footnotes in fixture") end,
         build_book_index = function() return {} end,
@@ -54,8 +54,8 @@ package.preload["weread.lib.footnotes"] = function()
         FOOTNOTES_CSS = "",
     }
 end
-package.preload["weread.lib.thoughts"] = function() return {} end
-package.preload["weread.ui.download_dialog"] = function()
+package.preload["weink.lib.thoughts"] = function() return {} end
+package.preload["weink.ui.download_dialog"] = function()
     return {
         new = function(_self, options)
             options.show = function() end
@@ -66,7 +66,7 @@ package.preload["weread.ui.download_dialog"] = function()
         end,
     }
 end
-package.preload["weread.lib.content"] = function()
+package.preload["weink.lib.content"] = function()
     return {
         create_download_workspace = function(_settings, _book)
             local path = root .. "/workspace"
@@ -94,7 +94,7 @@ package.preload["weread.lib.content"] = function()
     }
 end
 
-local Checkpoint = require("weread.lib.download_checkpoint")
+local Checkpoint = require("weink.lib.download_checkpoint")
 local workspace = root .. "/workspace"
 os.execute("mkdir -p " .. string.format("%q", workspace .. "/chapters"))
 local saved_body = workspace .. "/chapters/1.xhtml"
@@ -145,7 +145,7 @@ assert(Checkpoint.save(fake_client, checkpoint_path, {
     css = "body{}",
 }))
 
-local Downloader = require("weread.lib.downloader")
+local Downloader = require("weink.lib.downloader")
 local downloader = Downloader:new{
     client = fake_client,
     settings = settings,

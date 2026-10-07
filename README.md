@@ -35,7 +35,7 @@
 
 **方式二：手动复制源码目录**
 
-把仓库里的 `_meta.lua`、`main.lua`、`weread/`、`fonts/`、`icons/`、`integrations/` 放进
+把仓库里的 `_meta.lua`、`main.lua`、`weink/`、`fonts/`、`icons/`、`integrations/` 放进
 `koreader/plugins/weink.koplugin/`，重启 KOReader。
 
 装好后的入口：

@@ -1,6 +1,6 @@
 package.path = "./?.lua;" .. package.path
 
-local Checkpoint = require("weread.lib.download_checkpoint")
+local Checkpoint = require("weink.lib.download_checkpoint")
 
 local root = os.tmpname()
 os.remove(root)

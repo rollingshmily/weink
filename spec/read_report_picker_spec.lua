@@ -6,12 +6,12 @@ local closed_view
 package.preload["ui/uimanager"] = function()
     return { close = function(_self, view) closed_view = view end }
 end
-package.preload["weread.lib.logger"] = function()
+package.preload["weink.lib.logger"] = function()
     return { err = function() end }
 end
-package.preload["weread.lib.read_stats"] = function() return {} end
-package.preload["weread.ui.read_stats_view"] = function() return {} end
-package.preload["weread.lib.plugin_util"] = function()
+package.preload["weink.lib.read_stats"] = function() return {} end
+package.preload["weink.ui.read_stats_view"] = function() return {} end
+package.preload["weink.lib.plugin_util"] = function()
     return {
         tr = function(text) return text end,
         T = function(text, value) return text:gsub("%%1", tostring(value)) end,
@@ -20,7 +20,7 @@ package.preload["weread.lib.plugin_util"] = function()
     }
 end
 
-local ReadReportUI = require("weread.ui.read_report")
+local ReadReportUI = require("weink.ui.read_report")
 local checks = 0
 local function expect(condition, message)
     checks = checks + 1

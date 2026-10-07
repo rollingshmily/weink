@@ -1,4 +1,4 @@
--- Unit tests for weread/lib/progress_sync.lua.
+-- Unit tests for weink/lib/progress_sync.lua.
 -- Run from the repo root with:
 --   lua spec/progress_sync_spec.lua
 
@@ -10,16 +10,16 @@ local function capture_log(...)
     diagnostic_logs[#diagnostic_logs + 1] = table.concat(line, " ")
     diagnostic_events[#diagnostic_events + 1] = { ... }
 end
-package.loaded["weread.lib.logger"] = { scoped = function()
+package.loaded["weink.lib.logger"] = { scoped = function()
     return { info = capture_log, warn = capture_log, err = capture_log }
 end }
 -- Only unrelated catalog/network dependencies are stubbed. Mapper, payload
 -- construction, _send, normalization and confirmation below are real functions.
-package.preload["weread.lib.content"] = function() return {} end
-package.preload["weread.lib.protocol"] = function() return {} end
-local ProgressSync = require("weread.lib.progress_sync")
-local Mapper = require("weread.lib.position_mapper")
-local ReadReport = require("weread.lib.read_report")
+package.preload["weink.lib.content"] = function() return {} end
+package.preload["weink.lib.protocol"] = function() return {} end
+local ProgressSync = require("weink.lib.progress_sync")
+local Mapper = require("weink.lib.position_mapper")
+local ReadReport = require("weink.lib.read_report")
 
 local failures, checks = 0, 0
 local current_test
