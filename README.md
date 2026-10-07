@@ -1,7 +1,8 @@
-# WeRead KOReader Plugin（二开版）
+# WeRead KOReader Plugin（e-ink 二开版）
 
-> **本仓库说明**：这是基于原作者 **[finlater/weread.koplugin](https://github.com/finlater/weread.koplugin)** 的二次开发分支，**不是**上游官方仓库。  
-> 核心阅读、登录、同步、统计等能力均来自原项目；本仓库在其之上增加了**国内可访问的在线更新**、**自动 Release 发版**，以及 **v0.5.4 起的扁平 EPUB + 独立元数据目录**布局。  
+> **本仓库说明**：基于原作者 **[finlater/weread.koplugin](https://github.com/finlater/weread.koplugin)** 的独立二开分支，**不是**上游官方仓库。  
+> 两个仓库自 `942e25c`（2026-08-01）起分道：上游仍保留 web 阅读器链路，本分支只走**墨水屏 APK 契约**（≥1.2.82 起改道，1.2.84 已删除 web 登录与分片实现），并在这条线上独立演进（书架/搜索、下载、进度同步、时长上报、划线想法、文章列表、插件内更新）。  
+> **版本线独立**：本分支自 **2.0.0** 起使用自己的版本号，与上游 1.x 线没有对应关系；移植上游改动时在提交信息与 CHANGELOG 里标注对应的 upstream 版本。  
 > 请优先给原作者点 Star / 提上游问题：https://github.com/finlater/weread.koplugin
 
 > **免责声明**：本项目仅供个人学习和技术研究使用，不得用于商业用途。使用本项目所产生的一切后果（包括但不限于账号封禁、数据丢失等）由使用者自行承担，项目作者与二开维护者概不负责。请遵守微信读书的用户协议和相关法律法规。

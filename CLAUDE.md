@@ -4,6 +4,13 @@
 
 KOReader plugin for reading WeRead (微信读书) books and MP articles on e-ink devices. Lua codebase running inside KOReader's plugin system.
 
+## Fork identity
+
+- This repository is an independent e-ink-only fork of `finlater/weread.koplugin`; the two lines diverged at `942e25c` (2026-08-01).
+- Upstream keeps the web-reader path. This fork speaks only the e-ink APK contracts and deleted the web login/shard code in 1.2.84.
+- Version numbers are independent from 2.0.0 onward. Upstream ports are cherry-picked, and the commit message or CHANGELOG entry names the upstream version they came from.
+- The KOReader plugin directory name, plugin name and `settings/weread.lua` stay unchanged on purpose: existing installs must keep their login, cache and local-book matches.
+
 ## Language
 
 - Code, variable names, commit messages: English
