@@ -18,149 +18,93 @@
 
 ## 安装
 
-> ⚠️ 建议使用 **KOReader 2026.03 或更高版本**。旧版本可能无法正常加载插件，例如「工具」菜单里找不到入口。
+> 建议 **KOReader 2026.03 或更高版本**；旧版本可能无法正常加载插件，例如「工具」菜单里看不到入口。
 
-### 方式一：Release 包（推荐）
+**方式一：用 Release 包（推荐）**
 
-1. 打开 [Releases](https://github.com/rollingshmily/weread.koplugin/releases) 下载最新 `weread.koplugin-v*.zip`。
-2. 国内网络可在链接前加代理前缀，例如：
-   - `https://runn.i.ng/rollingshmily/weread.koplugin/releases/download/v1.1.0/weread.koplugin-v1.1.0.zip`（[ghspeedup.com](https://ghspeedup.com/)）
-   - `https://gh-proxy.com/https://github.com/rollingshmily/weread.koplugin/releases/download/v1.1.0/weread.koplugin-v1.1.0.zip`
-   - `https://ghfast.top/https://github.com/rollingshmily/weread.koplugin/releases/download/v1.1.0/weread.koplugin-v1.1.0.zip`
-3. 解压后把 `weread.koplugin/` 目录放到 KOReader 的 `plugins` 目录。
+1. 在本仓库 [Releases](https://github.com/rollingshmily/weread.koplugin/releases) 下载最新的 `weread.koplugin-v*.zip`。
+2. 国内网络慢的话，可以在链接前加加速前缀，例如：
 
-### 方式二：手动复制源码目录
+   ```
+   https://runn.i.ng/<owner>/<repo>/releases/download/<tag>/<file>
+   https://gh-proxy.com/https://github.com/<owner>/<repo>/releases/download/<tag>/<file>
+   https://ghfast.top/https://github.com/<owner>/<repo>/releases/download/<tag>/<file>
+   ```
 
-将插件目录复制到 KOReader 的 plugins 目录：
+3. 解压，把 `weread.koplugin/` 放进 KOReader 的 `plugins/` 目录，重启 KOReader。
 
-```
-koreader/plugins/weread.koplugin/
-```
+**方式二：手动复制源码目录**
 
-4. 重启 KOReader，在菜单中找到：
+把仓库里的 `_meta.lua`、`main.lua`、`weread/`、`fonts/`、`icons/`、`integrations/` 放进
+`koreader/plugins/weread.koplugin/`，重启 KOReader。
+
+装好后的入口：
 
 ```
 工具 → 微信读书
 ```
 
-### 后续在线更新
-
-安装完成后，在设备上打开：
+**在设备上更新**
 
 ```
 工具 → 微信读书 → 插件更新 → 检查更新
 ```
 
-默认使用 [ghspeedup.com](https://ghspeedup.com/)（实际请求走 `runn.i.ng` 路径模式）拉取 GitHub 资源。如果某个代理不可用，可在同一菜单切换到 `gh-proxy.com` / `ghfast.top` / 直连；检查与下载时也会自动尝试备用代理。
+默认走 ghspeedup（`runn.i.ng` 路径模式）；也可以在菜单里改用 `gh-proxy.com` / `ghfast.top` / 直连，
+检查与下载时会自动尝试备用通道。
 
-## 登录与认证
+## 登录
 
-登录在插件内用手机扫码完成，凭证过期可续期或重新扫码。
-
-1. 在 KOReader 打开 **工具 → 微信读书 → 账号 → 墨水屏登录**。
-2. 用微信扫码，并在手机上确认授权（需包含收藏/浮窗权限）。
-3. 凭证过期时可用同一菜单的「立即续期墨水屏登录」；续期失败再重新扫码。
+1. 打开 `工具 → 微信读书 → 账号`，选扫码登录。
+2. 用微信扫码并在手机上确认授权（授权需包含收藏 / 浮窗）。
+3. 凭证过期可在同一菜单里续期；续期失败就重新扫码。
 
 ## SimpleUI / Zen_UI 集成
 
-插件提供统一的“微信读书书架”入口并支持集成到 SimpleUI和 ZenUI的快捷按钮中。(需要安装最新版 [SimpleUI](https://github.com/doctorhetfield-cmd/simpleui.koplugin) 和 [ZenUI](https://github.com/AnthonyGress/zen_ui.koplugin)插件)。
+插件提供统一的「微信读书书架」入口，可以挂到 [SimpleUI](https://github.com/doctorhetfield-cmd/simpleui.koplugin)
+与 [ZenUI](https://github.com/AnthonyGress/zen_ui.koplugin) 上：
 
-- **SimpleUI**：进入 `快捷操作` 新建操作，类型选择 `插件 → 微信读书`，再把该操作加入底部栏即可。如需使用本项目图标，将 `icons/weread-w-book.svg` 或 `icons/weread-ink.png` 复制到 SimpleUI 的自定义图标目录后，在快捷操作中选中它。
-- **Zen_UI 底栏**：进入 `控件 → 按钮 → ➕ → 插件 → 微信读书`，点击后直接打开微信读书书架。注册时会把 `weread-w-book.svg` 同步到 KOReader 用户图标目录，供 ZenUI 自动匹配或手动选择；不会自动修改、添加或启用 Tab。
-- **Zen_UI 首页**：进入 `主页 → 小组件`，启用“微信读书”组件。组件默认关闭，可由用户自行排序。
+- **SimpleUI**：`快捷操作` 里新建操作，类型选 `插件 → 微信读书`，再把它加到底部栏。想用本项目的图标，
+  就把 `icons/weread-w-book.svg` 或 `icons/weread-ink.png` 复制到 SimpleUI 的自定义图标目录后选中。
+- **ZenUI 底栏**：`控件 → 按钮 → ➕ → 插件 → 微信读书`，点击直接打开书架。注册时会把 `weread-w-book.svg`
+  同步到 KOReader 用户图标目录，供其自动匹配或手动选择。
+- **ZenUI 首页**：`主页 → 小组件` 里启用「微信读书」组件（默认关闭，可自行排序）。
 
-原生 KOReader 的 “工具 → 微信读书” 菜单保持不变。
+原生 `工具 → 微信读书` 菜单不受影响。
 
-|                     SimpleUI                     |                   Zen_UI                   |
-|:------------------------------------------------:|:------------------------------------------:|
-| ![simpleui](screenshots/simpleui_quick_menu.png) | ![ZenUI](screenshots/zenui_quick_menu.png) |
+## 菜单在哪
 
-「我的划线/想法」只管理当前关联书的个人云端记录；删除划线不会连带删除想法，反之亦然。删除不修改 KOReader 本地笔记或已下载的公开标注；列表支持刷新及继续加载更多想法。
+装好之后功能都在 `工具 → 微信读书` 下面：
 
-## 菜单结构
+- **账号**：扫码登录、凭证续期、清除账号数据
+- **书架 / 搜索**：书籍与公众号文章，也能直接搜微信读书
+- **只在阅读时出现**：立即同步进度、书籍详情、显示划线和想法、划线与想法管理
+- **阅读时间上报 / 阅读统计**：上报开关与触发方式、目标书籍、统计查看
+- **设置**：缓存管理、进度管理、下载设置、划线设置、账号管理
+- **插件更新**：检查更新、更新通道、加速通道选择
+- **关于**：版本与项目说明
 
-```
-微信读书
-├── 账号 / 墨水屏登录 · 账号名
-├── 立即同步进度       （阅读微信读书缓存书籍时显示）
-├── 书籍详情           （阅读微信读书缓存书籍时显示）
-├── 显示划线和想法     （阅读书籍时显示，开关）
-├── 划线与想法管理     （阅读可重排文档时显示；本地书先关联微信读书）
-│   ├── 匹配微信读书书目 / 已关联微信读书：书名
-│   ├── 我的划线/想法   当前书的个人云端记录，分页查看原文/想法；逐条确认云端删除
-│   ├── 下载当前章节的想法
-│   ├── 继续匹配
-│   ├── 选择章节匹配
-│   └── 清除划线与想法
-├── 书架               书籍 / 文章收藏 / 微信浮窗分栏；列表可刷新
-├── 搜索               搜索微信读书
-├── 阅读时间上报        后台上报阅读时长
-│   ├── 启用阅读时间上报
-│   ├── 仅在阅读时上报
-│   ├── 选择目标书籍
-│   │   ├── 自动关联微信读书书籍
-│   │   └── 手动设置上报书籍
-│   └── 上报状态
-├── 阅读统计            阅读时长/天数/排行/偏好可视化（页内 周/月/年/总 tab 切换，可翻阅历史周期）
-├── 设置
-│   ├── 缓存管理
-│   │   ├── 扫描并关联本地书籍
-│   │   ├── 缓存清理（含收藏/浮窗文章）
-│   │   └── 缓存目录
-│   ├── 进度管理
-│   │   ├── 打开时拉取进度（默认关闭）
-│   │   └── 关闭时上传进度（默认关闭）
-│   ├── 下载设置
-│   │   ├── 书籍图片（默认开启）
-│   │   ├── 章节并发数（默认 2，可选 1–4）
-│   │   ├── 微信文章图片（收藏/浮窗，默认关闭）
-│   │   └── 章节预下载
-│   │       ├── 自动预下载下一章（默认关闭，开启时会确认网络卡顿风险）
-│   │       ├── 预下载划线和想法（默认关闭，总开关关闭时不可操作）
-│   │       └── 显示预下载提示（默认开启，总开关关闭时不可操作）
-│   ├── 划线设置
-│   │   ├── 划线边缘防误触（默认开启）
-│   │   └── 边缘区域：20%（可调 10%–40%）
-│   └── 账号管理
-│       ├── 账号状态
-│       ├── 立即续期墨水屏登录
-│       └── 清除账号数据
-├── 插件更新
-│   ├── 检查更新
-│   ├── 更新通道（自动 / 正式版 / 开发分支）
-│   ├── GitHub 代理（ghspeedup.com / gh-proxy.com / ghfast.top / 直连）
-│   └── 启动时检查更新（默认关闭）
-└── 关于
-```
+## 已知限制 / TODO
 
-## TODO
-
-- [ ] 书签/笔记展示
-- [ ] 更丰富的书籍详情（热门划线等）
-- [ ] 阅读时间上报手动选择目标书籍时支持搜索
-- [x] ~~按需缓存章节，支持一次性缓存多个章节~~（v0.6.0 已支持）
-- [x] ~~书架页面支持搜索功能~~（v0.6.0 已支持）
-
-> **脚注显示：**1.2.84 起交由 KOReader 原生设置控制，插件不再提供“隐藏脚注文本”开关。已下载的旧书需要删除后重新下载。
+- [ ] 书签与笔记的独立展示（目前通过「划线与想法管理」查看云端记录）
+- [ ] 进度冲突在本地偏移是估算值时的判定放宽（避免为很小的差异打断阅读）
+- [ ] 云端回读坐标语义的受控验证
+- 脚注显示自 1.2.84 起交给 KOReader 原生设置控制，插件不再提供开关；旧书需要删掉重新下载
 
 ## 贡献
 
-欢迎提交 issue 和 PR。提交前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
+欢迎提交 issue 和 PR；提交前请读一下 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-本地书的划线与想法通过插件自有的标注层投到正文上（不改 EPUB、不动 KOReader 笔记），
-原理、失效时机、测试步骤与限制见 [标注层说明](docs/annotations-overlay.md)。
+本地书的划线与想法由插件自有的标注层投到正文上（不改 EPUB、不动 KOReader 笔记），
+原理、失效时机、测试步骤与限制见[标注层说明](docs/annotations-overlay.md)。
 
 ## 许可证
 
-本项目代码采用 [GNU Affero General Public License v3.0](LICENSE)，SPDX 标识为 `AGPL-3.0-only`，与 KOReader 使用的许可证保持一致。
+本项目代码采用 [GNU Affero General Public License v3.0](LICENSE)，SPDX 标识 `AGPL-3.0-only`。
 
-修改、整合或再分发本项目时，必须遵守 AGPL-3.0，保留版权和许可证声明，并按许可证要求将本项目代码或其衍生作品开源。
+修改、整合或再分发时必须遵守 AGPL-3.0：保留版权与许可证声明，并按许可证要求开源你的修改。
 
 `fonts/NotoEmoji-Regular.ttf` 是第三方字体，采用 [SIL Open Font License 1.1](fonts/LICENSE)，不适用本项目的 AGPL-3.0。
 
 Copyright © 2026 finlater and contributors（本项目源自其 AGPL-3.0 工程）。  
 Copyright © 2026 rollingshmily and contributors（Weink 部分）。
-
-问题与建议请在本仓库提 issue / PR。  
-
-提交前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
