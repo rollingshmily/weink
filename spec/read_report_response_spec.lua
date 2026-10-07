@@ -230,12 +230,33 @@ for _, value in ipairs({ "result=accepted", "readingTime=17", "chapterUid=22", "
     contains(text, value, "numeric diagnostic " .. value)
 end
 eq(text:find("SECRET", 1, true), nil, "success log uses numeric allowlist")
+-- APK contract (classes3.dex BaseReportService.ReadBookInShelf): cumulative
+-- readingTime, the hour-bucketed ledger, device/app identity and the
+-- guest-token signature.
 local expected = { bookId = "SECRET_BOOK_ID", chapterUid = 22, chapterIdx = 3, chapterOffset = 151,
-    progress = 44.25, currentProgress = 44.25, chapterProgress = 37, readingTime = 17 }
+    progress = 44.25, currentProgress = 44.25, chapterProgress = 37, readingTime = 17,
+    risk = 0, recordCreateTimeZone = "+08:00", reviewId = "", bookVersion = 23,
+    ttsTime = 0, lectureTime = 0, lectureTextTime = 0, novalTime = 0,
+    isLecture = 0, voiceType = -1, autoTime = 0, isStoryFeed = 0, wordCount = 0 }
 for key, value in pairs(expected) do eq(stats.packets[1][key], value, "retained payload field " .. key) end
-for key in pairs(stats.packets[1]) do eq(expected[key] ~= nil, true, "no extra payload field " .. key) end
-for _, key in ipairs({ "deviceId", "appId", "installId", "bookVersion" }) do
-    eq(stats.packets[1][key], nil, "live payload excludes " .. key)
+eq(type(stats.packets[1].timestamp), "number", "payload carries timestamp")
+eq(type(stats.packets[1].random), "number", "payload carries random")
+eq(type(stats.packets[1].hours), "table", "payload carries the hour ledger")
+eq(#stats.packets[1].hours, 1, "single hour bucket in a short session")
+eq(stats.packets[1].hours[1].readingTime, 17, "bucket mirrors cumulative time")
+eq(stats.packets[1].hours[1].timeZone, "+08:00", "bucket timezone")
+eq(type(stats.packets[1].deviceId), "string", "payload carries deviceId")
+eq(stats.packets[1].appId, stats.packets[1].deviceId, "appId mirrors deviceId, as in the APK")
+eq(type(stats.packets[1].installId), "string", "payload carries installId")
+eq(type(stats.packets[1].summary), "string", "payload carries summary")
+eq(type(stats.packets[1].signature), "string", "payload carries the read signature")
+eq(#stats.packets[1].signature, 64, "signature is sha256 hex")
+local allowed = { hours = true, timestamp = true, random = true, deviceId = true,
+    appId = true, installId = true, summary = true, signature = true }
+for key in pairs(expected) do allowed[key] = true end
+for key in pairs(stats.packets[1]) do eq(allowed[key] == true, true, "no extra payload field " .. key) end
+for _, key in ipairs({ "psvts", "sg", "s" }) do
+    eq(stats.packets[1][key], nil, "web field omitted: " .. key)
 end
 
 -- Rejections and unknown results must not leak raw response/error strings.
@@ -258,11 +279,21 @@ end
 eq(log_count("read report outcome:"), 2, "repeated failure diagnostics are throttled")
 eq(failure_stats.posts, 40, "diagnostics do not add any report attempts")
 local packet = failure_stats.packets[1]
-for _, key in ipairs({ "deviceId", "appId", "installId", "bookVersion", "currentProgress", "chapterProgress" }) do
-    eq(packet[key], nil, "no-position payload excludes " .. key)
+eq(packet.currentProgress, nil, "no-position payload excludes currentProgress")
+for _, key in ipairs({ "deviceId", "appId", "installId" }) do
+    eq(type(packet[key]), "string", "no-position payload keeps " .. key)
 end
+eq(type(packet.bookVersion), "number", "no-position payload keeps bookVersion")
+eq(packet.chapterProgress, 0, "no-position payload keeps chapterProgress")
+eq(type(packet.signature), "string", "no-position payload is still signed")
 local base_fields = { bookId = true, chapterUid = true, chapterIdx = true,
-    chapterOffset = true, progress = true, readingTime = true }
+    chapterOffset = true, progress = true, readingTime = true,
+    hours = true, timestamp = true, random = true, risk = true,
+    recordCreateTimeZone = true, reviewId = true, chapterProgress = true,
+    ttsTime = true, lectureTime = true, lectureTextTime = true, novalTime = true,
+    isLecture = true, voiceType = true, autoTime = true, isStoryFeed = true,
+    wordCount = true, deviceId = true, appId = true, installId = true,
+    summary = true, signature = true, bookVersion = true }
 for key in pairs(packet) do eq(base_fields[key], true, "no extra no-position field " .. key) end
 
 print(("read_report_response_spec: %d checks"):format(checks))

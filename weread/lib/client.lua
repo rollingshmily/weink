@@ -556,6 +556,41 @@ function Client:report_read(payload, _referer)
     return self:eink_post_json("/book/read", payload)
 end
 
+-- ReportService.READ_TROUBLE: fetched once from GET /config and reused for the
+-- anti-replay signature (batch / markFinishReading), not for /book/read.
+function Client:encrypt_param_token()
+    if self._encrypt_param_token then
+        return self._encrypt_param_token
+    end
+    local token = ""
+    local ok, result = pcall(function()
+        return self:eink_json("/config", { token = 1 })
+    end)
+    if ok and type(result) == "table" then
+        token = tostring(result.token or "")
+    end
+    self._encrypt_param_token = token
+    return token
+end
+
+-- APK path when the hour ledger spans more than one bucket
+-- (ReportService.m39updateProgress$lambda45 -> batchUploadProgress). The
+-- per-book body keeps its own guest-token signature; the top-level signature is
+-- the plain anti-replay one derived from the /config token.
+function Client:report_read_batch(payload)
+    local AntiReplay = require("weread.lib.anti_replay")
+    local timestamp = os.time()
+    local random = math.random(0, 999)
+    return self:eink_post_json("/book/batchUploadProgress", {
+        books = { payload },
+        timestamp = timestamp,
+        random = random,
+        signature = AntiReplay.anti_replay_signature(
+            self:encrypt_param_token(), timestamp, random),
+        recordCreateTimeZone = payload.recordCreateTimeZone,
+    })
+end
+
 local function eink_payload_error(data)
     if type(data) ~= "table" then return nil end
     local err = data.errCode or data.errcode

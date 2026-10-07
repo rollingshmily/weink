@@ -1,4 +1,6 @@
+local AntiReplay = require("weread.lib.anti_replay")
 local Content = require("weread.lib.content")
+local ReportHours = require("weread.lib.report_hours")
 local WeRead = require("weread.lib.protocol")
 
 local logger = require("weread.lib.logger").scoped("ReadReport")
@@ -26,10 +28,14 @@ local JOB_COLLECT_INTERVAL_SECONDS = 2
 -- Context fields that the subprocess sends back for the parent to persist.
 -- Mirrors the scalar reading-state fields stored by BookStore; the chapter
 -- catalog itself stays in the on-disk catalog cache written by the child.
+-- "report_hours_json" carries the hour-bucketed reading-time ledger between
+-- ticks. It is a plain string so it round-trips through settings and stays a
+-- stable context-fingerprint component.
 local CONTEXT_FIELDS = {
     "title", "reader_url",
     "chapter_uid", "chapter_idx", "chapter_offset", "progress", "summary",
     "read_context_updated_at", "read_session_entered_at", "read_session_id",
+    "report_hours_json",
 }
 
 local ReadReport = {}
@@ -825,6 +831,17 @@ function ReadReport:_run_pipeline(book_id, opts)
         return outcome
     end
 
+    -- The APK drops the per-book ledger the moment the server acknowledges
+    -- (ReportService.m42updateProgress$lambda47 -> clearReadingInfo). Doing it
+    -- before the parent persists the snapshot makes the next window start from
+    -- zero instead of re-sending time the server already credited.
+    local function accepted()
+        if type(outcome.book) == "table" then
+            outcome.book.report_hours_json = nil
+        end
+        return outcome
+    end
+
     local context_ok, book = pcall(function()
         return self:ensure_context(book_id, false)
     end)
@@ -835,7 +852,7 @@ function ReadReport:_run_pipeline(book_id, opts)
         return outcome
     end
     local response = attempt(book)
-    if outcome.accepted then return outcome end
+    if outcome.accepted then return accepted() end
     if response.state ~= "rejected" then return uncertain() end
 
     local failure = response.fields
@@ -844,7 +861,7 @@ function ReadReport:_run_pipeline(book_id, opts)
     end)
     if refresh_ok then
         response = attempt(refreshed)
-        if outcome.accepted then return outcome end
+        if outcome.accepted then return accepted() end
         if response.state ~= "rejected" then return uncertain() end
         failure = "initial=" .. failure .. "; refreshed=" .. response.fields
     else
@@ -881,7 +898,7 @@ function ReadReport:_run_pipeline(book_id, opts)
         return outcome
     end
     response = attempt(final_book)
-    if outcome.accepted then return outcome end
+    if outcome.accepted then return accepted() end
     if response.state ~= "rejected" then return uncertain() end
     outcome.error = failure .. "; final=" .. response.fields
     outcome.error_kind = "server"
@@ -1038,13 +1055,66 @@ end
 function ReadReport:build_payload(book_id, elapsed_seconds, book, position)
     book = book or self:ensure_context(book_id, false)
     apply_position(book, position)
+
+    -- APK contract: reading time accumulates per book and is reported as an
+    -- hour-bucketed ledger (ReportServiceKt.saveHoursTime ->
+    -- generateBookReadPostBody). The server's daily bucket is keyed by the same
+    -- local hour start, so a bare per-tick delta has nothing to credit.
+    local delta = math.max(0, math.floor(tonumber(elapsed_seconds) or 0))
+    local ledger = ReportHours.accumulate(
+        ReportHours.parse(book.report_hours_json), delta, {
+            now = self.now(),
+            offset_seconds = ReportHours.DEFAULT_OFFSET_SECONDS,
+        })
+    book.report_hours_json = ReportHours.serialize(ledger)
+    -- Cumulative since the last acknowledged report, not this tick's delta.
+    local reading_time = ReportHours.totals(ledger)
+
+    -- Identity: the APK sends DeviceId.get(context) for both deviceId and
+    -- appId, plus the install id; appId/installId/summary are @NotNull on
+    -- BaseReportService.ReadBookInShelf.
+    local eink = self.settings:get("eink", {}) or {}
+    local vid = tostring(eink.vid or "")
+    local device_id = ""
+    local install_id = ""
+    if type(self.settings.get_eink_device_id) == "function" then
+        device_id = tostring(self.settings:get_eink_device_id() or "")
+    end
+    if type(self.settings.get_eink_install_id) == "function" then
+        install_id = tostring(self.settings:get_eink_install_id() or "")
+    end
+    local timezone = ReportHours.timezone_string(ReportHours.DEFAULT_OFFSET_SECONDS)
+    local summary = tostring(book.summary or "")
+    local risk = 0
+
     local payload = {
         bookId = tostring(book_id),
         chapterUid = tonumber(book.chapter_uid) or book.chapter_uid,
         chapterIdx = tonumber(book.chapter_idx) or 0,
+        reviewId = "",
         chapterOffset = math.max(0, math.floor(tonumber(book.chapter_offset) or 0)),
+        chapterProgress = 0,
+        readingTime = reading_time,
+        ttsTime = 0,
+        lectureTime = 0,
+        lectureTextTime = 0,
+        novalTime = 0,
+        appId = device_id,
+        installId = install_id,
+        bookVersion = tonumber(book.book_version) or tonumber(book.bookVersion) or 0,
+        summary = summary,
+        isLecture = 0,
+        voiceType = -1,
+        timestamp = self.now(),
+        random = math.random(0, 999),
+        autoTime = 0,
+        isStoryFeed = 0,
+        wordCount = 0,
+        hours = ledger,
+        deviceId = device_id,
+        risk = risk,
+        recordCreateTimeZone = timezone,
         progress = tonumber(book.progress) or 0,
-        readingTime = math.max(0, math.floor(tonumber(elapsed_seconds) or 0)),
     }
     -- APK ReadingProgressReporter forwards the current position separately
     -- from progress. Use the live position, never a cached chapter's fraction.
@@ -1056,8 +1126,21 @@ function ReadReport:build_payload(book_id, elapsed_seconds, book, position)
             payload.chapterProgress = math.floor(math.max(0, math.min(1, fraction)) * 100)
         end
     end
-    -- Reading reports deliberately omit device/app identity, install identity
-    -- and book version. Login/renewal keeps its own required identity fields.
+    -- Encrypt.encryptAntiReplaySignature([guest_token, random, timestamp,
+    -- generatePayLoad(postBody)]) -> native GenSignature.
+    payload.signature = AntiReplay.report_signature(
+        AntiReplay.GUEST_TOKEN, payload.random, payload.timestamp,
+        AntiReplay.payload_string({
+            vid = vid,
+            deviceId = device_id,
+            appId = device_id,
+            bookId = tostring(book_id),
+            risk = risk,
+            recordCreateTimeZone = timezone,
+            readingTime = reading_time,
+            ttsTime = 0,
+            hours = ledger,
+        }))
     return payload
 end
 
@@ -1095,6 +1178,11 @@ function ReadReport:_send(book_id, book, position, elapsed_seconds, diagnostic)
             "percent=", tostring(tonumber(payload.progress)),
             "current_progress=", tostring(tonumber(payload.currentProgress)),
             "chapter_progress=", tostring(tonumber(payload.chapterProgress)))
+    end
+    -- APK switches to the batch endpoint once the ledger spans more than one
+    -- hour bucket (ReportService.m39updateProgress$lambda45).
+    if ReportHours.needs_batch(payload.hours) then
+        return self.client:report_read_batch(payload)
     end
     return self.client:report_read(payload)
 end

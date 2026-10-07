@@ -139,13 +139,14 @@ test("one reader session enters once and reports live position", function()
     eq(records[2].readingTime, 30, "time report keeps interval")
 end)
 
-test("native position fields omit device install and version metadata", function()
+test("native position fields carry identity and the guest-token signature", function()
     local report = fixture()
     report.settings.get = function(_self, key)
-        if key == "eink" then return { device_id = "device" } end
-        if key == "eink_install_id" then return "install" end
+        if key == "eink" then return { vid = "1000", device_id = "device" } end
         return {}
     end
+    report.settings.get_eink_device_id = function() return "device" end
+    report.settings.get_eink_install_id = function() return "install" end
     local book = { chapter_uid = 11, chapter_idx = 1, progress = 10, bookVersion = 23 }
     local packet = report:build_payload("book", 17, book, {
         chapter_uid = 22, chapter_idx = 2, chapter_offset = 150,
@@ -154,18 +155,23 @@ test("native position fields omit device install and version metadata", function
     eq(packet.chapterIdx, 2, "live chapter index")
     eq(packet.chapterProgress, 37, "chapter percent uses APK integer scale")
     eq(packet.currentProgress, 44, "current progress emitted independently")
-    eq(packet.bookVersion, nil, "book version is not uploaded even when known")
-    eq(packet.deviceId, nil, "device identity is not uploaded")
-    eq(packet.appId, nil, "device-derived app identity is not uploaded")
-    eq(packet.installId, nil, "install identity is not uploaded")
-    eq(packet.readingTime, 17, "explicit elapsed seconds preserved")
-    eq(packet.signature, nil, "no fabricated read signature")
+    eq(packet.bookVersion, 23, "book version uploaded when known")
+    eq(packet.deviceId, "device", "device identity uploaded")
+    eq(packet.appId, "device", "appId repeats the device identity, as in the APK")
+    eq(packet.installId, "install", "install identity uploaded")
+    eq(packet.reviewId, "", "reviewId is present and empty")
+    eq(packet.risk, 0, "risk flag emitted")
+    eq(packet.recordCreateTimeZone, "+08:00", "record timezone emitted")
+    eq(packet.readingTime, 17, "cumulative ledger seconds")
+    eq(type(packet.signature), "string", "read signature emitted")
+    eq(#packet.signature, 64, "signature is sha256 hex")
+    eq(packet.signature:match("^%x+$") ~= nil, true, "signature is lowercase hex")
     local no_position = report:build_payload("book", 0, book)
-    eq(no_position.chapterProgress, nil, "no stale chapter percent reused")
+    eq(no_position.chapterProgress, 0, "chapterProgress always emitted")
     eq(no_position.currentProgress, nil, "no invented live position")
-    for _, key in ipairs({ "bookVersion", "deviceId", "appId", "installId" }) do
-        eq(no_position[key], nil, "background packet omits " .. key)
-    end
+    eq(no_position.deviceId, "device", "background packet keeps identity")
+    eq(no_position.appId, "device", "background packet keeps app identity")
+    eq(no_position.installId, "install", "background packet keeps install identity")
 end)
 
 test("watermarks do not acknowledge read uploads or trigger duplicate POSTs", function()
