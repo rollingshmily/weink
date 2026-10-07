@@ -2224,6 +2224,47 @@ section, div {
     return path
 end
 
+-- WeChat answers requests for article links that carry no `chksm` signature
+-- with its POC verification page (/mp/wappoc_appmsgcaptcha). WeRead hands back
+-- exactly that unsigned form (scene=58&subscene=0) for floating/saved articles,
+-- and the challenge page has no js_content, so a JS-less client can never get
+-- the body even though the link is valid. /review/single returns a freshly
+-- signed mpInfo.doc_url for the same article, which WeChat serves normally.
+local function mp_url_is_signed(url)
+    return type(url) == "string" and url:find("chksm=", 1, true) ~= nil
+end
+
+function Content.resolve_mp_article_url(client, article)
+    local url = tostring(
+        (article and article.url and article.url ~= "" and article.url)
+        or (article and article.sourceUrl) or "")
+    if url == "" or mp_url_is_signed(url) then
+        return url
+    end
+    local review_id = article and (article.reviewId or article.review_id)
+    if not review_id or tostring(review_id) == ""
+        or type(client) ~= "table" or type(client.eink_json) ~= "function" then
+        return url
+    end
+    local ok, data = pcall(function()
+        return client:eink_json("/review/single", {
+            reviewId = tostring(review_id),
+            commentsCount = 0,
+            commentsDirection = 0,
+            likesCount = 0,
+            synckey = 0,
+        })
+    end)
+    local review = ok and type(data) == "table" and data.review or nil
+    local mp_info = type(review) == "table" and review.mpInfo or nil
+    local doc_url = type(mp_info) == "table" and (mp_info.doc_url or mp_info.docUrl) or nil
+    if mp_url_is_signed(doc_url) then
+        logger.info("MP article link normalised to its signed form")
+        return doc_url
+    end
+    return url
+end
+
 function Content.fetch_article_html(client, settings, book, article, opts)
     opts = opts or {}
     local source_url = tostring(
@@ -2232,19 +2273,29 @@ function Content.fetch_article_html(client, settings, book, article, opts)
     if not source_url:match("^https?://mp%.weixin%.qq%.com/") then
         error("WeChat article source URL is missing or invalid", 0)
     end
+    source_url = Content.resolve_mp_article_url(client, article)
     local html, meta = client:get_public_text(source_url)
     local body = Content.extract_article_body(html)
     if not body then
         local empty_response = not html or html:match("^%s*$") ~= nil
+        local final_url = tostring((type(meta) == "table" and meta.url) or "")
+        local challenged = final_url:find("wappoc_appmsgcaptcha", 1, true) ~= nil
+            or (type(html) == "string" and html:find("poc_token", 1, true) ~= nil)
         logger.warn(
             "could not extract MP article body:",
-            "reason=", empty_response and "empty_response" or "missing_body",
+            "reason=", empty_response and "empty_response"
+                or (challenged and "wechat_challenge" or "missing_body"),
             "html_length=", tostring(meta and meta.length or #(html or "")),
             "content_type=", tostring(meta and meta.content_type or ""),
+            "final_url=", final_url,
             "has_source_url=", "yes"
         )
         if empty_response then
             error("Article content response is empty. See KOReader log for details.", 0)
+        end
+        if challenged then
+            error("WeChat asked for a verification for this article. "
+                .. "Please try again later.", 0)
         end
         error("Could not extract article body. See KOReader log for details.", 0)
     end
