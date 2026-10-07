@@ -229,6 +229,8 @@ local function fixture(remote, options)
         notify = function(code, data)
             notifications[#notifications + 1] = { code = code, data = data }
         end,
+        readback_delay_seconds = options.readback_delay_seconds,
+        readback_attempts = options.readback_attempts,
         is_online = options.is_online,
         now = options.now,
         subprocess = options.subprocess or false,
@@ -286,6 +288,9 @@ local function deferred_upload_fixture(accepted, remote_provider, options)
             if remote_provider then return remote_provider() end
             return { progress = 50, chapterUid = 33, chapterOffset = 100 }
         end,
+        -- Run the diagnostic readback inline; production waits 3s and retries.
+        readback_delay_seconds = 0.2,
+        readback_attempts = 1,
         build_upload_outcome = function(_id, position)
             stats.built = stats.built + 1
             stats.position = position

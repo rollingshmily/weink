@@ -53,12 +53,15 @@ function ProgressSyncDialog.notify(code, data)
     data = data or {}
     local text
     if code == "upload_success" then
-        text = T(_("WeRead accepted the progress request: %1%. App position and reading time are not verified."),
+        text = T(_("WeRead accepted the progress request: %1%."),
+            percent(data.position))
+    elseif code == "upload_unconfirmed" then
+        text = T(_("WeRead accepted the progress request: %1%, but the cloud record has not caught up yet; the next sync will retry."),
             percent(data.position))
     elseif code == "upload_failed" then
         text = T(_("Progress upload failed:\n%1"), tostring(data.error or ""))
     elseif code == "already_synced" then
-        text = _("The reported coordinates match. App position and reading time are not verified.")
+        text = _("The reported coordinates match the cloud record.")
     elseif code == "remote_applied" then
         text = T(_("Opened WeRead's chapter near %1%. The within-chapter position is estimated."),
             percent(data.position))

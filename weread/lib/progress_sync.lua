@@ -24,6 +24,8 @@ local RESUME_RECHECK_SECONDS = 5 * 60
 local RESUME_FALLBACK_SECONDS = 8
 local PULL_RETRY_DELAY_SECONDS = 15
 local PULL_MAX_RETRIES = 3
+local UPLOAD_READBACK_DELAY_SECONDS = 3
+local UPLOAD_READBACK_ATTEMPTS = 2
 local BUSY_RETRY_SECONDS = 2
 local BUSY_RETRY_LIMIT = 10
 local SAME_THRESHOLD_PERCENT = 2
@@ -119,6 +121,12 @@ function ProgressSync:new(options)
         end,
         notify = options.notify or function() end,
         now = options.now or os.time,
+        -- The cloud applies a report asynchronously, so the diagnostic readback
+        -- waits before comparing; tests override both to run it inline.
+        readback_delay = tonumber(options.readback_delay_seconds)
+            or UPLOAD_READBACK_DELAY_SECONDS,
+        readback_attempts = tonumber(options.readback_attempts)
+            or UPLOAD_READBACK_ATTEMPTS,
         subprocess = options.subprocess == nil and make_subprocess_runner()
             or options.subprocess,
         state = "idle",
@@ -711,6 +719,8 @@ function ProgressSync:_upload_snapshot(position, reason, show_result, on_complet
                     "percent=", tostring(position.percent),
                     "reason=", tostring(reason))
                 if show_result and applies_to_current then
+                    -- Acceptance only; the cloud record is read back below and
+                    -- the result is what actually gets reported to the reader.
                     self.notify("upload_success", { position = position })
                 end
                 if applies_to_current and on_complete then
@@ -762,20 +772,36 @@ function ProgressSync:_upload_snapshot(position, reason, show_result, on_complet
                 if type(upload_outcome) == "table" and upload_outcome.accepted then
                     -- Acceptance is persisted BEFORE diagnostic networking.
                     -- A hung/failed GET can never make the POST retryable.
-                    self.scheduler:scheduleIn(0.2, function()
-                        if not valid() or self.job then return end
-                        self:_start_job("progress_confirmation", function()
-                            return self:_child_fetch_remote(book_id, snapshot_chapters)
-                        end, function(result)
-                            if not valid() then return end
-                            self:_apply_job_auth(result)
-                            local remote = result and result.remote
-                            log_position("upload readback", remote)
-                            local status, confirmation_reason = upload_confirmation(position, remote)
-                            log("info", "upload confirmation:", status,
-                                "reason=", confirmation_reason)
+                    -- The cloud applies the record asynchronously, so a readback
+                    -- fired right after the POST still sees the pre-write record
+                    -- and reports a false not_confirmed. Wait, then retry once
+                    -- before telling the reader the coordinates did not land.
+                    local function readback(readback_attempt)
+                        self.scheduler:scheduleIn(self.readback_delay, function()
+                            if not valid() or self.job then return end
+                            self:_start_job("progress_confirmation", function()
+                                return self:_child_fetch_remote(book_id, snapshot_chapters)
+                            end, function(result)
+                                if not valid() then return end
+                                self:_apply_job_auth(result)
+                                local remote = result and result.remote
+                                log_position("upload readback", remote)
+                                local status, confirmation_reason = upload_confirmation(position, remote)
+                                log("info", "upload confirmation:", status,
+                                    "reason=", confirmation_reason)
+                                if status ~= "confirmed"
+                                    and readback_attempt < self.readback_attempts then
+                                    readback(readback_attempt + 1)
+                                    return
+                                end
+                                -- valid() already covers "still the current session".
+                                if status ~= "confirmed" and show_result then
+                                    self.notify("upload_unconfirmed", { position = position })
+                                end
+                            end)
                         end)
-                    end)
+                    end
+                    readback(1)
                 end
             end)
             if not started then
