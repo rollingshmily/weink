@@ -67,7 +67,7 @@ function Integration:_buildWidget(ctx)
     local height = math.max(1, tonumber(ctx and ctx.height)
         or Screen:scaleBySize(96))
     local label = TextWidget:new{
-        text = _("Weink"),
+        text = _("WeRead"),
         face = Font:getFace("cfont", Screen:scaleBySize(18)),
         bold = true,
     }
@@ -150,7 +150,7 @@ function Integration:_tryRegister()
     local result = register(self.item_id, function(ctx)
         return self:_buildWidget(ctx)
     end, {
-        label = _("Weink"),
+        label = _("WeRead"),
         size = {
             preferred_pct = 0.14,
             min_pct = 0.10,

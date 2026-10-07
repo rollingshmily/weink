@@ -39,44 +39,44 @@ function M:onDispatcherRegisterActions()
     Dispatcher:registerAction("weink_sync_progress", {
         category = "none",
         event = "WeinkSyncProgress",
-        title = _("Weink · Sync reading progress"),
+        title = _("WeRead · Sync reading progress"),
         reader = true,
     })
     Dispatcher:registerAction("weink_quick_menu", {
         category = "none",
         event = "ShowWeinkQuickMenu",
-        title = _("Weink · Quick menu"),
+        title = _("WeRead · Quick menu"),
         reader = true,
     })
     Dispatcher:registerAction("weink_bookshelf", {
         category = "none",
         event = "ShowWeinkBookshelf",
-        title = _("Weink · Bookshelf"),
+        title = _("WeRead · Bookshelf"),
         general = true,
     })
     Dispatcher:registerAction("weink_reading_statistics", {
         category = "none",
         event = "ShowWeinkReadingStatistics",
-        title = _("Weink · Reading statistics"),
+        title = _("WeRead · Reading statistics"),
         general = true,
     })
     Dispatcher:registerAction("weink_search", {
         category = "none",
         event = "ShowWeinkSearch",
-        title = _("Weink · Search"),
+        title = _("WeRead · Search"),
         general = true,
     })
     Dispatcher:registerAction("weink_toggle_annotations", {
         category = "none",
         event = "ToggleWeinkAnnotations",
-        title = _("Weink · Toggle underlines and thoughts"),
+        title = _("WeRead · Toggle underlines and thoughts"),
         reader = true,
     })
 end
 
 function M:addToMainMenu(menu_items)
     menu_items.weink = {
-        text = _("Weink"),
+        text = _("WeRead"),
         sorting_hint = "tools",
         sub_item_table_func = function()
             return self:getMainMenuItems()
@@ -94,61 +94,40 @@ function M:einkLoginName()
 end
 
 function M:getAccountMenuItems()
-    local eink_item = {
-        text_func = function()
-            if self.settings:is_eink_configured() then
-                return T(_("Eink login · %1"), self:einkLoginName())
-            end
-            return _("Eink login")
-        end,
-        keep_menu_open = true,
-    }
-    if self.settings:is_eink_configured() then
-        eink_item.sub_item_table_func = function()
-            return {
-                {
-                    text = _("Local highlights upload to WeRead while signed in"),
-                    enabled = false,
-                },
-                {
-                    text = _("Scan again"),
-                    keep_menu_open = true,
-                    callback = self:safeCallback(_("Eink QR login"), function()
-                        self.eink_qr_login:start()
-                    end),
-                },
-                {
-                    text = _("Renew eink login now"),
-                    keep_menu_open = true,
-                    callback = self:safeCallback(_("Renew eink login now"), function()
-                        self:renewEinkWithUI()
-                    end),
-                },
-                {
-                    text = _("Sign out eink"),
-                    keep_menu_open = true,
-                    callback = self:safeCallback(_("Sign out eink"), function()
-                        self:confirmClearEinkAccount()
-                    end),
-                },
-            }
-        end
-    else
-        eink_item.callback = self:safeCallback(_("Eink QR login"), function()
-            self.eink_qr_login:start()
-        end)
-    end
-
-    return {
-        eink_item,
+    local configured = self.settings:is_eink_configured()
+    local items = {
         {
-            text = _("Clear all logins"),
+            text = configured and _("Scan again") or _("Eink QR login"),
             keep_menu_open = true,
-            callback = self:safeCallback(_("Clear all logins"), function()
-                self:confirmClearAccount()
+            callback = self:safeCallback(_("Eink QR login"), function()
+                self.eink_qr_login:start()
             end),
         },
     }
+    if configured then
+        table.insert(items, {
+            text = _("Renew eink login now"),
+            keep_menu_open = true,
+            callback = self:safeCallback(_("Renew eink login now"), function()
+                self:renewEinkWithUI()
+            end),
+        })
+        table.insert(items, {
+            text = _("Sign out eink"),
+            keep_menu_open = true,
+            callback = self:safeCallback(_("Sign out eink"), function()
+                self:confirmClearEinkAccount()
+            end),
+        })
+    end
+    table.insert(items, {
+        text = _("Clear all logins"),
+        keep_menu_open = true,
+        callback = self:safeCallback(_("Clear all logins"), function()
+            self:confirmClearAccount()
+        end),
+    })
+    return items
 end
 
 function M:getMainMenuItems()
@@ -214,7 +193,7 @@ function M:getMainMenuItems()
                     version = self:getUpdater():get_local_version() or version
                 end
                 UIManager:show(InfoMessage:new{
-                    text = T(_("Weink v%1\n\nDisclaimer: This project is for personal learning and technical research only, not for commercial use. All consequences arising from the use of this project (including but not limited to account bans, data loss, etc.) are borne by the user. The project author assumes no responsibility. Please comply with WeRead's user agreement and applicable laws and regulations.\n\nhttps://github.com/rollingshmily/weink"), version),
+                    text = T(_("WeRead v%1\n\nDisclaimer: This project is for personal learning and technical research only, not for commercial use. All consequences arising from the use of this project (including but not limited to account bans, data loss, etc.) are borne by the user. The project author assumes no responsibility. Please comply with WeRead's user agreement and applicable laws and regulations.\n\nhttps://github.com/rollingshmily/weink"), version),
                 })
             end,
         },

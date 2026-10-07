@@ -14,7 +14,7 @@ local I18n = require("weink.lib.i18n")
 
 assert(I18n.tr("Bookshelf") == "书架", "automatic Chinese locale must translate plugin menus")
 local meta = require("_meta")
-assert(meta.fullname == "Weink", "plugin metadata shows the project name")
+assert(meta.fullname == I18n.tr("WeRead"), "plugin metadata shows the user-facing product name")
 assert(type(meta.description) == "string" and meta.description ~= "",
     "plugin metadata keeps a description")
 

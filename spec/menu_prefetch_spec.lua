@@ -100,7 +100,7 @@ expect(registered.weink_show == nil,
     "generic WeRead shortcut action is no longer registered")
 local sync_action = registered.weink_sync_progress
 expect(sync_action and sync_action.event == "WeinkSyncProgress"
-        and sync_action.title == "Weink · Sync reading progress"
+        and sync_action.title == "WeRead · Sync reading progress"
         and sync_action.reader == true,
     "standalone sync action remains available in reader context")
 local quick_action = registered.weink_quick_menu
@@ -110,7 +110,7 @@ expect(quick_action and quick_action.event == "ShowWeinkQuickMenu",
 expect(quick_action and quick_action.reader == true
         and quick_action.general ~= true,
     "quick menu action remains reader-only")
-expect(quick_action and quick_action.title == "Weink · Quick menu",
+expect(quick_action and quick_action.title == "WeRead · Quick menu",
     "quick menu action has the requested title")
 local toggle_action = registered.weink_toggle_annotations
 expect(toggle_action and toggle_action.event == "ToggleWeinkAnnotations",
@@ -119,7 +119,7 @@ expect(toggle_action and toggle_action.reader == true
         and toggle_action.general ~= true,
     "annotation visibility action is reader-only")
 expect(toggle_action
-        and toggle_action.title == "Weink · Toggle underlines and thoughts",
+        and toggle_action.title == "WeRead · Toggle underlines and thoughts",
     "annotation visibility action has a gesture-friendly title")
 local bookshelf_action = registered.weink_bookshelf
 expect(bookshelf_action and bookshelf_action.event == "ShowWeinkBookshelf",
@@ -127,16 +127,16 @@ expect(bookshelf_action and bookshelf_action.event == "ShowWeinkBookshelf",
 expect(bookshelf_action and bookshelf_action.general == true
         and bookshelf_action.reader ~= true,
     "bookshelf action is grouped with the general WeRead actions")
-expect(bookshelf_action and bookshelf_action.title == "Weink · Bookshelf",
+expect(bookshelf_action and bookshelf_action.title == "WeRead · Bookshelf",
     "bookshelf gesture action has the requested title")
 local general_actions = {
     weink_reading_statistics = {
         event = "ShowWeinkReadingStatistics",
-        title = "Weink · Reading statistics",
+        title = "WeRead · Reading statistics",
     },
     weink_search = {
         event = "ShowWeinkSearch",
-        title = "Weink · Search",
+        title = "WeRead · Search",
     },
 }
 expect(registered.weink_local_bookshelf == nil,
@@ -255,17 +255,18 @@ host.settings.get = function(self, key, default)
     return orig_get(self, key, default)
 end
 local account_items = host:getAccountMenuItems()
-local eink_sub
+local has_renew = false
+local nested_submenu = false
 for _, item in ipairs(account_items or {}) do
     if item.sub_item_table_func then
-        local sub = item.sub_item_table_func()
-        if menu_has(sub, "Renew eink login now") then
-            eink_sub = sub
-            break
-        end
+        nested_submenu = true
+    end
+    if item.text == "Renew eink login now" then
+        has_renew = true
     end
 end
-expect(eink_sub ~= nil, "eink submenu has a manual renew action")
+expect(has_renew, "account menu offers a manual renew action")
+expect(not nested_submenu, "account menu stays flat without an intermediate level")
 
 print(string.format(
     "menu_prefetch_spec: %d checks, %d failure(s)", checks, failures))
