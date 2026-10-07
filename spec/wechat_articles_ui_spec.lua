@@ -127,20 +127,22 @@ for k, v in pairs(Library) do
 end
 
 -- The article tab renders the list directly on the full-screen shelf view.
+-- /mp/list listType: 1 = WeChat floating, 2 = favorites (verified against a
+-- real account on 2026-10-07; the two used to be mapped the other way round).
 host:showWeChatArticlesPage(2)
 expect(#shown_views == 1, "article view count mismatch")
 local view = shown_views[1]
-expect(view.data.mode == "floating", "floating shelf mode mismatch")
+expect(view.data.mode == "favorites", "favorites shelf mode mismatch")
 expect(#view.data.articles == 2, "article list count mismatch")
 expect(view.data.articles[2]._cached == true, "cached article badge mismatch")
 
-view.callbacks.on_switch("favorites")
-expect(shown_views[2].data.mode == "favorites", "favorites tab did not open directly")
-expect(#shown_views[2].data.articles == 2, "favorites list missing")
+view.callbacks.on_switch("floating")
+expect(shown_views[2].data.mode == "floating", "floating tab did not open directly")
+expect(#shown_views[2].data.articles == 2, "floating list missing")
 
 view = shown_views[2]
 view.callbacks.on_refresh()
-expect(#shown_views == 3 and shown_views[3].data.mode == "favorites",
+expect(#shown_views == 3 and shown_views[3].data.mode == "floating",
     "refresh button did not reload the current article list")
 view = shown_views[3]
 

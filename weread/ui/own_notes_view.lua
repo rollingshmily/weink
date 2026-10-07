@@ -5,9 +5,11 @@ local Device = require("device")
 local FocusManager = require("ui/widget/focusmanager")
 local Font = require("ui/font")
 local FrameContainer = require("ui/widget/container/framecontainer")
+local GestureRange = require("ui/gesturerange")
 local Geom = require("ui/geometry")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
 local HorizontalSpan = require("ui/widget/horizontalspan")
+local InputContainer = require("ui/widget/container/inputcontainer")
 local LineWidget = require("ui/widget/linewidget")
 local ScrollableContainer = require("ui/widget/container/scrollablecontainer")
 local Size = require("ui/size")
@@ -19,6 +21,74 @@ local VerticalSpan = require("ui/widget/verticalspan")
 local FocusNav = require("weread.ui.focus_nav")
 local _ = require("weread.lib.i18n").tr
 local Screen = Device.screen
+
+-- Trash-can action button for every record. KOReader ships no delete/trash
+-- icon and IconButton only accepts names from its own icon set, so the glyph
+-- is painted from rectangles. The widget keeps the tap and focus protocol
+-- FocusNav expects (onTap/onFocus/onUnfocus), like the Button it replaced.
+local TrashButton = InputContainer:extend{
+    dimen = nil,
+    callback = nil,
+    show_parent = nil,
+}
+function TrashButton:init()
+    local size = tonumber(self.size) or Screen:scaleBySize(30)
+    self.width, self.height = size, size
+    self.glyph = math.floor(size * 0.6)
+    self.dimen = Geom:new{ x = 0, y = 0, w = size, h = size }
+    self.ges_events = {
+        Tap = { GestureRange:new{ ges = "tap", range = self.dimen } },
+    }
+end
+
+function TrashButton:getSize()
+    return self.dimen
+end
+
+function TrashButton:paintTo(bb, x, y)
+    local unit = math.max(1, Screen:scaleBySize(2))
+    local g = self.glyph
+    local left = x + math.floor((self.width - g) / 2)
+    local top = y + math.floor((self.height - g) / 2)
+    bb:paintRect(x, y, self.width, self.height,
+        self.hasFocus and Blitbuffer.COLOR_DARK_GRAY or Blitbuffer.COLOR_WHITE)
+    local lid_y = top + math.floor(g * 0.2)
+    local body_top = lid_y + unit
+    local body_bottom = top + g - math.floor(g * 0.06)
+    local body_left = left + math.floor(g * 0.16)
+    local body_right = left + g - math.floor(g * 0.16)
+    local ink = Blitbuffer.COLOR_BLACK
+    bb:paintRect(left + math.floor(g * 0.36), lid_y - unit,
+        math.floor(g * 0.28), unit, ink)
+    bb:paintRect(body_left - unit, lid_y,
+        (body_right - body_left) + 2 * unit, unit, ink)
+    bb:paintRect(body_left, body_top, unit, body_bottom - body_top, ink)
+    bb:paintRect(body_right - unit, body_top, unit, body_bottom - body_top, ink)
+    bb:paintRect(body_left, body_bottom - unit, body_right - body_left, unit, ink)
+    local slot_h = math.max(unit, body_bottom - body_top - 3 * unit)
+    bb:paintRect(left + math.floor(g * 0.4), body_top + 2 * unit, unit, slot_h, ink)
+    bb:paintRect(left + math.floor(g * 0.58), body_top + 2 * unit, unit, slot_h, ink)
+end
+
+function TrashButton:onTap()
+    if self.callback then
+        self.callback()
+    end
+    return true
+end
+
+function TrashButton:onFocus()
+    self.hasFocus = true
+    UIManager:setDirty(self.show_parent or self, "ui")
+    return true
+end
+
+function TrashButton:onUnfocus()
+    self.hasFocus = false
+    UIManager:setDirty(self.show_parent or self, "ui")
+    return true
+end
+
 local View = FocusManager:extend{}
 
 function View:init()
@@ -27,10 +97,13 @@ function View:init()
     self.covers_fullscreen = true
     local margin = Size.padding.large
     local width = w - 2 * margin - 3 * Screen:scaleBySize(6)
-    local function text(value, size, bold)
+    local icon_size = Screen:scaleBySize(30)
+    local icon_gap = Size.padding.default
+    local text_width = math.max(Screen:scaleBySize(120), width - icon_size - icon_gap)
+    local function text(value, size, bold, box_width)
         return TextBoxWidget:new{
             text = value, face = Font:getFace("cfont", size), bold = bold or false,
-            width = width, alignment = "left", line_height = 0,
+            width = box_width or width, alignment = "left", line_height = 0,
             fgcolor = Blitbuffer.COLOR_BLACK, bgcolor = Blitbuffer.COLOR_WHITE,
         }
     end
@@ -51,23 +124,30 @@ function View:init()
         local block = VerticalGroup:new{ align = "left" }
         -- Quote and thought are independent text boxes: normal wrapping and
         -- natural height retain even multi-screen paragraphs without ellipses.
-        local quote = text("│ " .. (note.quote ~= "" and note.quote or _("No quoted text.")), 17)
-        table.insert(block, quote)
+        local quote = text("│ " .. (note.quote ~= "" and note.quote or _("No quoted text.")), 17,
+            false, text_width)
+        local column = VerticalGroup:new{ align = "left" }
+        table.insert(column, quote)
         local thought
         if note.kind == "review" and note.content ~= "" then
-            table.insert(block, VerticalSpan:new{ width = Size.padding.small })
-            thought = text(note.content, 20, true)
-            table.insert(block, thought)
+            table.insert(column, VerticalSpan:new{ width = Size.padding.default })
+            thought = text(note.content, 20, true, text_width)
+            table.insert(column, thought)
         end
-        table.insert(block, VerticalSpan:new{ width = Size.padding.small })
-        table.insert(block, text(record.metadata, 14))
-        local delete = Button:new{
-            text = _("Delete from WeRead"), text_font_size = 14,
-            width = width, align = "right", bordersize = 0, margin = 0,
-            padding_v = Size.padding.small, show_parent = self,
+        -- The delete action became a right-hand icon, so the height it used to
+        -- take goes into breathing room between the thought and the date.
+        table.insert(column, VerticalSpan:new{ width = Size.padding.default })
+        local metadata = text(record.metadata, 14, false, text_width)
+        table.insert(column, metadata)
+        local delete = TrashButton:new{
+            size = icon_size, show_parent = self,
             callback = function() self.on_delete(note, self) end,
         }
-        table.insert(block, delete)
+        local row = HorizontalGroup:new{ align = "top" }
+        table.insert(row, column)
+        table.insert(row, HorizontalSpan:new{ width = icon_gap })
+        table.insert(row, delete)
+        table.insert(block, row)
         rows[#rows + 1] = { delete }
         table.insert(content, block)
         table.insert(content, LineWidget:new{
@@ -75,7 +155,8 @@ function View:init()
             background = Blitbuffer.COLOR_BLACK,
         })
         table.insert(content, VerticalSpan:new{ width = Size.padding.default })
-        self._blocks[#self._blocks + 1] = { quote = quote, thought = thought, delete = delete, block = block }
+        self._blocks[#self._blocks + 1] = { quote = quote, thought = thought,
+            metadata = metadata, delete = delete, block = block, row = row, column = column }
     end
     if #self.records == 0 then
         table.insert(content, text(_("No personal underlines or thoughts in this book."), 17))

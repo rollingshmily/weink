@@ -19,6 +19,19 @@ local log_error = PluginUtil.log_error
 local display_error = PluginUtil.display_error
 local file_exists = PluginUtil.file_exists
 
+-- 微信文章列表 /mp/list 的 listType（2026-10-07 真机实测）：1 = 微信浮窗，
+-- 2 = 文章收藏。旧代码把两者反着对应，这里只保留一份映射，别再各写各的。
+local MP_LIST_TYPE_BY_MODE = { favorites = 2, floating = 1 }
+local MP_MODE_BY_LIST_TYPE = { [1] = "floating", [2] = "favorites" }
+
+local function mp_list_type(mode)
+    return MP_LIST_TYPE_BY_MODE[mode] or 1
+end
+
+local function mp_mode(list_type)
+    return MP_MODE_BY_LIST_TYPE[tonumber(list_type) or 0] or "floating"
+end
+
 local M = {}
 local sortBooks
 
@@ -418,7 +431,7 @@ function M:showShelfView(mode, keyword, old_view, options)
     }, {
         on_switch = function(new_mode)
             if new_mode == "favorites" or new_mode == "floating" then
-                self:showWeChatArticlesPage(new_mode == "favorites" and 1 or 2, nil, view)
+                self:showWeChatArticlesPage(mp_list_type(new_mode), nil, view)
                 return
             end
             local next_options = {}
@@ -894,7 +907,7 @@ end
 
 function M:showWeChatArticlesPage(list_type, title, old_view)
     list_type = tonumber(list_type) or 2
-    title = title or (list_type == 2 and _("WeChat Floating Articles") or _("WeChat Favorites"))
+    title = title or (list_type == 1 and _("WeChat Floating Articles") or _("WeChat Favorites"))
     local cached = self.library_db and self.library_db:getMpArticles(list_type) or nil
     if cached and #cached > 0 then
         self:renderWeChatArticleList(list_type, title, cached, old_view)
@@ -905,7 +918,7 @@ end
 
 function M:fetchWeChatArticles(list_type, title, old_view)
     list_type = tonumber(list_type) or 2
-    title = title or (list_type == 2 and _("WeChat Floating Articles") or _("WeChat Favorites"))
+    title = title or (list_type == 1 and _("WeChat Floating Articles") or _("WeChat Favorites"))
     self:runOnlineTask(_("Sync WeChat articles..."), function()
         self:showBusy(_("Sync WeChat articles..."))
         local ok, res_or_err = pcall(function()
@@ -927,7 +940,7 @@ end
 
 function M:renderWeChatArticleList(list_type, title, articles, old_view)
     local LibraryView = require("weread.ui.library_view")
-    local mode = list_type == 1 and "favorites" or "floating"
+    local mode = mp_mode(list_type)
     local rows = {}
     for _, article in ipairs(articles or {}) do
         local cached_path = Content.article_cached_path(self.settings, nil, article)
@@ -953,7 +966,7 @@ function M:renderWeChatArticleList(list_type, title, articles, old_view)
             if new_mode == "books" then
                 self:showShelfView("books", nil, view)
             else
-                self:showWeChatArticlesPage(new_mode == "favorites" and 1 or 2, nil, view)
+                self:showWeChatArticlesPage(mp_list_type(new_mode), nil, view)
             end
         end,
         on_refresh = function()
