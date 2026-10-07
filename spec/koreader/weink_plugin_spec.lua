@@ -25,7 +25,7 @@ describe("WeRead plugin integration", function()
 
         assert.is_table(plugin)
         assert.equals("weink", plugin.name)
-        assert.equals("Weink", plugin.fullname)
+        assert.equals("WeRead", plugin.fullname)
         assert.is_false(plugin.is_doc_only)
         assert.matches("weink%.koplugin$", plugin.path)
     end)
