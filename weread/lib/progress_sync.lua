@@ -480,7 +480,17 @@ function ProgressSync:_clear_verified(reason)
     end
 end
 
+-- "No WeRead book is open right now" is a normal skip (local books take the
+-- same path): it must not clear the verified state, warn, or raise a dialog.
+local BENIGN_POSITION_REASONS = {
+    document_not_weread = true,
+    no_document = true,
+}
+
 function ProgressSync:_position_unavailable(reason)
+    if BENIGN_POSITION_REASONS[reason] then
+        return
+    end
     local changed = self.state ~= "unsafe" or self.verified_reason ~= reason
     self:_clear_verified(reason)
     self.state = "unsafe"
@@ -1292,6 +1302,12 @@ end
 
 function ProgressSync:on_suspend()
     self.suspended_at = self.now()
+    local book_id = self.detect_book()
+    if not book_id or is_mp_book(book_id) then
+        -- Nothing to snapshot: no WeRead document is open right now. This is a
+        -- normal skip, not a position error.
+        return
+    end
     local position, reason = self:capture_local()
     if not position then self:_position_unavailable(reason) end
     if position and self.local_position

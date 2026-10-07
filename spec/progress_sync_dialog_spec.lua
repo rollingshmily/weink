@@ -33,4 +33,16 @@ contains("has not caught up yet")
 contains("the next sync will retry")
 Dialog.notify("remote_applied", { position = { percent = 45 } })
 contains("within-chapter position is estimated")
+local silent = shown
+Dialog.notify("local_unavailable", { error = "document_not_weread" })
+checks = checks + 1
+assert(shown == silent, "no WeRead document open must stay silent")
+Dialog.notify("local_unavailable", { error = "no_document" })
+checks = checks + 1
+assert(shown == silent, "no open document must stay silent")
+Dialog.notify("local_unavailable", { error = "document_chapter_unmapped" })
+contains("could not be matched")
+Dialog.notify("local_unavailable", { error = "document_unavailable" })
+contains("Could not determine the current reading position")
+contains("document_unavailable")
 print(("progress_sync_dialog_spec: %d checks passed"):format(checks + 1))

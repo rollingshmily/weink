@@ -951,6 +951,27 @@ test("suspend queues movement locally and reconnect flushes it", function()
         "successful reconnect clears pending snapshot")
 end)
 
+test("suspend outside a WeRead document captures nothing and stays silent", function()
+    local f = fixture({
+        bookId = "book",
+        progress = 25,
+        chapterUid = 22,
+        chapterIdx = 2,
+        chapterOffset = 150,
+        updateTime = 10,
+    })
+    f.sync:on_reader_ready()
+    f.drain()
+    eq(f.sync.verified, true, "open WeRead document verifies first")
+    local notifications = #f.notifications
+    f.sync.detect_book = function() return nil end
+    f.sync:on_suspend()
+    eq(#f.notifications, notifications, "no dialog while no WeRead book is open")
+    eq(f.sync.verified, true, "lock outside a document keeps verification")
+    eq(f.values.books.book.pending_upload_position, nil,
+        "lock outside a document queues nothing")
+end)
+
 test("reconnect uploads a queued snapshot in a subprocess", function()
     local built = 0
     local applied = 0

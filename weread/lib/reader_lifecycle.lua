@@ -57,10 +57,6 @@ function M:_removeReaderHighlightTapGuard()
     self._reader_highlight_original_on_tap = nil
 end
 
-function M:onShowWeRead()
-    self:showAccountStatus()
-end
-
 function M:onWeReadSyncProgress()
     local book_id = self:detectWeReadBook()
     if not book_id or WeRead.is_mp_book(book_id) then
@@ -390,6 +386,13 @@ function M:stopReadReport(reason)
 end
 
 function M:onSuspend()
+    -- Capture only makes sense while a WeRead document is open. onResume already
+    -- returns early here; without the same guard, locking the screen on the file
+    -- browser (or a local book) captured nothing, cleared the verified state and
+    -- popped "document_not_weread" at the user.
+    if not self._current_weread_book_id then
+        return
+    end
     if self._cancelUnifiedAnnotationSync then self:_cancelUnifiedAnnotationSync() end
     self._annotation_pending_prefetch = nil
     if self._thought_prefetch_task then

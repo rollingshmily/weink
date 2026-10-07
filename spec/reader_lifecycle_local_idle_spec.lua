@@ -8,8 +8,10 @@ local overlay_setups = 0
 local overlay_teardowns = 0
 local sync_ready = 0
 local sync_close = 0
+local sync_suspend = 0
 local report_ready = 0
 local report_close = 0
+local report_suspend = 0
 local report_stops = {}
 local releases = {}
 local prefetches = 0
@@ -81,6 +83,10 @@ local host = {
         on_close_document = function()
             sync_close = sync_close + 1
         end,
+        on_suspend = function()
+            sync_suspend = sync_suspend + 1
+            error("suspend must not run for local books")
+        end,
         on_page_update = function()
             error("page update must not run for local books")
         end,
@@ -97,6 +103,10 @@ local host = {
         end,
         on_close_document = function()
             report_close = report_close + 1
+        end,
+        on_suspend = function()
+            report_suspend = report_suspend + 1
+            error("read report suspend must not run for local books")
         end,
         on_resume = function()
             error("read report resume must not run for local books")
@@ -154,6 +164,9 @@ expect(#report_stops == 1 and report_stops[1] == "document_not_weread",
 
 host:onPageUpdate()
 host:onResume()
+host:onSuspend()
+expect(sync_suspend == 0, "local suspend does not capture progress")
+expect(report_suspend == 0, "local suspend does not touch the read report")
 
 host:onCloseDocument()
 expect(sync_close == 0, "local close does not capture progress")
