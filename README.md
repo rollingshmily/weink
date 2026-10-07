@@ -1,44 +1,10 @@
-# WeRead KOReader Plugin（e-ink 二开版）
+# Weink
 
-> **本仓库说明**：基于原作者 **[finlater/weread.koplugin](https://github.com/finlater/weread.koplugin)** 的独立二开分支，**不是**上游官方仓库。  
-> 两个仓库自 `942e25c`（2026-08-01）起分道：上游仍保留 web 阅读器链路，本分支只走**墨水屏 APK 契约**（≥1.2.82 起改道，1.2.84 已删除 web 登录与分片实现），并在这条线上独立演进（书架/搜索、下载、进度同步、时长上报、划线想法、文章列表、插件内更新）。  
-> **版本线独立**：本分支自 **2.0.0** 起使用自己的版本号，与上游 1.x 线没有对应关系；移植上游改动时在提交信息与 CHANGELOG 里标注对应的 upstream 版本。  
-> 请优先给原作者点 Star / 提上游问题：https://github.com/finlater/weread.koplugin
+在 KOReader 上阅读微信读书的书籍、公众号文章（收藏 / 浮窗），并同步阅读进度与阅读时长。
 
-> **免责声明**：本项目仅供个人学习和技术研究使用，不得用于商业用途。使用本项目所产生的一切后果（包括但不限于账号封禁、数据丢失等）由使用者自行承担，项目作者与二开维护者概不负责。请遵守微信读书的用户协议和相关法律法规。
+只走**墨水屏 APK 契约**：不使用 web Cookie，也不使用 Skill API Key（≥1.2.82 起改道，1.2.84 起 web 登录与分片实现已从工程中删除）。
 
-在 KOReader 上阅读微信读书书籍、收藏与浮窗中的微信文章，并同步阅读时长和进度的插件。
-
-## 本仓库相对原版的改动
-
-| 改动 | 说明 |
-|------|------|
-| **插件内在线更新** | 菜单 `工具 → 微信读书 → 插件更新`，设备上直接检查 / 下载 / 安装，不必每次用电脑覆盖插件目录 |
-| **国内 GitHub 代理** | 默认 [ghspeedup.com](https://ghspeedup.com/)（worker: `runn.i.ng` 路径模式）；备用 `gh-proxy.com`、`ghfast.top`、直连；失败自动换备用 |
-| **更新通道** | 自动（优先 Release，否则 `main`）/ 仅正式版 / 仅开发分支；可选启动时检查（默认关，12 小时节流） |
-| **自动 Release** | 修改 `_meta.lua` 的 `version` 并推送 `main` 后，GitHub Actions 自动打 tag 并上传 `weread.koplugin-v*.zip` |
-| **扁平书库 + 独立元数据** | 图书目录只放平铺 EPUB；想法/目录/metadata 进可配置的元数据目录（按 `bookId` 分夹）。收藏与浮窗文章单独存在 KOReader 数据目录 `weread/articles/`，不进书库 |
-| **登录与缓存隔离** | 登录态在 `settings/weread.lua`，下载与元数据默认都不在 `plugins/`；覆盖/在线更新插件不会清掉扫码登录和已下载内容 |
-| **大书下载容错** | 章节 XHTML 和资源索引逐章落盘，支持整本下载断点续传；最终 EPUB 在子进程中构建，主界面轮询进度，默认章节并发数为 2（可调 1–4）；支持下载过程中暂停/继续，遇到风控可先停请求 |
-| **从原作者版平滑迁移** | 与上游共用同一配置文件与字段（`AUTH_SCHEMA_VERSION = 1`）；旧「每书一目录」仍可识别；损坏的空 metadata 路径会在启动时尝试修复 |
-
-> 书籍下载、进度同步、阅读时长上报、划线想法、阅读统计和文章列表都走墨水屏登录态；不再使用 web Cookie 或 Skill API Key。
->
-> **2026-08-01 已同步上游 v0.6.0**：书架/书籍详情 UI 重构（双 Tab + SQLite 快照 + 书架内搜索）、下载书脚注、多章节下载、章节预加载、WeRead 快捷菜单、SimpleUI/ZenUI 启动入口、README/截图与 CI/Release 流程更新。
->
-> **2026-08-12 已同步上游 v1.1.0**：加入物理按键导航、磁盘流式下载、页内脚注、想法星标修复、阅读上报菜单刷新、快速切书防崩，以及可绑定的书架/搜索/阅读统计动作；继续保留本仓库的扁平书库、自研更新器与公众号优化。
->
-> **2026-08-13 已同步上游 v1.2.0**：加入本地书划线/想法同步（XPointer 叠加层，不改 EPUB）、整本下载防残缺 EPUB，以及阅读器菜单按文档类型显示；继续跳过上游收藏夹与 OTA 发版流程。
-
-### 相关链接
-
-| 项目 | 链接 |
-|------|------|
-| 原作者仓库 | https://github.com/finlater/weread.koplugin |
-| 本二开仓库 | https://github.com/rollingshmily/weread.koplugin |
-| 本仓库 Releases | https://github.com/rollingshmily/weread.koplugin/releases |
-| [kindlebtcontroller.koplugin](https://github.com/finlater/kindlebtcontroller.koplugin) | 蓝牙手柄/遥控器控制 Kindle |
-| [one.koplugin](https://github.com/finlater/one.koplugin) | KOReader 离线阅读「ONE · 一个」 |
+> **免责声明**：本项目仅供个人学习和技术研究使用，不得用于商业用途。使用本项目所产生的一切后果（包括但不限于账号封禁、数据丢失等）由使用者自行承担，项目作者概不负责。请遵守微信读书的用户协议和相关法律法规。
 
 ## 功能
 
@@ -118,7 +84,7 @@
 
 ## 安装
 
-> ⚠️ 建议使用 **KOReader 2026.03 或更高版本**。旧版本可能无法正常加载或使用插件，例如「工具」菜单中找不到「微信读书」。详见 [#14](https://github.com/finlater/weread.koplugin/issues/14)。
+> ⚠️ 建议使用 **KOReader 2026.03 或更高版本**。旧版本可能无法正常加载插件，例如「工具」菜单里找不到入口。
 
 ### 方式一：Release 包（推荐）
 
@@ -258,12 +224,9 @@ koreader/plugins/weread.koplugin/
 
 `fonts/NotoEmoji-Regular.ttf` 是第三方字体，采用 [SIL Open Font License 1.1](fonts/LICENSE)，不适用本项目的 AGPL-3.0。
 
-Copyright © 2026 finlater and contributors.  
-本仓库二次开发部分 Copyright © 2026 rollingshmily and contributors.
+Copyright © 2026 finlater and contributors（本项目源自其 AGPL-3.0 工程）。  
+Copyright © 2026 rollingshmily and contributors（Weink 部分）。
 
-## 贡献
-
-- **上游功能 / 通用 Bug**：优先到原作者仓库反馈：https://github.com/finlater/weread.koplugin  
-- **本仓库二开改动**（在线更新、代理、Release 流程等）：在本仓库提 issue / PR  
+问题与建议请在本仓库提 issue / PR。  
 
 提交前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
