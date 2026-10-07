@@ -27,7 +27,14 @@ end)
 assert(not ok and store:get("book", "source", "1").revision == "a", "chapter transaction must roll back")
 store:put("book", "download", "1", { next_batch = 2 }, "1")
 store:put("book", "batch", "1:1", { "thought" }, "1")
-store:commitChapter("book", "1", { revision = "b" }, "single", { records = { { pos0 = "single-xp" } } })
+store:write("book", {
+    { kind = "source", key = "1", uid = "1", value = { revision = "b" } },
+    { kind = "download", key = "1" },
+    { kind = "batch", uid = "1" },
+    { kind = "projection", key = store:projectionKey("single", "1"), uid = "1",
+        value = { records = { { pos0 = "single-xp" } } } },
+    { kind = "matching", key = store:projectionKey("single", "1") },
+})
 assert(not store:get("book", "download", "1") and not store:get("book", "batch", "1:1"))
 assert(store:get("book", "projection", "single:1").records[1].pos0 == "single-xp")
 assert(not store:get("book", "projection", "full:1"), "XPointers cannot leak between EPUBs")

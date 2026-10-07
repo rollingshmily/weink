@@ -172,36 +172,6 @@ expect(loaded and loaded.binding.book_id == "7"
         and loaded.records[1].items[1].content == "想法",
     "binding, XPointer, or thought data did not survive migration")
 
-expect(store:replaceSyncCheckpoint("/books/第一炉香.epub", {
-    book_id = "7", catalog_signature = "signature", chapters = {},
-}), "sync checkpoint could not be initialized")
-expect(store:saveSyncChapter("/books/第一炉香.epub", 1, "chapter-1", {
-    underlines = { { range = "1-2" } }, reviews = {}, complete = false,
-}), "partial sync chapter could not be checkpointed")
-expect(store:saveSyncReviewBatch(
-    "/books/第一炉香.epub", "chapter-1", 1,
-    { { range = "1-2", pageReviews = { { review = { content = "想法" } } } } }),
-    "sync review batch could not be checkpointed")
-local checkpoint = store:getSyncCheckpoint("/books/第一炉香.epub")
-expect(checkpoint and checkpoint.catalog_signature == "signature"
-        and checkpoint.chapters[1].chapter_uid == "chapter-1"
-        and checkpoint.chapters[1].review_batches[1].batch_index == 1
-        and checkpoint.chapters[1].review_batches[1].reviews[1]
-            .pageReviews[1].review.content == "想法",
-    "batch-level sync checkpoint could not be resumed")
-expect(store:finishSyncChapter("/books/第一炉香.epub", 1, "chapter-1", {
-    underlines = { { range = "1-2" } },
-    reviews = checkpoint.chapters[1].review_batches[1].reviews,
-    complete = true,
-}), "completed sync chapter could not be committed")
-checkpoint = store:getSyncCheckpoint("/books/第一炉香.epub")
-expect(checkpoint.chapters[1].complete == true
-        and #checkpoint.chapters[1].review_batches == 0,
-    "completed chapter retained temporary review batches")
-expect(store:clearSyncCheckpoint("/books/第一炉香.epub")
-        and store:getSyncCheckpoint("/books/第一炉香.epub") == nil,
-    "completed sync checkpoint was not cleared")
-
 expect(store:clearDocument("/books/第一炉香.epub"),
     "per-book database could not be cleared")
 expect(not files[first_path] and files[second_path],

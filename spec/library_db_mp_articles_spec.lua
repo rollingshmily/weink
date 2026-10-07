@@ -191,12 +191,7 @@ expect(db:cacheMpArticles(1, fav_articles), "refresh favorites failed")
 expect(db:getMpArticles(1)[1].cached_path == nil,
     "list refresh retained a stale article path")
 
--- Test 3: removeMpArticle
-expect(db:removeMpArticle("fav_1") == true, "remove article failed")
-local remaining_favs = db:getMpArticles(1)
-expect(#remaining_favs == 1 and remaining_favs[1].reviewId == "fav_2", "remaining fav mismatch after delete")
-
--- Test 4: eink account fallback in accountKey
+-- Test 3: eink account fallback in accountKey
 current_account = { user_vid = "" }
 local current_eink = { vid = "67890" }
 settings.get = function(_self, key, default)

@@ -276,23 +276,6 @@ function Annotations.buildThoughtPopupItems(range_review, meta)
     return items
 end
 
---- Format a normalized thought item for KOReader's native TextViewer.
-function Annotations.formatThoughtPopupItem(item)
-    if type(item) ~= "table" then
-        return ""
-    end
-
-    local parts = {}
-    local meta = "▸ " .. tostring(item.author or "匿名")
-    local likes = tonumber(item.likes_count) or 0
-    if likes > 0 then
-        meta = meta .. " · ♥ " .. tostring(likes)
-    end
-    parts[#parts + 1] = meta
-    parts[#parts + 1] = tostring(item.content or "")
-    return table.concat(parts, "\n")
-end
-
 --- Remove the marker emitted by pre-1.2.7 EPUB generation.
 -- Only the plugin-owned wr-star span is removed; ordinary literal asterisks in
 -- book text are preserved.

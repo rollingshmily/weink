@@ -108,10 +108,6 @@ function M.totals(hours)
     return reading, tts
 end
 
-function M.is_empty(hours)
-    return #M.normalize(hours) == 0
-end
-
 -- The APK switches to /book/batchUploadProgress once a report spans more than
 -- one hour bucket.
 function M.needs_batch(hours)

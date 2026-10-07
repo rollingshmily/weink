@@ -906,19 +906,6 @@ function ReadReport:_run_pipeline(book_id, opts)
     return outcome
 end
 
--- Inline (blocking) report used when subprocess support is unavailable.
-function ReadReport:report_once()
-    local proceed, book_id, position = self:_precheck()
-    if not proceed then
-        return false
-    end
-    local outcome = self:_run_pipeline(book_id, {
-        allow_renewal = self:_renewal_allowed(),
-        position = position,
-    })
-    return self:_apply_outcome(outcome)
-end
-
 -- ------------------------------------------------------------------
 -- Report context
 -- ------------------------------------------------------------------

@@ -265,50 +265,6 @@ local failure_log = table.concat(logs, "\n")
 expect(failure_log:find("shelf sync failed", 1, true),
     "shelf failure diagnostics were not written")
 
-local review_settings = {
-    get = function(_self, key, default)
-        if key == "eink" then return { vid = "1", access_token = "t" } end
-        return default
-    end,
-}
-local review_client = Client:new(review_settings)
-local ok_review, data_review, err_review
-ok_review, _, err_review = review_client:get_review_comments("")
-expect(not ok_review and err_review == "empty review_id",
-    "review comments rejected an empty review_id")
-
-responses[#responses + 1] = {
-    body = '{"reviewId":"r1","comments":[{"content":"hi"}],"commentsCount":1}',
-    code = 200,
-    headers = { ["content-type"] = "application/json" },
-}
-review_client.json_decode = function(_self, text)
-    return { reviewId = "r1", comments = { { content = "hi" } }, commentsCount = 1, _raw = text }
-end
-local review_request_index = #requests + 1
-ok_review, data_review, err_review = review_client:get_review_comments("r1", 60)
-expect(ok_review and type(data_review) == "table"
-    and data_review.commentsCount == 1 and err_review == nil,
-    "review comments did not return parsed data")
-local review_request = requests[review_request_index]
-local review_url = review_request and review_request.url or ""
-expect(review_url:find("/review/single", 1, true)
-    and (review_url:find("reviewId=r1", 1, true) or (review_request.headers or {}).vid ~= nil),
-    "review comments built the wrong URL: " .. tostring(review_url))
-
-responses[#responses + 1] = { body = "not-json", code = 200 }
-review_client.json_decode = function()
-    error("invalid JSON")
-end
-ok_review, data_review, err_review = review_client:get_review_comments("r2")
-expect(not ok_review and data_review == "not-json" and err_review == "invalid JSON",
-    "review comments did not surface JSON decode failures")
-
-responses[#responses + 1] = { body = "", code = 200 }
-ok_review, _, err_review = review_client:get_review_comments("r3")
-expect(not ok_review and err_review == "empty response",
-    "review comments did not reject an empty body")
-
 local download_path = os.tmpname()
 os.remove(download_path)
 responses[#responses + 1] = {

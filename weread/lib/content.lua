@@ -72,12 +72,6 @@ function Content.book_meta_dir(settings, book_id)
     return tostring(root):gsub("/+$", "") .. "/" .. Content.book_dir_name(book_id)
 end
 
--- Compatibility alias used across the codebase: "cache dir" now means the
--- plugin-owned sidecar directory for a bookId, not the flat EPUB library root.
-function Content.book_cache_dir(settings, book_id)
-    return Content.book_meta_dir(settings, book_id)
-end
-
 local function looks_like_book_id_dir(dir, book_id)
     if type(dir) ~= "string" or dir == "" then
         return false
@@ -1613,24 +1607,6 @@ function Content.fetch_chapters_epub_eink(client, settings, book, chapters, opti
     return path, selected
 end
 
-function Content.fetch_chapters_epub(client, settings, book, chapters, options)
-    options = options or {}
-    return Content.fetch_chapters_epub_eink(client, settings, book, chapters, options)
-end
-
-function Content.fetch_first_chapter(client, settings, book)
-    local chapters = book.chapters or Content.load_catalog_cache(client, settings, book)
-    if not chapters then
-        chapters = Content.fetch_catalog(client, book)
-        Content.save_catalog_cache(client, settings, book, chapters)
-    end
-    local chapter = Content.first_readable_chapter(chapters)
-    if not chapter then
-        error("No readable chapter found")
-    end
-    return Content.fetch_chapter_epub(client, settings, book, chapter)
-end
-
 function Content.extract_article_body(html)
     html = tostring(html or "")
     local body = html:match('<div[^>]*id="js_content"[^>]*>(.-)</div>%s*<script')
@@ -1649,18 +1625,6 @@ function Content.extract_article_body(html)
     body = body:gsub(" src=''", "")
     body = body:gsub("data%-src=", "src=")
     return body
-end
-
-local function normalize_void_elements(html)
-    html = html:gsub("<(br)%s*>", "<%1/>")
-    html = html:gsub("<(hr)%s*>", "<%1/>")
-    html = html:gsub("<(img)(%s[^>]-)>", function(tag, attrs)
-        if not attrs:match("/$") then
-            return "<" .. tag .. attrs .. "/>"
-        end
-        return "<" .. tag .. attrs .. ">"
-    end)
-    return html
 end
 
 -- Map WeChat's editor font names onto the generic families KOReader maps in

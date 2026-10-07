@@ -691,46 +691,6 @@ function Client:get_chapter_reviews(book_id, chapter_uid, ranges)
     return true, { reviews = all_reviews }
 end
 
-function Client:get_review_comments(review_id, count, opts)
-    opts = opts or {}
-    if type(review_id) ~= "string" or review_id == "" then
-        return false, nil, "empty review_id"
-    end
-
-    local comments_count = count or 20
-    local ok, body, code, headers = pcall(function()
-        return self:eink_request("/review/single", {
-            reviewId = review_id,
-            commentsCount = comments_count,
-            commentsDirection = opts.comments_direction or 0,
-            likesCount = opts.likes_count or 0,
-            synckey = opts.synckey or 0,
-        })
-    end)
-    if not ok then
-        return false, nil, tostring(body)
-    end
-    if not code or code < 200 or code >= 300 then
-        return false, nil, "eink /review/single failed: HTTP " .. tostring(code or "unknown")
-    end
-    if not body or body == "" then
-        return false, nil, "empty response"
-    end
-
-    local decode_ok, parsed = pcall(function()
-        return self:decode_http_json(body, {
-            method = "GET",
-            url = "/review/single",
-            code = code,
-            headers = headers,
-        })
-    end)
-    if not decode_ok or type(parsed) ~= "table" then
-        return false, body, "invalid JSON"
-    end
-    return true, parsed, nil
-end
-
 function Client:eink_credentials()
     local eink = self.settings:get("eink", {}) or {}
     local vid = tostring(eink.vid or "")
@@ -1024,27 +984,6 @@ function Client:eink_chapter_underlines(book_id, chapter_uid)
     return data
 end
 
-function Client:eink_bestbookmarks(book_id, chapter_uid)
-    book_id = tostring(book_id or "")
-    local params = { bookId = book_id, chapterUid = 0 }
-    local cache_key = book_id
-    if chapter_uid ~= nil and tostring(chapter_uid) ~= "" and tostring(chapter_uid) ~= "0" then
-        params.chapterUid = chapter_uid
-        cache_key = book_id .. ":" .. tostring(chapter_uid)
-    end
-    self._eink_bestbookmarks_cache = self._eink_bestbookmarks_cache or {}
-    if self._eink_bestbookmarks_cache[cache_key] then
-        return self._eink_bestbookmarks_cache[cache_key]
-    end
-    local data = self:eink_json("/book/bestbookmarks", params)
-    local err = eink_payload_error(data)
-    if err then
-        error("eink bestbookmarks errCode=" .. tostring(err))
-    end
-    self._eink_bestbookmarks_cache[cache_key] = data
-    return data
-end
-
 -- APK NoteService.loadUserBookReviewList: USER_NOTE=11, mine=1, listMode=0.
 -- synckey/hasMore are an incremental cursor, not an offset or a page number.
 function Client:eink_own_reviews(book_id, synckey)
@@ -1203,20 +1142,6 @@ function Client:eink_remove_bookmark(bookmark_id)
     local data = self:eink_post_json("/book/removeBookmark", {
         bookmarkId = bookmark_id,
     })
-    self._eink_bookmark_cache = nil
-    return data
-end
-
-function Client:eink_update_bookmark(bookmark_id, style)
-    bookmark_id = tostring(bookmark_id or "")
-    if bookmark_id == "" then
-        error("eink updateBookmark missing bookmarkId")
-    end
-    local payload = { bookmarkId = bookmark_id }
-    if style ~= nil then
-        payload.style = style
-    end
-    local data = self:eink_post_json("/book/updateBookmark", payload)
     self._eink_bookmark_cache = nil
     return data
 end

@@ -543,60 +543,6 @@ sortBooks = function(books, sort_order)
     return sorted
 end
 
-function M:showShelfPage()
-    local books = self.shelf_books or {}
-    if #books == 0 then
-        self:showInfo(_("Your WeRead shelf is empty."))
-        return
-    end
-    local menu, buildItems
-    local function refresh()
-        menu:switchItemTable(nil, buildItems())
-    end
-    buildItems = function()
-        local items = self:shelfToolbarItems(true, refresh)
-        local sorted = sortBooks(books, self.settings:get("shelf").sort_order)
-        local saved_books = self.settings:get("books", {})
-        local downloaded_cache = {}
-        self._shelf_saved_books = saved_books
-        for _i, book in ipairs(sorted) do
-            if self:bookMatchesFilters(book, saved_books, downloaded_cache) then
-                local book_id = book.book_id or book.bookId
-                local is_cached = self:isBookDownloaded(book, saved_books, downloaded_cache)
-                local right_text
-                if book.readUpdateTime and book.readUpdateTime > 0 then
-                    right_text = os.date("%Y-%m-%d", book.readUpdateTime)
-                elseif book.finishReading == 1 then
-                    right_text = _("Done")
-                else
-                    right_text = ""
-                end
-                local function rightStatus(cached)
-                    if cached then
-                        return right_text ~= "" and "✓  " .. right_text or "✓"
-                    end
-                    return right_text
-                end
-                table.insert(items, {
-                    text = book.title or book.bookId or _("Untitled"),
-                    mandatory = rightStatus(is_cached),
-                    mandatory_func = function()
-                        local current = self._shelf_saved_books and self._shelf_saved_books[book_id]
-                        return rightStatus(self:bookRecordHasDownload(current))
-                    end,
-                    callback = self:safeCallback(book.title or book.bookId or _("Untitled"), function()
-                        self:showBookRecord(book)
-                    end),
-                })
-            end
-        end
-        return items
-    end
-    menu = self:showList(_("WeRead Bookshelf"), buildItems(), _("Your WeRead shelf is empty."))
-    self.shelf_menu = menu
-    self._shelf_refresh = refresh
-end
-
 function M:refreshShelfCacheIndicators()
     self._shelf_saved_books = self.settings:get("books", {})
     if self.shelf_menu and self._shelf_refresh then
@@ -944,14 +890,6 @@ function M:showBookReviews(book)
     end
 
     loadReviews("recommended", nil)
-end
-
-function M:showShelfTabs()
-    self:showShelfView("books")
-end
-
-function M:showWeChatArticlesTab()
-    self:showWeChatArticlesPage(2)
 end
 
 function M:showWeChatArticlesPage(list_type, title, old_view)
@@ -1342,13 +1280,6 @@ function M:openFile(path)
     end
 end
 
-function M:openCachedBook(book)
-    self:openFile(self:getFullBookCachePath(book))
-end
-
--- Read offline from the best available cache. A complete EPUB wins. Otherwise
--- choose the cached chapter nearest to the last known chapter/progress, with a
--- slight preference for the preceding chapter when distances are equal.
 function M:openBookForReading(book)
     local full_path = self:getFullBookCachePath(book)
     if file_exists(full_path) then
@@ -1544,17 +1475,6 @@ function M:confirmAndDownloadChapters(book, chapters, suffix, options)
         },
     }
     UIManager:show(dialog)
-end
-
-function M:pullProgressWithUI(book_id)
-    if not self:requireLogin(true, true) then
-        return
-    end
-    self:runNetworkAction(_("Pull progress"), function()
-        local result = self.client:get_progress(book_id)
-        local progress = result and result.book and result.book.progress or 0
-        return T(_("Remote progress: %1%"), tostring(progress))
-    end)
 end
 
 function M:showSearch()

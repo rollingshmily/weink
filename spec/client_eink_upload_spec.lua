@@ -67,14 +67,6 @@ end
 
 do
     local client, posted = make_client()
-    client:eink_update_bookmark("bm-1", 2)
-    expect(posted[1].path == "/book/updateBookmark", "update posts /book/updateBookmark")
-    expect(posted[1].payload.bookmarkId == "bm-1" and posted[1].payload.style == 2,
-        "update sends bookmarkId and style")
-end
-
-do
-    local client, posted = make_client()
     client:eink_add_review({
         bookId = "465030",
         chapterUid = 1395,

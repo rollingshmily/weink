@@ -178,20 +178,6 @@ function Store.documentKey(path)
         tostring(attr.size), tostring(attr.modification), tostring(engine) }, "\n"))
 end
 
-function Store:commitChapter(book_id, uid, source, document_key, projection)
-    local changes = {
-        { kind = "source", key = uid, uid = uid, value = source },
-        { kind = "download", key = uid },
-        { kind = "batch", uid = uid },
-    }
-    if document_key then
-        local key = self:projectionKey(document_key, uid)
-        changes[#changes + 1] = { kind = "projection", key = key, uid = uid, value = projection }
-        changes[#changes + 1] = { kind = "matching", key = key }
-    end
-    self:write(book_id, changes)
-end
-
 -- Legacy databases remain intact until migration is verified. A migration is
 -- idempotent and never overwrites newer shared chapter data from another file.
 function Store:importLegacy(book_id, path, document_key)

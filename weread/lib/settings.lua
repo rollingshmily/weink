@@ -562,14 +562,6 @@ function Settings:update_auth(credentials, options)
     return changed
 end
 
-function Settings:get_all()
-    local all = {}
-    for key in pairs(defaults) do
-        all[key] = self:get(key)
-    end
-    return all
-end
-
 function Settings:get_download_dir()
     return self.cache_dir
 end

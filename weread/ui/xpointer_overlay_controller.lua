@@ -230,10 +230,6 @@ function M:syncExternalAnnotations(options)
     return self:startUnifiedAnnotationSync(options)
 end
 
-function M:clearExternalAnnotations(touchmenu_instance)
-    return self:clearUnifiedAnnotationProjections(touchmenu_instance)
-end
-
 function M:getXPointerOverlayPrototypeMenuItems()
     return self:getUnifiedAnnotationMenuItems()
 end

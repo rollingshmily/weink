@@ -638,14 +638,4 @@ function Footnotes.has_converted(stats)
         and ((tonumber(stats.converted) or 0) + (tonumber(stats.image_notes) or 0) > 0)
 end
 
-function Footnotes.log_stats(stats)
-    logger.info("processed:",
-        "candidates=", tostring(stats and stats.candidates or 0),
-        "converted=", tostring(stats and stats.converted or 0),
-        "images=", tostring(stats and stats.image_notes or 0),
-        "backlinks=", tostring(stats and stats.backlinks or 0),
-        "removed_note_blocks=", tostring(stats and stats.removed_note_blocks or 0),
-        "unresolved=", tostring(stats and stats.unresolved or 0))
-end
-
 return Footnotes

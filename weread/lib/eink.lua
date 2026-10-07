@@ -465,35 +465,6 @@ function Eink.txt_to_xhtml(text)
         .. "<body>\n" .. table.concat(parts, "\n") .. "\n</body></html>"
 end
 
-function Eink.payload_kind(body)
-    if type(body) ~= "string" then
-        return type(body)
-    end
-    if body == "" then
-        return "empty"
-    end
-    local b1, b2 = body:byte(1, 2)
-    if b1 == 0x50 and b2 == 0x4b then
-        return "zip"
-    end
-    if b1 == 0x1f and b2 == 0x8b then
-        return "gzip"
-    end
-    if b1 == 0x78 then
-        return "zlib"
-    end
-    if body:find("\0", 1, true) then
-        return "binary:" .. tostring(#body)
-    end
-    if body:match("^%s*{") then
-        return "json"
-    end
-    if looks_like_html(body) then
-        return "html:" .. tostring(#body)
-    end
-    return "text:" .. tostring(#body)
-end
-
 function Eink.to_chapter_xhtml(body)
     if type(body) ~= "string" or body == "" then
         return nil

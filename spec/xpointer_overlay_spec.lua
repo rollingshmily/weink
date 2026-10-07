@@ -104,7 +104,7 @@ expect(position_calls < 50,
 expect(comparisons < 25,
     "ordered page lookup used too many interval comparisons")
 
-overlay:resetLayout()
+overlay:invalidate()
 overlay:paintTo({}, 0, 0)
 expect(box_calls == 2, "layout reset did not invalidate screen box cache")
 

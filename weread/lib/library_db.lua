@@ -457,20 +457,6 @@ function LibraryDB:getMpArticles(list_type)
     return ok and articles or nil
 end
 
-function LibraryDB:removeMpArticle(review_id)
-    if not review_id then return false end
-    local db = self:open()
-    if not db then return false end
-    local stmt
-    local ok = pcall(function()
-        stmt = db:prepare("DELETE FROM mp_articles WHERE review_id=?")
-        stmt:reset():bind(tostring(review_id)):step()
-    end)
-    close_statement(stmt)
-    pcall(function() db:close() end)
-    return ok
-end
-
 function LibraryDB:updateMpArticleCachePath(review_id, path)
     if not review_id then return false end
     local db = self:open()

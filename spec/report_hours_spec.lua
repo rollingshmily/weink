@@ -73,7 +73,7 @@ end
 do
     local ledger = Hours.accumulate({}, 0, { now = 0 })
     assert_eq(#ledger, 0, "zero delta creates nothing")
-    assert_eq(Hours.is_empty(ledger), true, "empty ledger")
+    assert_eq(#ledger, 0, "empty ledger")
     ledger = Hours.accumulate(ledger, -5, { now = 0 })
     assert_eq(#ledger, 0, "negative delta creates nothing")
 end

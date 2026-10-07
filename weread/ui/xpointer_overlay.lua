@@ -59,11 +59,6 @@ function Overlay:invalidate()
     self.visible = {}
 end
 
-function Overlay:resetLayout()
-    self._ordered_prefix_ends = nil
-    self:invalidate()
-end
-
 function Overlay:_orderedStart(document, page_start)
     if not self.records_ordered or not page_start
         or type(document.compareXPointers) ~= "function" then return 1 end
