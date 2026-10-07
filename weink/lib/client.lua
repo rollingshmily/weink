@@ -2,7 +2,7 @@ local ltn12 = require("ltn12")
 local logger = require("weink.lib.logger")
 local socketutil = require("socketutil")
 local http = require("socket.http")
-local WeRead = require("weink.lib.protocol")
+local Protocol = require("weink.lib.protocol")
 local Eink = require("weink.lib.eink")
 
 local ok_json, json = pcall(require, "json")
@@ -210,7 +210,7 @@ function Client:request(opts)
     local body = opts.body
     local response
     local headers = {
-        ["User-Agent"] = WeRead.USER_AGENT,
+        ["User-Agent"] = Protocol.USER_AGENT,
         ["Accept"] = "application/json, text/plain, */*"
     }
 
@@ -824,7 +824,7 @@ function Client:eink_request(path, params)
     end
     local query = {}
     for key, value in pairs(params or {}) do
-        query[#query + 1] = WeRead.urlencode(tostring(key)) .. "=" .. WeRead.urlencode(tostring(value))
+        query[#query + 1] = Protocol.urlencode(tostring(key)) .. "=" .. Protocol.urlencode(tostring(value))
     end
     table.sort(query)
     local url = "https://i.weread.qq.com" .. path
@@ -1024,8 +1024,8 @@ function Client:eink_download_to_file(book_id, chapters_param, path)
             error("eink credentials are missing")
         end
         local query = {
-            "bookId=" .. WeRead.urlencode(tostring(book_id)),
-            "chapters=" .. WeRead.urlencode(tostring(chapters_param)),
+            "bookId=" .. Protocol.urlencode(tostring(book_id)),
+            "chapters=" .. Protocol.urlencode(tostring(chapters_param)),
         }
         table.sort(query)
         local url = "https://i.weread.qq.com/book/chapterdownload?" .. table.concat(query, "&")

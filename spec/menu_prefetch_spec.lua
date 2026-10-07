@@ -96,7 +96,7 @@ local host = {
 for key, value in pairs(Menu) do host[key] = value end
 
 host:onDispatcherRegisterActions()
-expect(registered.weread_show == nil,
+expect(registered.weink_show == nil,
     "generic WeRead shortcut action is no longer registered")
 local sync_action = registered.weink_sync_progress
 expect(sync_action and sync_action.event == "WeinkSyncProgress"
@@ -139,7 +139,7 @@ local general_actions = {
         title = "Weink · Search",
     },
 }
-expect(registered.weread_local_bookshelf == nil,
+expect(registered.weink_local_bookshelf == nil,
     "fork does not expose the skipped upstream local-bookshelf action")
 for name, expected in pairs(general_actions) do
     local action = registered[name]
@@ -175,11 +175,11 @@ expect(not menu_has(local_reader_items, "Sync progress now")
     "local document menu retained WeRead-only book actions")
 
 host.detectWeinkBook = function() return "book-1" end
-local weread_reader_items = host:getMainMenuItems()
-expect(menu_has(weread_reader_items, "Sync progress now")
-        and menu_has(weread_reader_items, "Book details")
-        and not menu_has(weread_reader_items, "Download thoughts for this chapter")
-        and menu_has(weread_reader_items, "Underlines and thoughts management"),
+local weink_reader_items = host:getMainMenuItems()
+expect(menu_has(weink_reader_items, "Sync progress now")
+        and menu_has(weink_reader_items, "Book details")
+        and not menu_has(weink_reader_items, "Download thoughts for this chapter")
+        and menu_has(weink_reader_items, "Underlines and thoughts management"),
     "WeRead book menu retained the local-book annotation submenu")
 
 host.detectWeinkBook = function() return "mp-book" end

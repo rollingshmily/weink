@@ -85,7 +85,7 @@ function ProgressSyncDialog.notify(code, data)
             tostring(data.error or ""))
     elseif code == "local_unavailable" then
         local reason = tostring(data.error or "")
-        if reason == "document_not_weread" or reason == "no_document" then
+        if reason == "document_not_weink" or reason == "no_document" then
             -- No WeRead document is open: a normal skip, never a user-facing error.
             return
         elseif reason == "document_chapter_unmapped" or reason == "document_chapter_ambiguous" then

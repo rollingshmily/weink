@@ -44,7 +44,7 @@ assert(shown.timeout == 2, "answered-dialog notices fade out by themselves")
 Dialog.notify("remote_applied", { position = { percent = 45 } })
 contains("within-chapter position is estimated")
 local silent = shown
-Dialog.notify("local_unavailable", { error = "document_not_weread" })
+Dialog.notify("local_unavailable", { error = "document_not_weink" })
 checks = checks + 1
 assert(shown == silent, "no WeRead document open must stay silent")
 Dialog.notify("local_unavailable", { error = "no_document" })

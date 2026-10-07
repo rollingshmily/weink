@@ -69,7 +69,7 @@ do
     local item = { text = "你好世界", pos0 = "xpointer" }
     local _, kind = Upload.upload_added(plugin, item)
     expect(kind == "bookmark", "stored original uploads a bookmark")
-    expect(item.weread.range == "3-7", "stored original yields the HTML range")
+    expect(item.weink.range == "3-7", "stored original yields the HTML range")
     expect(zip_calls == 0, "stored original does not download chapter zip")
 end
 
@@ -144,7 +144,7 @@ do
         "bookmark payload uses APK underline type and markText")
     expect(posted[1].bookVersion == 0 and posted[1].style == 0,
         "bookmark payload sends live-proved bookVersion and style")
-    expect(item.weread.bookmarkId == "bm-9", "bookmarkId is stored on the local item")
+    expect(item.weink.bookmarkId == "bm-9", "bookmarkId is stored on the local item")
 end
 
 do
@@ -179,7 +179,7 @@ do
     local item = {
         text = "你好世界",
         note = "旧想法",
-        weread = { reviewId = "rv-9", bookId = "465030" },
+        weink = { reviewId = "rv-9", bookId = "465030" },
     }
     local _, kind = Upload.upload_removed(plugin, item)
     expect(kind == "review", "thought delete uses /review/delete")

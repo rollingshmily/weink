@@ -24,7 +24,7 @@ package.preload["weink.lib.crypto"] = function()
     }
 end
 
-local WeRead = require("weink.lib.protocol")
+local Protocol = require("weink.lib.protocol")
 local checks = 0
 local function eq(got, want, label)
     checks = checks + 1
@@ -35,12 +35,12 @@ end
 
 local cover_base = "https://cdn.weread.qq.com/weread/cover/52/Example/"
 for _, token in ipairs({ "s", "t6", "t12", "t9" }) do
-    eq(WeRead.normalize_cover_url(cover_base .. token .. "_Example.jpg"),
+    eq(Protocol.normalize_cover_url(cover_base .. token .. "_Example.jpg"),
         cover_base .. "t9_Example.jpg", token .. " cover normalization")
 end
-eq(WeRead.normalize_cover_url(nil), nil, "nil cover preserved")
-eq(WeRead.normalize_cover_url(""), "", "empty cover preserved")
-eq(WeRead.normalize_cover_url(false), false, "non-string cover preserved")
+eq(Protocol.normalize_cover_url(nil), nil, "nil cover preserved")
+eq(Protocol.normalize_cover_url(""), "", "empty cover preserved")
+eq(Protocol.normalize_cover_url(false), false, "non-string cover preserved")
 for _, url in ipairs({
     "https://example.com/cover.jpg",
     "https://example.com/books_Example.jpg",
@@ -48,7 +48,7 @@ for _, url in ipairs({
     "https://example.com/t_Example.jpg",
     "https://example.com/twelve_Example.jpg",
 }) do
-    eq(WeRead.normalize_cover_url(url), url, "unrelated URL preserved: " .. url)
+    eq(Protocol.normalize_cover_url(url), url, "unrelated URL preserved: " .. url)
 end
 
 print(("protocol_cover_spec: %d checks"):format(checks))

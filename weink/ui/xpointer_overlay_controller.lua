@@ -10,8 +10,8 @@ local _ = PluginUtil.tr
 local T = PluginUtil.T
 
 local M = {}
-local VIEW_MODULE = "weread_xpointer_overlay"
-local TOUCH_ZONE = "weread_xpointer_overlay_tap"
+local VIEW_MODULE = "weink_xpointer_overlay"
+local TOUCH_ZONE = "weink_xpointer_overlay_tap"
 
 local function current_file(plugin)
     return plugin.ui and plugin.ui.document and plugin.ui.document.file

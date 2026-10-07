@@ -1,7 +1,7 @@
 -- End-of-book navigation dialog integration.
 local EndOfBookDialog = require("weink.ui.end_of_book_dialog")
 local PluginUtil = require("weink.lib.plugin_util")
-local WeRead = require("weink.lib.protocol")
+local Protocol = require("weink.lib.protocol")
 
 local _ = PluginUtil.tr
 
@@ -37,7 +37,7 @@ function M:showEndOfBookDialog(book_id)
 
     local books = self.settings:get("books", {})
     local book = book_id and (books[tostring(book_id)] or books[book_id]) or nil
-    local is_regular_weink_book = book ~= nil and not WeRead.is_mp_book(book_id)
+    local is_regular_weink_book = book ~= nil and not Protocol.is_mp_book(book_id)
     local chapters = is_regular_weink_book and self:ensureChaptersLoaded(book) or nil
 
     local current_idx, is_full_book

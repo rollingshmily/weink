@@ -159,7 +159,7 @@ end
 -- the work is done. The hook is keyed in settings and can be deleted in a
 -- later release without leaving anything behind.
 local RENAME_MIGRATION_KEY = "rename_migration"
-local RENAME_MIGRATION_VALUE = "weink"
+local RENAME_MIGRATION_VALUE = "weink2"
 local LEGACY_DATA_DIRNAME = "weread"
 
 local function repoint(value, old_prefix, new_prefix)
@@ -221,10 +221,33 @@ function Migrations.run_rename(settings)
                 log_error(moved_or_err))
         end
     end
+    -- Book sidecar markers changed name too (<book>.weread -> <book>.weink,
+    -- same for the *.epub.weread badges). Convert the ones already on disk so
+    -- downloaded books stay recognised instead of turning into local books.
+    local markers = 0
+    local function convert_dir(dir)
+        if not lfs or type(dir) ~= "string" or dir == "" then return end
+        local ok, iter, dir_obj = pcall(lfs.dir, dir)
+        if not ok then return end
+        for name in iter, dir_obj do
+            if type(name) == "string" then
+                local base = name:match("^(.-)%.weread$")
+                local marker = base and base ~= "" and join(dir, base .. ".weink") or nil
+                if marker and not is_file(marker)
+                    and os.rename(join(dir, name), marker) then
+                    markers = markers + 1
+                end
+            end
+        end
+    end
+    convert_dir(settings.cache_dir)
+    convert_dir(settings.meta_dir)
     settings.store:saveSetting(RENAME_MIGRATION_KEY, RENAME_MIGRATION_VALUE)
     settings.store:flush()
-    logger.info("rename migration done:", "repointed_paths=", tostring(changed))
-    return changed
+    logger.info("rename migration done:",
+        "repointed_paths=", tostring(changed),
+        "markers=", tostring(markers))
+    return changed + markers
 end
 
 function Migrations.run(settings, client)

@@ -9,13 +9,13 @@ local logger = require("weink.lib.logger").scoped("EinkQR")
 local QRMessage = require("ui/widget/qrmessage")
 local T = require("ffi/util").template
 local UIManager = require("ui/uimanager")
-local WeRead = require("weink.lib.protocol")
+local Protocol = require("weink.lib.protocol")
 
 local function _(text)
     return I18n.tr(text)
 end
 
-local WEREAD_BASE = "https://i.weread.qq.com"
+local WEINK_BASE = "https://i.weread.qq.com"
 local WX_APPID = "wxab9b71ad2b90ff34"
 local WX_SCOPE = "snsapi_userinfo,snsapi_friend,snsapi_favorites"
 local QRCONNECT_URL = "https://open.weixin.qq.com/connect/sdk/qrconnect"
@@ -96,7 +96,7 @@ end
 
 function EinkQRLogin:_begin_protocol()
     local ticket = self:_request_json(
-        WEREAD_BASE .. "/wxticket?nonceStr=weread",
+        WEINK_BASE .. "/wxticket?nonceStr=weink",
         {
             method = "GET",
             timeout = { 15, 25 },
@@ -111,11 +111,11 @@ function EinkQRLogin:_begin_protocol()
         error("eink ticket missing signature")
     end
     local query = {
-        "appid=" .. WeRead.urlencode(WX_APPID),
-        "noncestr=" .. WeRead.urlencode("weread"),
-        "timestamp=" .. WeRead.urlencode(tostring(timestamp)),
-        "scope=" .. WeRead.urlencode(WX_SCOPE),
-        "signature=" .. WeRead.urlencode(sig),
+        "appid=" .. Protocol.urlencode(WX_APPID),
+        "noncestr=" .. Protocol.urlencode("weink"),
+        "timestamp=" .. Protocol.urlencode(tostring(timestamp)),
+        "scope=" .. Protocol.urlencode(WX_SCOPE),
+        "signature=" .. Protocol.urlencode(sig),
     }
     local qr = self:_request_json(
         QRCONNECT_URL .. "?" .. table.concat(query, "&"),
@@ -170,7 +170,7 @@ function EinkQRLogin:_exchange(wx_code, device_id)
     local headers = eink_headers()
     headers["Content-Type"] = "application/json; charset=UTF-8"
     local payload = self:_request_json(
-        WEREAD_BASE .. "/login",
+        WEINK_BASE .. "/login",
         {
             method = "POST",
             body = self.client:json_encode(body),
@@ -274,7 +274,7 @@ function EinkQRLogin:_show_qr(uuid, generation)
     local qr_size = math.floor(math.min(screen_width, screen_height) * 0.72)
     local dialog
     dialog = QRMessage:new{
-        text = CONFIRM_URL .. "?uuid=" .. WeRead.urlencode(uuid),
+        text = CONFIRM_URL .. "?uuid=" .. Protocol.urlencode(uuid),
         width = qr_size,
         height = qr_size,
         dismiss_callback = function()
@@ -308,10 +308,10 @@ function EinkQRLogin:_poll(uuid, generation)
     end
     local query = {
         "f=json",
-        "uuid=" .. WeRead.urlencode(uuid),
+        "uuid=" .. Protocol.urlencode(uuid),
     }
     if self.poll_last ~= nil then
-        query[#query + 1] = "last=" .. WeRead.urlencode(tostring(self.poll_last))
+        query[#query + 1] = "last=" .. Protocol.urlencode(tostring(self.poll_last))
     end
     local ok, text = pcall(function()
         local body, http_code = self.client:request({
@@ -376,7 +376,7 @@ end
 -- exported for specs
 EinkQRLogin._login_signature = login_signature
 EinkQRLogin._confirm_url = function(uuid)
-    return CONFIRM_URL .. "?uuid=" .. WeRead.urlencode(uuid)
+    return CONFIRM_URL .. "?uuid=" .. Protocol.urlencode(uuid)
 end
 
 return EinkQRLogin

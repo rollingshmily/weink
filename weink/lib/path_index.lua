@@ -1,5 +1,5 @@
 -- Reverse path -> bookId map. Built in FileManager; Reader only dofiles this
--- tiny sidecar so local books never open weread.lua or the book table.
+-- tiny sidecar so local books never open the plugin settings or the book table.
 
 local M = {
     map = {},
@@ -71,7 +71,7 @@ function M.marker_path(file_path)
     if type(file_path) ~= "string" or file_path == "" then
         return nil
     end
-    return file_path .. ".weread"
+    return file_path .. ".weink"
 end
 
 function M.write_marker(file_path, book_id)
@@ -103,7 +103,14 @@ function M.read_marker(file_path)
     end
     local file = io.open(marker, "r")
     if not file then
-        return nil
+        -- Marker written before the rename: adopt it under the new name so an
+        -- already downloaded book keeps being recognised as a WeRead book.
+        if os.rename(file_path .. ".weread", marker) then
+            file = io.open(marker, "r")
+        end
+        if not file then
+            return nil
+        end
     end
     local book_id = file:read("*l")
     file:close()
@@ -175,7 +182,17 @@ function M.adopt_markers(dir)
     end
     local adopted = 0
     for name in iter, dir_obj do
-        local epub_name = type(name) == "string" and name:match("^(.*%.epub)%.weread$")
+        local epub_name = type(name) == "string" and name:match("^(.*%.epub)%.weink$")
+        if not epub_name and type(name) == "string" then
+            local legacy_epub = name:match("^(.*%.epub)%.weread$")
+            if legacy_epub then
+                local base = dir:gsub("/+$", "")
+                if os.rename(base .. "/" .. name,
+                    base .. "/" .. legacy_epub .. ".epub.weink") then
+                    epub_name = legacy_epub
+                end
+            end
+        end
         if epub_name then
             local epub = dir:gsub("/+$", "") .. "/" .. epub_name
             local book_id = M.read_marker(epub)

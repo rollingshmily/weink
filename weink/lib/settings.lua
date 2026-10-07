@@ -306,7 +306,7 @@ function Settings:new()
         PathIndex.rebuild(obj.store:readSetting("books", {}))
     end
     -- Sidecar scan is cheap; skip only the full books-table rebuild.
-    -- Renamed EPUBs keep badges if *.epub.weread is still next to the file.
+    -- Renamed EPUBs keep badges if *.epub.weink is still next to the file.
     PathIndex.adopt_markers(obj.cache_dir)
     return setmetatable(obj, self)
 end

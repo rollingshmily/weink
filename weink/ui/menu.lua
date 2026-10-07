@@ -7,7 +7,7 @@ local InfoMessage = require("ui/widget/infomessage")
 local logger = require("weink.lib.logger")
 local UIManager = require("ui/uimanager")
 local ThoughtPopup = require("weink.ui.thought_popup")
-local WeRead = require("weink.lib.protocol")
+local Protocol = require("weink.lib.protocol")
 
 local PluginUtil = require("weink.lib.plugin_util")
 local _ = PluginUtil.tr
@@ -224,7 +224,7 @@ function M:getMainMenuItems()
         local book_id = self:detectWeinkBook()
         local reader_items = {}
         if book_id ~= nil then
-            if not WeRead.is_mp_book(book_id) then
+            if not Protocol.is_mp_book(book_id) then
                 reader_items[#reader_items + 1] = {
                     text = _("Sync progress now"),
                     keep_menu_open = true,

@@ -14,7 +14,7 @@ Usage:
     # Test with a fresh x-wr-ticket (copy from browser DevTools):
     python3 scripts/verify_mp_articles.py --cookie "..." --ticket "t03tserver..."
 
-Or set WEREAD_COOKIE env var.
+Or set WEINK_COOKIE env var.
 """
 
 import argparse
@@ -51,13 +51,13 @@ def http_get(url, cookie, extra_headers=None):
 
 def main():
     parser = argparse.ArgumentParser(description="Verify WeRead MP article flow")
-    parser.add_argument("--cookie", default=os.environ.get("WEREAD_COOKIE", ""))
+    parser.add_argument("--cookie", default=os.environ.get("WEINK_COOKIE", ""))
     parser.add_argument("--ticket", default="", help="Fresh x-wr-ticket from browser")
     parser.add_argument("--book-id", default=BOOK_ID)
     args = parser.parse_args()
 
     if not args.cookie:
-        print("ERROR: provide --cookie or set WEREAD_COOKIE", file=sys.stderr)
+        print("ERROR: provide --cookie or set WEINK_COOKIE", file=sys.stderr)
         sys.exit(1)
 
     articles_url = (

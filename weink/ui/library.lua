@@ -10,7 +10,7 @@ local logger = require("weink.lib.logger")
 local ProgressbarDialog = require("ui/widget/progressbardialog")
 local TextViewer = require("ui/widget/textviewer")
 local UIManager = require("ui/uimanager")
-local WeRead = require("weink.lib.protocol")
+local Protocol = require("weink.lib.protocol")
 
 local PluginUtil = require("weink.lib.plugin_util")
 local _ = PluginUtil.tr
@@ -92,7 +92,7 @@ function M:showBookshelf()
     self:refreshBookshelf()
 end
 
-function M:closeWeReadUI()
+function M:closeWeinkUI()
     -- Close from the topmost view down so no full-screen WeRead widget remains
     -- in UIManager's window stack after a document is opened.
     local seen = {}
@@ -120,7 +120,7 @@ function M:onWeinkAccountChanged()
     if self._cancelUnifiedAnnotationSync then
         self:_cancelUnifiedAnnotationSync()
     end
-    self:closeWeReadUI()
+    self:closeWeinkUI()
     self.shelf_regular = nil
     self.shelf_mp = nil
     self.shelf_books = nil
@@ -142,7 +142,7 @@ function M:applyShelfSnapshot(all_books)
     self.shelf_regular = {}
     self.shelf_mp = {}
     for _i, book in ipairs(all_books or {}) do
-        if WeRead.is_mp_book(book.book_id or book.bookId) then
+        if Protocol.is_mp_book(book.book_id or book.bookId) then
             table.insert(self.shelf_mp, book)
         else
             table.insert(self.shelf_regular, book)
@@ -176,7 +176,7 @@ function M:refreshBookshelf(old_view, view_options)
         self.shelf_regular = {}
         self.shelf_mp = {}
         for _i, book in ipairs(all_books) do
-            if WeRead.is_mp_book(book.bookId) then
+            if Protocol.is_mp_book(book.bookId) then
                 table.insert(self.shelf_mp, book)
             else
                 table.insert(self.shelf_regular, book)
@@ -1285,7 +1285,7 @@ function M:openFile(path)
         self:showInfo(_("No cached file."))
         return
     end
-    self:closeWeReadUI()
+    self:closeWeinkUI()
     if self.ui.document then
         self.ui:switchDocument(path)
     else

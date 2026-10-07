@@ -1,7 +1,7 @@
 local AntiReplay = require("weink.lib.anti_replay")
 local Content = require("weink.lib.content")
 local ReportHours = require("weink.lib.report_hours")
-local WeRead = require("weink.lib.protocol")
+local Protocol = require("weink.lib.protocol")
 
 local logger = require("weink.lib.logger").scoped("ReadReport")
 local PluginUtil = require("weink.lib.plugin_util")
@@ -244,7 +244,7 @@ function ReadReport:resolve_target()
             type(book) == "table" and book.title or detected_id,
             "current_document"
     end
-    return nil, nil, "document_not_weread"
+    return nil, nil, "document_not_weink"
 end
 
 function ReadReport:_set_error(err, kind, prefix)
@@ -931,7 +931,7 @@ end
 -- record. Performs network I/O; never persists settings.
 function ReadReport:_build_context(book_id, force, book)
     book.book_id = book.book_id or book.bookId or book_id
-    book.reader_url = WeRead.reader_url(book_id)
+    book.reader_url = Protocol.reader_url(book_id)
 
     -- BookStore never persists the chapter list, so a freshly loaded record
     -- has no chapters. Restore them from the on-disk catalog cache first;

@@ -24,7 +24,7 @@ local Footnotes = require("weink.lib.footnotes")
 local I18n = require("weink.lib.i18n")
 local StandbyGuard = require("weink.lib.standby_guard")
 local Thoughts = require("weink.lib.thoughts")
-local WeRead = require("weink.lib.protocol")
+local Protocol = require("weink.lib.protocol")
 local WorkerSettings = require("weink.lib.worker_settings")
 local Checkpoint = require("weink.lib.download_checkpoint")
 local ok_ffiutil, ffiutil = pcall(require, "ffi/util")
@@ -576,7 +576,7 @@ end
 
 function Downloader:_startEpubBuild(dl)
     local cover_data
-    local cover_url = WeRead.normalize_cover_url(dl.book.cover)
+    local cover_url = Protocol.normalize_cover_url(dl.book.cover)
     if cover_url and cover_url ~= "" then
         pcall(function() cover_data = self.client:get_binary(cover_url) end)
     end
@@ -1794,7 +1794,7 @@ function Downloader:_step(dl)
                 return paths[tostring(dl.selected[1].chapterUid or 1)], paths
             end
             local cover_data
-            local cover_url = WeRead.normalize_cover_url(dl.book.cover)
+            local cover_url = Protocol.normalize_cover_url(dl.book.cover)
             if cover_url and cover_url ~= "" then
                 pcall(function() cover_data = self.client:get_binary(cover_url) end)
             end
@@ -1870,7 +1870,7 @@ function Downloader:_step(dl)
             end
             record.cache_dir = dl.book.cache_dir or record.cache_dir
             record.reader_url = record.reader_url
-                or dl.book.reader_url or WeRead.reader_url(book_id)
+                or dl.book.reader_url or Protocol.reader_url(book_id)
             dl.book.reader_url = dl.book.reader_url or record.reader_url
             books[book_id] = record
             self.settings:set("books", books)

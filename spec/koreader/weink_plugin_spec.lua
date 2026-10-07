@@ -65,7 +65,7 @@ describe("WeRead plugin integration", function()
     end)
 
     it("loads its startup module through the weread namespace", function()
-        -- Client, settings and menu load only when the user opens WeRead.
+        -- Client, settings and menu load only when the user opens Protocol.
         -- PluginLoader discovery itself requires path_index from main.lua.
         assert.is_table(package.loaded["weink.lib.path_index"])
         assert.is_nil(package.loaded["lib.path_index"])

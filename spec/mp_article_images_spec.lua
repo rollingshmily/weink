@@ -80,7 +80,7 @@ expect(#progress == 2 and progress[1][1] == 1 and progress[1][2] == 2
         and progress[2][1] == 2 and progress[2][2] == 2,
     "MP image progress did not count unique URLs")
 
-local relative = ".weread-article-" .. string.rep("a", 24) .. "-assets/img-0001.png"
+local relative = ".weink-article-" .. string.rep("a", 24) .. "-assets/img-0001.png"
 local first_reference = rewritten:find(relative, 1, true)
 local second_reference = first_reference
     and rewritten:find(relative, first_reference + #relative, true)
@@ -101,7 +101,7 @@ local image = assert(io.open(article_dir .. "/" .. relative, "rb"))
 expect(image:read(8) == "\137PNG\r\n\026\n",
     "streamed MP image bytes were corrupted")
 image:close()
-expect(io.open(article_dir .. "/.weread-article-" .. string.rep("a", 24)
+expect(io.open(article_dir .. "/.weink-article-" .. string.rep("a", 24)
         .. "-assets/img-0001.download", "rb")
         == nil,
     "successful MP image download left an incoming file")

@@ -159,7 +159,7 @@ expect(unified_ready == 0, "local open does not run annotation ready")
 expect(thought_db_opens == 0, "local open does not open thought DB")
 expect(#releases == 1 and releases[1] == "not_weread",
     "local open abandons any leftover progress-sync session")
-expect(#report_stops == 1 and report_stops[1] == "document_not_weread",
+expect(#report_stops == 1 and report_stops[1] == "document_not_weink",
     "local open stops leftover read report")
 
 host:onPageUpdate()

@@ -25,8 +25,8 @@ def main():
         if '=' in line and not line.startswith('#'):
             key, value = line.split('=', 1)
             env[key] = value.strip().strip('\"\'')
-    vid = env['WEREAD_EINK_VID']
-    token = env['WEREAD_EINK_ACCESS_TOKEN']
+    vid = env['WEINK_EINK_VID']
+    token = env['WEINK_EINK_ACCESS_TOKEN']
 
     def request(path, params=None, payload=None):
         headers = {'vid': vid, 'accessToken': token, 'appver': '2.1.2.10245900',
@@ -48,9 +48,9 @@ def main():
 
     stamp = int(time.time() * 1000)
     nonce = random.randint(0, 999)
-    device = env['WEREAD_EINK_DEVICE_ID']
+    device = env['WEINK_EINK_DEVICE_ID']
     login = request('/login', payload={
-        'deviceId': device, 'refreshToken': env['WEREAD_EINK_REFRESH_TOKEN'],
+        'deviceId': device, 'refreshToken': env['WEINK_EINK_REFRESH_TOKEN'],
         'timestamp': stamp, 'random': nonce, 'deviceType': 3,
         'signature': hashlib.sha256(f'{stamp}{device}{nonce}'.encode()).hexdigest(),
     })

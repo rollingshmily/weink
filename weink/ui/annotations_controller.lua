@@ -238,7 +238,7 @@ end
 function M:_teardownThoughtInterception()
     if self._thought_interception_setup and self.ui then
         self.ui:unRegisterTouchZones({
-            { id = "weread_thought_tap", overrides = { "tap_link" } },
+            { id = "weink_thought_tap", overrides = { "tap_link" } },
         })
         self._thought_interception_setup = nil
     end
@@ -276,7 +276,7 @@ function M:_setupThoughtInterception()
 
     self.ui:registerTouchZones({
         {
-            id = "weread_thought_tap",
+            id = "weink_thought_tap",
             ges = "tap",
             screen_zone = { ratio_x = 0, ratio_y = 0, ratio_w = 1, ratio_h = 1 },
             overrides = { "tap_link" },

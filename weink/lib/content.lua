@@ -1,6 +1,6 @@
 local Crypto = require("weink.lib.crypto")
 local Eink = require("weink.lib.eink")
-local WeRead = require("weink.lib.protocol")
+local Protocol = require("weink.lib.protocol")
 local Thoughts = require("weink.lib.thoughts")
 local logger = require("weink.lib.logger")
 local Checkpoint = require("weink.lib.download_checkpoint")
@@ -372,7 +372,7 @@ end
 
 local function remove_tree(path)
     if type(path) ~= "string"
-        or not path:match("/%.weread%-download%-%d+%-%d+$") then
+        or not path:match("/%.weink%-download%-%d+%-%d+$") then
         return nil, "refusing to remove an invalid download workspace"
     end
     local ok, purge_util = pcall(require, "ffi/util")
@@ -390,7 +390,7 @@ function Content.create_download_workspace(settings, book)
     local book_dir = Content.book_resolved_dir(settings, book_id, book)
     make_path(book_dir)
     book.cache_dir = book_dir
-    local workspace = string.format("%s/.weread-download-%d-%d",
+    local workspace = string.format("%s/.weink-download-%d-%d",
         book_dir, os.time(), math.random(100000, 999999))
     local incoming_dir = workspace .. "/incoming"
     local asset_dir = workspace .. "/images"
@@ -418,7 +418,7 @@ function Content.cleanup_stale_downloads(settings)
     if not ok_lfs then ok_lfs, lfs = pcall(require, "lfs") end
     if not ok_lfs or not lfs then return 0 end
     local dirs = {}
-    -- Full-book EPUBs and their atomic .part/.weread-backup files live in the
+    -- Full-book EPUBs and their atomic .part/.weink-backup files live in the
     -- flat user-facing library root in this fork, while staged assets live in
     -- each book's sidecar directory. Scan both locations during recovery.
     local content_dir = Content.book_content_dir(settings)
@@ -447,20 +447,20 @@ function Content.cleanup_stale_downloads(settings)
     for dir in pairs(dirs) do
         if lfs.attributes(dir, "mode") == "directory" then
             for name in lfs.dir(dir) do
-                if name:match("^%.weread%-download%-%d+%-%d+$") then
+                if name:match("^%.weink%-download%-%d+%-%d+$") then
                     local candidate = dir .. "/" .. name
                     if not has_resume_checkpoint(candidate) then
                         local cleaned = remove_tree(candidate)
                         if cleaned then removed = removed + 1 end
                     end
-                elseif name:match("^%.weread%-download%-build%-%d+%-%d+$") then
+                elseif name:match("^%.weink%-download%-build%-%d+%-%d+$") then
                     local cleaned = remove_tree(dir .. "/" .. name)
                     if cleaned then removed = removed + 1 end
                 elseif name:match("%.epub%.part$") then
                     if os.remove(dir .. "/" .. name) then removed = removed + 1 end
-                elseif name:match("%.epub%.weread%-backup$") then
+                elseif name:match("%.epub%.weink%-backup$") then
                     local backup = dir .. "/" .. name
-                    local final = backup:gsub("%.weread%-backup$", "")
+                    local final = backup:gsub("%.weink%-backup$", "")
                     local current = io.open(final, "rb")
                     if current then
                         current:close()
@@ -481,7 +481,7 @@ local function commit_file(part_path, path)
     local old = io.open(path, "rb")
     if not old then return nil, rename_err end
     old:close()
-    local backup = path .. ".weread-backup"
+    local backup = path .. ".weink-backup"
     pcall(os.remove, backup)
     local backed_up, backup_err = os.rename(path, backup)
     if not backed_up then return nil, backup_err or rename_err end
@@ -766,7 +766,7 @@ function Content.save_chapter_epub(settings, book, chapter, xhtml, assets, css)
 <dc:title>]] .. xml_escape(book_title) .. [[</dc:title>
 <dc:creator>]] .. xml_escape(author) .. [[</dc:creator>
 <dc:publisher>WeRead</dc:publisher>
-<dc:source>]] .. xml_escape(WeRead.reader_url(book_id, chapter.chapterUid)) .. [[</dc:source>
+<dc:source>]] .. xml_escape(Protocol.reader_url(book_id, chapter.chapterUid)) .. [[</dc:source>
 <dc:language>zh-CN</dc:language>
 <meta property="dcterms:modified">]] .. utc_modified() .. [[</meta>
 </metadata>
@@ -811,7 +811,7 @@ function Content.save_book_epub_from_files(settings, book, chapters, body_files,
     local path = Content.book_content_epub_path(settings, book, "full")
     local author = book.author or "WeRead"
     local root = Content.book_resolved_dir(settings, book_id, book)
-        .. string.format("/.weread-download-build-%d-%d", os.time(), math.random(100000, 999999))
+        .. string.format("/.weink-download-build-%d-%d", os.time(), math.random(100000, 999999))
     local text_dir = root .. "/text"
     make_path(text_dir)
 
@@ -900,7 +900,7 @@ function Content.save_book_epub_from_files(settings, book, chapters, body_files,
 <dc:title>]] .. xml_escape(book_title) .. [[</dc:title>
 <dc:creator>]] .. xml_escape(author) .. [[</dc:creator>
 <dc:publisher>WeRead</dc:publisher>
-<dc:source>]] .. xml_escape(WeRead.reader_url(book_id)) .. [[</dc:source>
+<dc:source>]] .. xml_escape(Protocol.reader_url(book_id)) .. [[</dc:source>
 <dc:language>zh-CN</dc:language>
 <meta property="dcterms:modified">]] .. utc_modified() .. [[</meta>]] .. cover_meta .. [[
 </metadata>
@@ -1014,7 +1014,7 @@ function Content.save_book_epub(settings, book, chapters, chapter_bodies, suffix
 <dc:title>]] .. xml_escape(book_title) .. [[</dc:title>
 <dc:creator>]] .. xml_escape(author) .. [[</dc:creator>]] .. description_meta .. [[
 <dc:publisher>WeRead</dc:publisher>
-<dc:source>]] .. xml_escape(WeRead.reader_url(book_id)) .. [[</dc:source>
+<dc:source>]] .. xml_escape(Protocol.reader_url(book_id)) .. [[</dc:source>
 <dc:language>zh-CN</dc:language>
 <meta property="dcterms:modified">]] .. utc_modified() .. [[</meta>]] .. cover_meta .. [[
 </metadata>
@@ -1147,7 +1147,7 @@ function Content.download_chapter_assets(client, book, chapter, used_names)
     end
     used_names = used_names or {}
     local book_id = book.book_id or book.bookId
-    local referer = WeRead.reader_url(book_id, chapter.chapterUid)
+    local referer = Protocol.reader_url(book_id, chapter.chapterUid)
     local tar_url = tostring(chapter.tar)
     if tar_url:match("^//") then
         tar_url = "https:" .. tar_url
@@ -1304,7 +1304,7 @@ function Content.download_chapter_assets_to_files(client, book, chapter, used_na
     if not chapter or not chapter.tar or chapter.tar == "" then return {}, {} end
     used_names = used_names or {}
     local book_id = book.book_id or book.bookId
-    local referer = WeRead.reader_url(book_id, chapter.chapterUid)
+    local referer = Protocol.reader_url(book_id, chapter.chapterUid)
     local tar_url = tostring(chapter.tar)
     if tar_url:match("^//") then
         tar_url = "https:" .. tar_url
@@ -1544,7 +1544,7 @@ function Content.fetch_chapters_epub_eink(client, settings, book, chapters, opti
         book.cached_chapters[tostring(chapter.chapterUid or chapter_index)] = path
     end
     book.cached_file = path
-    book.reader_url = book.reader_url or WeRead.reader_url(book.book_id or book.bookId)
+    book.reader_url = book.reader_url or Protocol.reader_url(book.book_id or book.bookId)
     return path, selected
 end
 
@@ -1898,7 +1898,7 @@ function Content.download_article_images_to_files(
         return url
     end
 
-    local asset_name = ".weread-article-"
+    local asset_name = ".weink-article-"
         .. tostring(html_path:match("([^/]+)%.html$")) .. "-assets"
     local asset_dir = article_dir .. "/" .. asset_name
     ensure_directory(asset_dir)
@@ -1978,7 +1978,7 @@ function Content.download_article_images_to_files(
 end
 
 function Content.article_path(settings, book, article)
-    local root = settings and (settings.data_dir or settings.cache_dir) or "/tmp/weread"
+    local root = settings and (settings.data_dir or settings.cache_dir) or "/tmp/weink"
     local account = settings and type(settings.get) == "function"
         and settings:get("account", {}) or {}
     local vid = type(account) == "table" and account.user_vid or nil

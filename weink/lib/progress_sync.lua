@@ -355,7 +355,7 @@ end
 function ProgressSync:capture_local()
     local book_id = self.detect_book()
     if not book_id or is_mp_book(book_id) then
-        return nil, "document_not_weread"
+        return nil, "document_not_weink"
     end
     book_id = tostring(book_id)
     local document = self.get_document()
@@ -483,7 +483,7 @@ end
 -- "No WeRead book is open right now" is a normal skip (local books take the
 -- same path): it must not clear the verified state, warn, or raise a dialog.
 local BENIGN_POSITION_REASONS = {
-    document_not_weread = true,
+    document_not_weink = true,
     no_document = true,
 }
 

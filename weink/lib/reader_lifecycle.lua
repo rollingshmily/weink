@@ -4,7 +4,7 @@ local EpubPath = require("weink.lib.epub_path")
 local logger = require("weink.lib.logger").scoped("Prefetch")
 local UIManager = require("ui/uimanager")
 local PluginUtil = require("weink.lib.plugin_util")
-local WeRead = require("weink.lib.protocol")
+local Protocol = require("weink.lib.protocol")
 local _ = PluginUtil.tr
 local T = PluginUtil.T
 local display_error = PluginUtil.display_error
@@ -59,7 +59,7 @@ end
 
 function M:onWeinkSyncProgress()
     local book_id = self:detectWeinkBook()
-    if not book_id or WeRead.is_mp_book(book_id) then
+    if not book_id or Protocol.is_mp_book(book_id) then
         self:showTransientInfo(
             _("This action requires an open WeRead book."), 1)
         return false
@@ -148,7 +148,7 @@ function M:onReaderReady()
             self.progress_sync:release_document("not_weread")
         end
         if self.read_report then
-            self.read_report:stop("document_not_weread")
+            self.read_report:stop("document_not_weink")
         end
         perf("reader_ready.total", total_started)
         return
@@ -389,7 +389,7 @@ function M:onSuspend()
     -- Capture only makes sense while a WeRead document is open. onResume already
     -- returns early here; without the same guard, locking the screen on the file
     -- browser (or a local book) captured nothing, cleared the verified state and
-    -- popped "document_not_weread" at the user.
+    -- popped "document_not_weink" at the user.
     if not self._current_weink_book_id then
         return
     end

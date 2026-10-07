@@ -1,9 +1,9 @@
 local bit = require("bit")
 local Crypto = require("weink.lib.crypto")
 
-local WeRead = {}
+local Protocol = {}
 
-WeRead.USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 Edg/135.0.0.0"
+Protocol.USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 Edg/135.0.0.0"
 
 local function is_digit_string(value)
     return tostring(value):match("^%d+$") ~= nil
@@ -20,14 +20,14 @@ local function js_string(value)
     return tostring(value)
 end
 
-function WeRead.urlencode(value)
+function Protocol.urlencode(value)
     value = js_string(value)
     return (value:gsub("([^%w%-_%.~])", function(ch)
         return string.format("%%%02X", ch:byte())
     end))
 end
 
-function WeRead.sign(query)
+function Protocol.sign(query)
     local a = 0x15051505
     local b = a
     local length = #query
@@ -50,7 +50,7 @@ local function byte_hex(value)
     return table.concat(out)
 end
 
-function WeRead.e(value)
+function Protocol.e(value)
     local s = tostring(value)
     local h = Crypto.md5_hex(s)
     local result = h:sub(1, 3)
@@ -86,24 +86,24 @@ function WeRead.e(value)
     return result
 end
 
-function WeRead.is_mp_book(book_id)
+function Protocol.is_mp_book(book_id)
     return tostring(book_id or ""):sub(1, 7) == "MP_WXS_"
 end
 
-function WeRead.reader_url(book_id, chapter_uid)
-    local url = "https://weread.qq.com/web/reader/" .. WeRead.e(book_id)
+function Protocol.reader_url(book_id, chapter_uid)
+    local url = "https://weread.qq.com/web/reader/" .. Protocol.e(book_id)
     if chapter_uid then
-        url = url .. "k" .. WeRead.e(chapter_uid)
+        url = url .. "k" .. Protocol.e(chapter_uid)
     end
     return url
 end
 
 --- Upgrade WeRead CDN cover URLs to the higher-resolution t9 token.
-function WeRead.normalize_cover_url(url)
+function Protocol.normalize_cover_url(url)
     if type(url) ~= "string" or url == "" then
         return url
     end
     return (url:gsub("/t%d+_", "/t9_"):gsub("/s_", "/t9_"))
 end
 
-return WeRead
+return Protocol

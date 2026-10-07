@@ -6,7 +6,7 @@ Usage:
     python3 scripts/verify_review_single.py --cookie "wr_skey=XXX; wr_vid=XXX; ..."
     python3 scripts/verify_review_single.py --cookie "..." --review-id "REVIEW_ID"
 
-Or set WEREAD_COOKIE env var. Provide --review-id from a thought that has comments,
+Or set WEINK_COOKIE env var. Provide --review-id from a thought that has comments,
 for example from /book/readreviews pageReviews[].reviewId in browser DevTools.
 """
 
@@ -58,7 +58,7 @@ def redact(value, keep=4):
 
 def main():
     parser = argparse.ArgumentParser(description="Verify WeRead /web/review/single")
-    parser.add_argument("--cookie", default=os.environ.get("WEREAD_COOKIE", ""))
+    parser.add_argument("--cookie", default=os.environ.get("WEINK_COOKIE", ""))
     parser.add_argument(
         "--review-id",
         default="",
@@ -68,7 +68,7 @@ def main():
     args = parser.parse_args()
 
     if not args.cookie:
-        print("ERROR: provide --cookie or set WEREAD_COOKIE", file=sys.stderr)
+        print("ERROR: provide --cookie or set WEINK_COOKIE", file=sys.stderr)
         sys.exit(1)
 
     print("=" * 60)

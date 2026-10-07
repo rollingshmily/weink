@@ -19,7 +19,7 @@ os.remove(root)
 local settings = { data_dir = root .. "/data", meta_dir = root .. "/meta",
     cache_dir = root .. "/cache" }
 local standalone = settings.data_dir .. "/articles/account"
-local asset_dir = standalone .. "/.weread-article-assets"
+local asset_dir = standalone .. "/.weink-article-assets"
 for _, dir in ipairs({ asset_dir, settings.meta_dir .. "/BOOK_1",
         settings.cache_dir .. "/articles/old" }) do
     assert(os.execute("mkdir -p " .. string.format("%q", dir)) == 0)

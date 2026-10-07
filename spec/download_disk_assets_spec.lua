@@ -117,7 +117,7 @@ local root = os.tmpname()
 os.remove(root)
 assert(os.execute("mkdir -p " .. string.format("%q", root)))
 local workspace = {
-    path = root .. "/.weread-download-100-123456",
+    path = root .. "/.weink-download-100-123456",
 }
 workspace.incoming_dir = workspace.path .. "/incoming"
 workspace.asset_dir = workspace.path .. "/images"
@@ -273,7 +273,7 @@ old:close()
 expect(io.open(output .. ".part", "rb") == nil,
     "failed EPUB build left a partial archive")
 
-local stale = root .. "/.weread-download-200-654321"
+local stale = root .. "/.weink-download-200-654321"
 assert(os.execute("mkdir -p " .. string.format("%q", stale)))
 local orphan = assert(io.open(root .. "/orphan.epub.part", "wb"))
 orphan:write("partial")

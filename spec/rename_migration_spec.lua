@@ -58,7 +58,7 @@ expect(values.books["42"].cache_dir == "/data/weink/cache", "book cache dir re-p
 expect(values.books["42"].cached_file == "/data/weink/cache/42.epub", "book file re-pointed")
 expect(db_calls == 1 and db_old == "/data/weread" and db_new == "/data/weink",
     "article cache paths migrated through the library database")
-expect(values.rename_migration == "weink", "migration recorded as done")
+expect(values.rename_migration == "weink2", "migration recorded as done")
 expect(flushes >= 1, "settings flushed")
 expect(Migrations.run_rename(settings) == 0 and db_calls == 1, "second run is a no-op")
 print(("rename_migration_spec: %d checks"):format(checks))

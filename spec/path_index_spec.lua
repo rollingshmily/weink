@@ -27,7 +27,7 @@ local_file:close()
 
 PathIndex.set(epub, "465030")
 expect(PathIndex.read_marker(epub) == "465030",
-    "download writes a sibling .weread marker")
+    "download writes a sibling .weink marker")
 expect(PathIndex.identify(epub) == "465030",
     "WeRead EPUB is identified from the sibling marker")
 expect(PathIndex.identify(local_epub) == nil,
@@ -56,7 +56,7 @@ expect(PathIndex.existing_file("465030") == epub,
 
 local renamed = root .. "/fanren-renamed.epub"
 assert(os.rename(epub, renamed), "rename epub")
-local marker = io.open(renamed .. ".weread", "w")
+local marker = io.open(renamed .. ".weink", "w")
 marker:write("465030\n")
 marker:close()
 PathIndex.reset()
@@ -66,7 +66,7 @@ PathIndex.by_id["465030"] = epub
 package.preload["libs/libkoreader-lfs"] = function()
     return {
         dir = function()
-            local names = { "fanren-renamed.epub.weread", ".", ".." }
+            local names = { "fanren-renamed.epub.weink", ".", ".." }
             local i = 0
             return function()
                 i = i + 1

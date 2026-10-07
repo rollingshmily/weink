@@ -7,7 +7,7 @@ local logger = require("weink.lib.logger")
 local PathChooser = require("ui/widget/pathchooser")
 local Scan = require("weink.lib.scan")
 local UIManager = require("ui/uimanager")
-local WeRead = require("weink.lib.protocol")
+local Protocol = require("weink.lib.protocol")
 
 local PluginUtil = require("weink.lib.plugin_util")
 local _ = PluginUtil.tr
@@ -42,7 +42,7 @@ function M:validateDownloadDir(path)
             return false, _("Directory does not exist and could not be created.")
         end
     end
-    local test_file = path .. "/.weread_write_test"
+    local test_file = path .. "/.weink_write_test"
     local f = io.open(test_file, "w")
     if not f then
         return false, _("Directory is not writable.")
@@ -593,7 +593,7 @@ function M:showCacheManagement()
     end
 
     local function add_cache_entry(book_id, book)
-        if WeRead.is_mp_book(book_id) then return end
+        if Protocol.is_mp_book(book_id) then return end
         local book_dir = Content.book_resolved_dir(self.settings, book_id, book)
         local key = book_dir or book_id
         if seen_dirs[key] then
@@ -730,7 +730,7 @@ function M:scanLocalCache(root, allowed, dry_run)
         fs = lfs,
         books = books,
         allowed = allowed,
-        is_mp = WeRead.is_mp_book,
+        is_mp = Protocol.is_mp_book,
         dry_run = dry_run,
         now = os.time(),
     })

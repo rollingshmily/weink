@@ -149,9 +149,9 @@ end
 
 local function persist_weread(item, fields)
     if type(item) ~= "table" then return end
-    item.weread = item.weread or {}
+    item.weink = item.weink or {}
     for key, value in pairs(fields) do
-        item.weread[key] = value
+        item.weink[key] = value
     end
 end
 
@@ -165,7 +165,7 @@ local function locate(plugin, item)
     if not chapter or chapter.chapterUid == nil then
         return nil, "no_chapter"
     end
-    local range = item.weread and item.weread.range
+    local range = item.weink and item.weink.range
     if not range or range == "" then
         range = Upload.range_for_item(plugin.client, book, chapter, item, plugin)
     end
@@ -233,7 +233,7 @@ end
 function Upload.upload_updated(plugin, item)
     if not Upload.can_upload(plugin) then return nil, "not_logged_in" end
     local note = thought_text(item)
-    local weread = item and item.weread or {}
+    local weread = item and item.weink or {}
     if note and weread.reviewId and tostring(weread.reviewId) ~= "" then
         local data = plugin.client:eink_useredit_review({
             reviewId = weread.reviewId,
@@ -255,7 +255,7 @@ function Upload.upload_updated(plugin, item)
     end
     if (not note) and weread.reviewId and tostring(weread.reviewId) ~= "" then
         local data = plugin.client:eink_delete_review(weread.reviewId)
-        if item.weread then item.weread.reviewId = nil end
+        if item.weink then item.weink.reviewId = nil end
         logger.info("eink review deleted", "reviewId=", weread.reviewId)
         return data, "review_delete"
     end
@@ -264,7 +264,7 @@ end
 
 function Upload.upload_removed(plugin, item)
     if not Upload.can_upload(plugin) then return nil, "not_logged_in" end
-    local weread = item and item.weread or {}
+    local weread = item and item.weink or {}
     local last
     if weread.reviewId and tostring(weread.reviewId) ~= "" then
         last = plugin.client:eink_delete_review(weread.reviewId)

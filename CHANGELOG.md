@@ -2,6 +2,13 @@
 
 只记录**用户能看到的**行为变化。实现细节、内部验证过程与排查记录不写在这里。
 
+## [2.5.0]
+
+- **书库标记文件改名**：`<书>.weread` → **`<书>.weink`**（`*.epub.weread` 徽标同样改为 `*.epub.weink`）。已下载的书由迁移钩子自动改名，打开时还会懒迁移一次，**老书不会被误判成本地书**。
+- **内部命名一次清干净**：协议模块别名 `WeRead` → `Protocol`、`item.weread` → `item.weink`、`weread_reader_items`、`weread_thought_tap`、`weread_xpointer_overlay*`、`closeWeReadUI` 等全部改成 weink；跳过码 `document_not_weread` → `document_not_weink`（排障技能同步更新）。
+- 下载临时目录/备份文件前缀改为 `.weink-*`（中断下载留下的旧 `.weread-*` 仍会被识别并清理）。
+- 有意保留：微信读书**服务域名**、EPUB 与文章缓存里既有的内容标识、AGPL 版权归属、迁移钩子里对旧名的引用、历史 CHANGELOG。
+
 ## [2.4.1]
 
 - 修掉两处改名漏网：**工具菜单置顶**用的插件名、以及书名/书号为空时的**兜底目录名**，此前仍写着旧名字——前者会让 Weink 不再置顶工具菜单。
@@ -15,7 +22,7 @@
   3. 把旧的 `settings/weread.lua` 复制成 `settings/weink.lua`；
   4. 读一次旧的 path index（`weread-path-index.lua`），之后写新的 `weink-path-index.lua`。
   钩子用设置里的 `rename_migration` 标记，只跑一次；上面的路径改写有专门回归（`spec/rename_migration_spec.lua`，9 项断言）。
-- **每本书的标记文件仍是 `<书>.weread`**，老书无需重下、也仍能被识别为微信读书的书（本地书不受影响）；这次不动它，避免动到书库侧的同名标记。
+- **每本书的标记文件仍是 `<书>.weink`**，老书无需重下、也仍能被识别为微信读书的书（本地书不受影响）；这次不动它，避免动到书库侧的同名标记。
 
 ## [2.3.1]
 
