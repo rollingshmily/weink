@@ -457,6 +457,35 @@ function LibraryDB:getMpArticles(list_type)
     return ok and articles or nil
 end
 
+-- One-time rename migration: cached WeChat article paths recorded before the
+-- plugin's data directory was renamed still point at the old location.
+function LibraryDB:migrateCachedPaths(old_prefix, new_prefix)
+    if type(old_prefix) ~= "string" or old_prefix == ""
+        or type(new_prefix) ~= "string" or new_prefix == "" then
+        return 0
+    end
+    local db = self:open()
+    if not db then return 0 end
+    local like = old_prefix .. "/%"
+    local count = 0
+    local stmt
+    local ok = pcall(function()
+        local check = db:prepare(
+            "SELECT COUNT(*) FROM mp_articles WHERE cached_path LIKE ?")
+        local row = check:reset():bind(like):step()
+        count = row and tonumber(row[1]) or 0
+        close_statement(check)
+        if count > 0 then
+            stmt = db:prepare(
+                "UPDATE mp_articles SET cached_path = ? || substr(cached_path, ?) WHERE cached_path LIKE ?")
+            stmt:reset():bind(new_prefix, #old_prefix + 1, like):step()
+        end
+    end)
+    close_statement(stmt)
+    pcall(function() db:close() end)
+    return ok and count or 0
+end
+
 function LibraryDB:updateMpArticleCachePath(review_id, path)
     if not review_id then return false end
     local db = self:open()

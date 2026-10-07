@@ -150,7 +150,88 @@ local function repair_flat_layout_cache_dirs(settings, books)
     return repaired
 end
 
+-- ------------------------------------------------------------------
+-- Rename migration (drop this hook once every install has run it)
+-- ------------------------------------------------------------------
+-- The plugin's own directories were renamed from "weread" to "weink". Older
+-- versions stored absolute paths inside that tree (per-book cache/meta paths
+-- and cached WeChat article files), so re-point them once and remember that
+-- the work is done. The hook is keyed in settings and can be deleted in a
+-- later release without leaving anything behind.
+local RENAME_MIGRATION_KEY = "rename_migration"
+local RENAME_MIGRATION_VALUE = "weink"
+local LEGACY_DATA_DIRNAME = "weread"
+
+local function repoint(value, old_prefix, new_prefix)
+    if type(value) ~= "string" or value == "" then return nil end
+    if value:sub(1, #old_prefix) ~= old_prefix then return nil end
+    return new_prefix .. value:sub(#old_prefix + 1)
+end
+
+function Migrations.run_rename(settings)
+    if settings.store:readSetting(RENAME_MIGRATION_KEY, "") == RENAME_MIGRATION_VALUE then
+        return 0
+    end
+    local ok_ds, DataStorage = pcall(require, "datastorage")
+    if not ok_ds or type(DataStorage.getFullDataDir) ~= "function" then
+        return 0
+    end
+    local old_prefix = DataStorage:getFullDataDir() .. "/" .. LEGACY_DATA_DIRNAME
+    local new_prefix = tostring(settings.data_dir or "")
+    if new_prefix == "" or new_prefix == old_prefix then
+        return 0
+    end
+    local changed = 0
+    for _, key in ipairs({ "download_dir", "meta_dir" }) do
+        local moved = repoint(settings.store:readSetting(key, ""), old_prefix, new_prefix)
+        if moved then
+            settings.store:saveSetting(key, moved)
+            changed = changed + 1
+        end
+    end
+    local books = settings.store:readSetting("books", {})
+    if type(books) == "table" then
+        local touched = false
+        for _, book in pairs(books) do
+            if type(book) == "table" then
+                for _, key in ipairs({ "cache_dir", "cached_file", "cached_full_book" }) do
+                    local moved = repoint(book[key], old_prefix, new_prefix)
+                    if moved then
+                        book[key] = moved
+                        touched = true
+                        changed = changed + 1
+                    end
+                end
+            end
+        end
+        if touched then
+            settings.store:saveSetting("books", books)
+        end
+    end
+    local ok_db, LibraryDB = pcall(require, "weink.lib.library_db")
+    if ok_db and type(LibraryDB) == "table"
+        and type(LibraryDB.migrateCachedPaths) == "function" then
+        local ok_call, moved_or_err = pcall(function()
+            return LibraryDB:new(settings):migrateCachedPaths(old_prefix, new_prefix)
+        end)
+        if ok_call and type(moved_or_err) == "number" then
+            changed = changed + moved_or_err
+        else
+            logger.warn("rename migration: article paths not migrated:",
+                log_error(moved_or_err))
+        end
+    end
+    settings.store:saveSetting(RENAME_MIGRATION_KEY, RENAME_MIGRATION_VALUE)
+    settings.store:flush()
+    logger.info("rename migration done:", "repointed_paths=", tostring(changed))
+    return changed
+end
+
 function Migrations.run(settings, client)
+    local ok_rename, rename_or_err = pcall(Migrations.run_rename, settings)
+    if not ok_rename then
+        logger.warn("rename migration failed:", log_error(rename_or_err))
+    end
     local books = settings:get("books", {})
     local found, migrated, failed = false, 0, 0
     for _book_id, book in pairs(books) do
