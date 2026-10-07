@@ -169,7 +169,7 @@ responses[#responses + 1] = {
     headers = { ["content-type"] = "application/json" },
 }
 ok, err = pcall(function()
-    client:get_text("https://i.weread.qq.com/book/info", {
+    client:get_public_text("https://i.weread.qq.com/book/info", {
         diagnostic_api = "/book/info",
     })
 end)

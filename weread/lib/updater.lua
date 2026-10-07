@@ -335,11 +335,6 @@ function Updater:resolve_proxy_entry(cfg)
     return Updater.lookup_proxy_preset("ghspeedup.com")
 end
 
-function Updater:resolve_proxy_base(cfg)
-    local entry = self:resolve_proxy_entry(cfg)
-    return entry and entry.url or "https://runn.i.ng"
-end
-
 function Updater:proxy_candidates(cfg)
     cfg = cfg or self:get_config()
     local preferred = self:resolve_proxy_entry(cfg)

@@ -5,14 +5,6 @@ local WeRead = {}
 
 WeRead.USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 Edg/135.0.0.0"
 
-function WeRead.is_success_response(result, field)
-    if type(result) ~= "table" then
-        return false
-    end
-    local value = result[field or "succ"]
-    return value == true or tonumber(value) == 1
-end
-
 local function is_digit_string(value)
     return tostring(value):match("^%d+$") ~= nil
 end
@@ -33,22 +25,6 @@ function WeRead.urlencode(value)
     return (value:gsub("([^%w%-_%.~])", function(ch)
         return string.format("%%%02X", ch:byte())
     end))
-end
-
-function WeRead.sorted_query(params)
-    local keys = {}
-    for key in pairs(params) do
-        if key ~= "s" then
-            table.insert(keys, key)
-        end
-    end
-    table.sort(keys)
-
-    local parts = {}
-    for _, key in ipairs(keys) do
-        table.insert(parts, key .. "=" .. WeRead.urlencode(params[key]))
-    end
-    return table.concat(parts, "&")
 end
 
 function WeRead.sign(query)
@@ -108,67 +84,6 @@ function WeRead.e(value)
 
     result = result .. Crypto.md5_hex(result):sub(1, 3)
     return result
-end
-
--- Lua string indexes are byte offsets. Return a valid UTF-8 prefix containing
--- at most max_chars code points so payload fields are never cut mid-character.
-function WeRead.utf8_substr(value, max_chars)
-    local text = tostring(value or "")
-    local limit = math.max(0, math.floor(tonumber(max_chars) or 0))
-    local index = 1
-    local count = 0
-
-    while index <= #text and count < limit do
-        local first = text:byte(index)
-        local width = 0
-        local second = text:byte(index + 1)
-
-        if first <= 0x7f then
-            width = 1
-        elseif first >= 0xc2 and first <= 0xdf
-            and second and second >= 0x80 and second <= 0xbf then
-            width = 2
-        elseif first == 0xe0
-            and second and second >= 0xa0 and second <= 0xbf then
-            width = 3
-        elseif first >= 0xe1 and first <= 0xec
-            and second and second >= 0x80 and second <= 0xbf then
-            width = 3
-        elseif first == 0xed
-            and second and second >= 0x80 and second <= 0x9f then
-            width = 3
-        elseif first >= 0xee and first <= 0xef
-            and second and second >= 0x80 and second <= 0xbf then
-            width = 3
-        elseif first == 0xf0
-            and second and second >= 0x90 and second <= 0xbf then
-            width = 4
-        elseif first >= 0xf1 and first <= 0xf3
-            and second and second >= 0x80 and second <= 0xbf then
-            width = 4
-        elseif first == 0xf4
-            and second and second >= 0x80 and second <= 0x8f then
-            width = 4
-        else
-            break
-        end
-
-        for offset = 2, width - 1 do
-            local continuation = text:byte(index + offset)
-            if not continuation or continuation < 0x80 or continuation > 0xbf then
-                width = 0
-                break
-            end
-        end
-        if width == 0 then
-            break
-        end
-
-        index = index + width
-        count = count + 1
-    end
-
-    return text:sub(1, index - 1)
 end
 
 function WeRead.is_mp_book(book_id)

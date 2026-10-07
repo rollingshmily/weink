@@ -194,7 +194,6 @@ end
 function fake_settings:flush() end
 
 local updater = Updater:new{ settings = fake_settings }
-assert_eq(updater:resolve_proxy_base(), "https://runn.i.ng", "resolve ghspeedup worker")
 local candidates = updater:proxy_candidates()
 assert_eq(candidates[1].id, "ghspeedup.com", "preferred proxy first")
 assert_eq(candidates[1].style, "path", "ghspeedup path style")

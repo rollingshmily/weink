@@ -407,49 +407,6 @@ function Client:download_to_file(url, path, opts)
     return path, bytes, resp_headers
 end
 
-function Client:post_json(url, data, opts)
-    opts = opts or {}
-    local referer = header_value(opts.headers, "Referer") or opts.referer
-    local req_opts = merge_req_opts(opts, {
-        url = url,
-        method = "POST",
-        body = self:json_encode(data),
-        headers = {
-            ["Content-Type"] = "application/json;charset=UTF-8",
-            ["Origin"] = "https://weread.qq.com",
-            ["Referer"] = referer or "https://weread.qq.com/",
-        }})
-    local text, code, resp_headers = self:request(req_opts)
-    if code and code >= 200 and code < 300 then
-        return self:decode_http_json(text, {
-            method = "POST",
-            url = url,
-            api_name = opts.diagnostic_api,
-            code = code,
-            headers = resp_headers,
-        }), code, resp_headers
-    end
-    error(http_error(self, code, text, resp_headers))
-end
-
-function Client:get_text(url, opts)
-    opts = opts or {}
-    local accept = header_value(opts.headers, "Accept") or opts.accept
-    local referer = header_value(opts.headers, "Referer") or opts.referer
-    local req_opts = merge_req_opts(opts, {
-        url = url,
-        method = "GET",
-        headers = {
-            ["Accept"] = accept or "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            ["Referer"] = referer or "https://weread.qq.com/",
-        }})
-    local text, code, resp_headers = self:request(req_opts)
-    if code and code >= 200 and code < 300 then
-        return text, code, resp_headers
-    end
-    error(http_error(self, code, text, resp_headers))
-end
-
 function Client:get_public_text(url, opts)
     opts = opts or {}
     local req_opts = merge_req_opts(opts, {

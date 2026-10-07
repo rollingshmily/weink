@@ -110,16 +110,6 @@ test("remote single chapter requests chapter switch", function()
     eq(target.chapter.chapterUid, 22, "target chapter")
 end)
 
-test("remote source conflict chooses newest but flags conflict", function()
-    local selected = Mapper.choose_remote(
-        { percent = 20, updated_at = 10, source = "web" },
-        { percent = 40, updated_at = 20, source = "gateway" },
-        2
-    )
-    eq(selected.source, "gateway", "newest selected")
-    eq(selected.conflict, true, "conflict flagged")
-end)
-
 test("compare uses percentage point threshold", function()
     local state = Mapper.compare({ percent = 25 }, { percent = 28 }, 2)
     eq(state, "remote_ahead", "remote ahead")

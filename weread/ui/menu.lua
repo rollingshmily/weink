@@ -84,15 +84,6 @@ function M:addToMainMenu(menu_items)
     }
 end
 
-function M:wechatLoginName()
-    local account = self.settings:get("account", {}) or {}
-    local name = type(account.name) == "string" and account.name or ""
-    if name == "" then
-        name = _("Unknown account")
-    end
-    return name
-end
-
 function M:einkLoginName()
     local eink = self.settings:get("eink", {}) or {}
     local label = tostring(eink.name or "")
