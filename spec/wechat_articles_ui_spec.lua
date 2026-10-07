@@ -46,6 +46,9 @@ package.preload["weink.lib.plugin_util"] = function()
 end
 package.preload["weink.lib.content"] = function()
     return {
+        mp_url_is_signed = function(url)
+            return type(url) == "string" and url:find("chksm=", 1, true) ~= nil
+        end,
         is_valid_article_cache = function(path)
             return path and path:find("/cache/", 1, true) ~= nil
         end,
@@ -154,6 +157,43 @@ view.callbacks.on_select(view.data.articles[1])
 expect(#opened_files == 2 and opened_files[2] == "/cache/art_1.html", "uncached article download & open mismatch")
 expect(updated_cache_paths["art_1"] == "/cache/art_1.html", "db cache path not updated")
 expect(#reported_reads == 1 and reported_reads[1].article.reviewId == "art_1", "read status not reported")
+
+-- /mp/list returns the same saved article twice (a WeRead-native entry plus
+-- the WeChat-saved form) for articles touched from both apps; the list must
+-- keep one row per reviewId (2026-10-08 device report).
+local deduped = host:dedupeMpArticles({
+    { reviewId = "dup_1", title = "dup", url = "https://mp.weixin.qq.com/s?__biz=a&mid=1&idx=1&sn=b&scene=58&subscene=0" },
+    { reviewId = "dup_1", title = "dup", url = "https://mp.weixin.qq.com/s?__biz=a&mid=1&idx=1&sn=b&chksm=" .. string.rep("d", 64) },
+    { reviewId = "other", title = "other", url = "https://mp.weixin.qq.com/s?__biz=a&mid=1&idx=1&sn=c" },
+    { reviewId = "", title = "no id", url = "https://mp.weixin.qq.com/s?__biz=a&mid=1&idx=1&sn=d" },
+    { reviewId = "", title = "no id 2", url = "https://mp.weixin.qq.com/s?__biz=a&mid=1&idx=1&sn=e" },
+})
+expect(#deduped == 4, "duplicate reviewIds must collapse, got " .. #deduped)
+expect(deduped[1].reviewId == "dup_1" and deduped[2].reviewId == "other",
+    "dedupe must keep the first occurrence position")
+expect(deduped[1].url:find("chksm=", 1, true) ~= nil,
+    "dedupe must prefer the already signed copy")
+expect(deduped[3].reviewId == "" and deduped[4].reviewId == "",
+    "entries without a reviewId must all be kept")
+
+host.client.eink_mp_list = function()
+    return {
+        lists = {
+            { reviewId = "dup_2", title = "dup", url = "https://mp.weixin.qq.com/s?__biz=a&mid=1&idx=1&sn=f&scene=58&subscene=0" },
+            { reviewId = "dup_2", title = "dup", url = "https://mp.weixin.qq.com/s?__biz=a&mid=1&idx=1&sn=f&scene=58&subscene=0" },
+            { reviewId = "solo", title = "solo", url = "https://mp.weixin.qq.com/s?__biz=a&mid=1&idx=1&sn=g&scene=58&subscene=0" },
+        },
+        synckey = 1,
+    }
+end
+local views_before = #shown_views
+host:fetchWeChatArticles(2)
+expect(#shown_views == views_before + 1, "fetch must render exactly one view")
+local fetched = shown_views[#shown_views]
+expect(#fetched.data.articles == 2,
+    "duplicate rows must not reach the view, got " .. #fetched.data.articles)
+expect(mp_articles_store[2][1].reviewId == "dup_2",
+    "the database cache must receive the deduped list")
 
 if failures > 0 then
     error(string.format("%d checks failed in wechat_articles_ui_spec", failures))

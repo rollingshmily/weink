@@ -930,7 +930,7 @@ function M:fetchWeChatArticles(list_type, title, old_view)
             self:showInfo(T(_("Sync WeChat articles failed:\n%1"), display_error(res_or_err)))
             return
         end
-        local articles = res_or_err.lists or {}
+        local articles = self:dedupeMpArticles(res_or_err.lists or {})
         if self.library_db then
             self.library_db:cacheMpArticles(list_type, articles)
         end
@@ -938,11 +938,37 @@ function M:fetchWeChatArticles(list_type, title, old_view)
     end)
 end
 
+-- /mp/list returns the same saved article twice -- once as a WeRead-native
+-- entry, once in the WeChat-saved form -- for articles the user touched from
+-- both apps. The raw response renders two rows on the first sync and one after
+-- the same list is read back from the database cache. Keep one row per
+-- reviewId, preferring the copy whose link already carries a chksm signature.
+function M:dedupeMpArticles(articles)
+    local is_signed = type(Content.mp_url_is_signed) == "function"
+        and Content.mp_url_is_signed or function() return false end
+    local rows, seen = {}, {}
+    for _, article in ipairs(articles or {}) do
+        local review_id = tostring(article.reviewId or article.review_id or "")
+        if review_id == "" then
+            rows[#rows + 1] = article
+        else
+            local at = seen[review_id]
+            if not at then
+                seen[review_id] = #rows + 1
+                rows[#rows + 1] = article
+            elseif not is_signed(rows[at].url) and is_signed(article.url) then
+                rows[at] = article
+            end
+        end
+    end
+    return rows
+end
+
 function M:renderWeChatArticleList(list_type, title, articles, old_view)
     local LibraryView = require("weink.ui.library_view")
     local mode = mp_mode(list_type)
     local rows = {}
-    for _, article in ipairs(articles or {}) do
+    for _, article in ipairs(self:dedupeMpArticles(articles)) do
         local cached_path = Content.article_cached_path(self.settings, nil, article)
         if not Content.is_valid_article_cache(cached_path) then
             cached_path = nil
