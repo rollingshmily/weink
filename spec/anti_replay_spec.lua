@@ -10,7 +10,6 @@ local function assert_eq(actual, expected, label)
 end
 
 local AntiReplay = require("weread.lib.anti_replay")
-local Crypto = require("weread.lib.crypto")
 local bit = require("bit")
 
 assert_eq(AntiReplay.SALT, "5a6f1", "salt matches libencrypt .rodata 0xB274")
@@ -51,25 +50,25 @@ assert_eq(xor_mod11(""), 0, "empty xor")
 assert_eq(xor_mod11("\0"), 0, "single zero byte")
 assert_eq(xor_mod11("AB"), bit.bxor(65, 66) % 11, "two byte xor")
 
--- sha256 hex of the double-rotated stage is exercised through the public API;
--- assert the composition matches an explicit re-implementation.
+-- Known-answer vectors captured from a real device (Frida hook on
+-- EncryptUtils.getSignatures + mitmproxy), 2026-10-07. Each input byte is
+-- RemapString-substituted before GenSignature, so these lock the remap step.
 do
-    local function rotate(text, key)
-        local n = #text
-        local out = {}
-        for i = 1, n do
-            out[((key + i - 1) % n) + 1] = text:sub(i, i)
-        end
-        return table.concat(out)
+    local vectors = {
+        { "5ecdcfd7f", "367", "1791346342",
+          "20619540_eink3344933858538641810883181483_eink3344933858538641810883181483_3300198989_0_+08:00_175_0_1791345600_+08:00_175_0",
+          "f657a17e0f36cd74c8b5f14c9744d6f7503cd6280c0e2ee81fd38d2d6bc636fd" },
+        { "5ecdcfd7f", "47", "1791344069",
+          "20619540_eink3344933858538641810883181483_eink3344933858538641810883181483_3300198989_0_+08:00_181_0_1791342000_+08:00_181_0",
+          "c625faebaaa5f7c7182395cc452cfdc9309439341718ceeedd23963c538801ec" },
+        { "5ecdcfd7f", "624", "1791346522",
+          "20619540_eink3344933858538641810883181483_eink3344933858538641810883181483_3300198989_0_+08:00_120_0_1791345600_+08:00_120_0",
+          "5abe6f65c80ddeb53a65086976cba3b4ff501882b23ea1d36144793a2cd5ab1a" },
+    }
+    for index, vector in ipairs(vectors) do
+        assert_eq(AntiReplay.sign({ vector[1], vector[2], vector[3], vector[4] }),
+            vector[5], "device vector " .. index)
     end
-    local parts = { "123", "1791333600000", "vid_dev_app_book", "5a6f1" }
-    table.sort(parts)
-    local concat = table.concat(parts)
-    local stage1 = rotate(concat, xor_mod11(concat))
-    local hex1 = Crypto.sha256_hex(stage1)
-    local stage2 = rotate(hex1, xor_mod11(hex1))
-    assert_eq(AntiReplay.sign({ "123", "1791333600000", "vid_dev_app_book" }),
-        Crypto.sha256_hex(stage2), "composition matches the traced algorithm")
 end
 
 -- generatePayLoad(): the signed field string, mirroring ReportService.generatePayLoad.

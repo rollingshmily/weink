@@ -30,6 +30,24 @@ local M = {}
 
 M.SALT = "5a6f1"
 
+-- RemapString: the library substitutes every signature-input byte through this
+-- 256-byte table *before* GenSignature sees it. Verified against three
+-- device-captured signatures (see spec/anti_replay_spec.lua). The table lives in
+-- .rodata of libencrypt.so (arm64 0xD9FC, armeabi-v7a 0xB174).
+local REMAP_HEX = "34ca55401db693c63130293532a7b811c2b516fa8bb124a4109004e908f83b8a9c8c44f9bc5c69e2a1dad2d37589f71e2d5056d77253bf22fb200f012e45876e6648f2e0cdfe67a943f49451cea54aee13268eccaa33145d0e39bbcf912b814dea99ec1a2c85c5d936744b18e1f13d9d419fb4170dd64cbedcaf972877f062ff71c1c8278f6c68a89be6591c1b1209984e3f063700ba1f0a192fc9d5d057496ffd25e4610c42cb96645fdbad60238d9a6dc3c45e3eb9926abd5b077f7695ed4fab847a80e778c7e5eb73836bfc38467d4765b352633a05d1efa3a6de9e3c02aeb27ba0f6f32ac0ac86035a540bf582d47ee3dfb0d8dd21e87c88a2795870b715"
+local REMAP = {}
+for i = 1, 256 do
+    REMAP[i] = tonumber(REMAP_HEX:sub(i * 2 - 1, i * 2), 16)
+end
+
+local function remap(text)
+    local out = {}
+    for i = 1, #text do
+        out[i] = string.char(REMAP[text:byte(i) + 1])
+    end
+    return table.concat(out)
+end
+
 local function xor_mod11(text)
     local accumulator = 0
     for i = 1, #text do
@@ -107,8 +125,9 @@ end
 function M.sign(keys)
     local parts = {}
     for _i, part in ipairs(keys or {}) do
-        parts[#parts + 1] = tostring(part == nil and "" or part)
+        parts[#parts + 1] = remap(tostring(part == nil and "" or part))
     end
+    -- The salt is pushed by the library itself, so it is NOT remapped.
     parts[#parts + 1] = M.SALT
     table.sort(parts)
     return stage(stage(table.concat(parts)))

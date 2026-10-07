@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.96]
+
+- **修复阅读上报签名：签名前必须对每个输入串做一次 `RemapString` 单字节替换。** 墨水屏客户端在把 `[token, random, timestamp, generatePayLoad 串]` 交给 native `GenSignature` 之前，会先用 `libencrypt.so` 里那张 256 字节替换表逐字节改写每个串（盐 `5a6f1` 由库内部追加、不参与 Remap）。此前插件按明文签名，服务端一律丢弃写入——这是「上报返回 `succ=1` 却零入账」的根因。
+- 已用**三个真机抓包向量**逐字节验证（Frida hook `EncryptUtils.getSignatures` + mitmproxy 实抓 `POST /book/read`），修正后的实现与真机 signature 完全一致；这三个向量同时落进 `spec/anti_replay_spec.lua` 作为回归锁。
+- 已知：`guest_token` 为内置默认值 `5ecdcfd7f`（服务端 `/feature` 不下发该字段）；`/config` 返回的 token 在真实流量中从未被使用。
+
 ## [1.2.95]
 
 - 阅读上报改为按墨水屏 APK 的完整合同发送：累计 `readingTime` + `hours` 小时桶、设备/app/安装身份、书籍版本与其余标量字段，并附防重放签名（`guest_token` 默认值，来自原生 `GenSignature` 的静态还原）；小时桶跨过 1 个时改走 `/book/batchUploadProgress`，服务端确认后清空本地账本。
