@@ -6,7 +6,7 @@ local Checkpoint = {}
 
 local function safe_component(value)
     value = tostring(value or ""):gsub("[^%w%._-]", "_")
-    return value ~= "" and value or "weread"
+    return value ~= "" and value or "weink"
 end
 
 local function parent_dir(path)

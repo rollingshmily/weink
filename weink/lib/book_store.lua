@@ -38,7 +38,7 @@ local article_fields = {
 
 local function basename_safe(value)
     value = tostring(value or ""):gsub("[^%w%._-]", "_")
-    return value ~= "" and value or "weread"
+    return value ~= "" and value or "weink"
 end
 
 local function dirname(path)

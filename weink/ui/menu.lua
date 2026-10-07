@@ -24,13 +24,13 @@ for _i, module in ipairs({
     if ok and type(order) == "table" and type(order.tools) == "table" then
         local already = false
         for _j, name in ipairs(order.tools) do
-            if name == "weread" then
+            if name == "weink" then
                 already = true
                 break
             end
         end
         if not already then
-            table.insert(order.tools, 1, "weread")
+            table.insert(order.tools, 1, "weink")
         end
     end
 end

@@ -218,8 +218,8 @@ end
 expect(prefetch ~= nil, "download settings contain a prefetch submenu")
 local fm_order = require("ui/elements/filemanager_menu_order")
 local reader_order = require("ui/elements/reader_menu_order")
-expect(fm_order.tools[1] == "weread", "WeRead is first in the filemanager tools menu")
-expect(reader_order.tools[1] == "weread", "WeRead is first in the reader tools menu")
+expect(fm_order.tools[1] == "weink", "Weink is first in the filemanager tools menu")
+expect(reader_order.tools[1] == "weink", "Weink is first in the reader tools menu")
 
 local prefetch_items = prefetch and prefetch.sub_item_table_func() or {}
 expect(#prefetch_items == 3, "prefetch submenu contains exactly three settings")

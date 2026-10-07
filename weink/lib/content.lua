@@ -10,7 +10,7 @@ local Content = {}
 local function basename_safe(value)
     value = tostring(value or ""):gsub("[^%w%._-]", "_")
     if value == "" then
-        value = "weread"
+        value = "weink"
     end
     return value
 end
@@ -20,7 +20,7 @@ local function filename_safe(value)
     value = value:gsub("^%s+", ""):gsub("%s+$", "")
     value = value:gsub("%s+", " ")
     if value == "" then
-        value = "weread"
+        value = "weink"
     end
     return value
 end
@@ -139,7 +139,7 @@ end
 function Content.book_content_epub_path(settings, book, suffix)
     local content_dir = Content.book_content_dir(settings)
     ensure_directory(content_dir)
-    local book_id = book and (book.book_id or book.bookId) or "weread"
+    local book_id = book and (book.book_id or book.bookId) or "weink"
     local book_title = (book and book.title) or "WeRead"
     local label = book_title
     if suffix and suffix ~= "" and suffix ~= "book" then
