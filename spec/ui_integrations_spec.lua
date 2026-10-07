@@ -35,11 +35,11 @@ _G.__ZEN_UI_REGISTER_HOME_ITEM = function(id, builder, options)
 end
 
 expect(ZenUI:onZenUIReady(plugin) == true,
-    "ZenUIReady did not register the Weink Home widget")
+    "ZenUIReady did not register the WeRead Home widget")
 expect(registered_id == "weink.bookshelf"
     and type(registered_builder) == "function",
     "ZenUI registration used the wrong item descriptor")
-expect(registered_options.label == "Weink",
+expect(registered_options.label == "WeRead",
     "ZenUI registration used the wrong label")
 expect(ZenUI:_openBookshelf() == true and opened == 1,
     "ZenUI entry did not call the stable bookshelf method")
