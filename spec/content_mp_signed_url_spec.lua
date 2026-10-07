@@ -90,4 +90,50 @@ expect(not ok, "challenge page must not be treated as article content")
 expect(tostring(err):find("verification", 1, true) ~= nil,
     "challenge error must mention the WeChat verification, got: " .. tostring(err))
 
+-- 4) /review/single repeats the unsigned stored form on most calls (measured
+--    15% signed on 2026-10-08), so the lookup must keep asking until WeChat
+--    hands back a signed doc_url instead of giving up after one try.
+local retry_calls = 0
+local retry_client = {
+    eink_json = function(_self, path, params)
+        retry_calls = retry_calls + 1
+        expect(path == "/review/single", "wrong retry endpoint: " .. tostring(path))
+        expect(params.reviewId == "r-4", "wrong retry reviewId: " .. tostring(params.reviewId))
+        if retry_calls < 3 then
+            return { review = { mpInfo = { doc_url = UNSIGNED } } }
+        end
+        return { review = { mpInfo = { doc_url = DOC_URL } } }
+    end,
+    get_public_text = function(_self, url)
+        requested = url
+        if not url:find("chksm=", 1, true) then
+            local challenge = "<html><body>poc_token=abc</body></html>"
+            return challenge, { content_type = "text/html", length = #challenge,
+                url = "https://mp.weixin.qq.com/mp/wappoc_appmsgcaptcha?poc_token=***" }
+        end
+        return ARTICLE_BODY, { content_type = "text/html", length = #ARTICLE_BODY, url = url }
+    end,
+}
+local retry_path = Content.fetch_article_html(retry_client, settings, nil,
+    { reviewId = "r-4", title = "retry", url = UNSIGNED })
+expect(retry_calls == 3, "unsigned doc_url must be retried, got " .. retry_calls .. " calls")
+expect(requested == DOC_URL, "retry must fetch the signed doc_url, got " .. tostring(requested))
+expect(Content.is_valid_article_cache(retry_path), "retried article cache missing")
+
+-- 5) When every attempt stays unsigned the stored link is what gets fetched
+--    (and named as a verification), rather than silently claiming success.
+local exhausted_calls = 0
+local exhausted_client = {
+    eink_json = function() exhausted_calls = exhausted_calls + 1; return {} end,
+    get_public_text = function(_self, url)
+        local challenge = "<html><body>poc_token=x</body></html>"
+        return challenge, { content_type = "text/html", length = #challenge,
+            url = "https://mp.weixin.qq.com/mp/wappoc_appmsgcaptcha?poc_token=***" }
+    end,
+}
+local resolved = Content.resolve_mp_article_url(exhausted_client,
+    { reviewId = "r-5", url = UNSIGNED })
+expect(resolved == UNSIGNED, "exhausted lookup must fall back to the stored link")
+expect(exhausted_calls > 1, "exhausted lookup must have retried, got " .. exhausted_calls)
+
 print("content_mp_signed_url_spec: " .. checks .. " checks passed")
