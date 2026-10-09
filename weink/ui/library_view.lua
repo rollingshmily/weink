@@ -301,6 +301,7 @@ local LibraryView = FocusManager:extend{
     rows = nil,
     on_page_changed = nil,
     on_back = nil,
+    on_categories = nil,
     back_label = nil,
 }
 
@@ -331,6 +332,51 @@ function LibraryView:tabBar()
 end
 
 function LibraryView:actionBar()
+    if self.mode == "store" then
+        -- A store page spends its chrome on navigation only: search and
+        -- categories at the root, a back cell when nested, plus refresh.
+        -- Full-width text rows for these wasted half the screen.
+        local cells = {}
+        if self.back_label and self.back_label ~= "" then
+            cells[#cells + 1] = { text = self.back_label, action = "back" }
+        else
+            cells[#cells + 1] = { text = _("⌕ Search"), action = "search" }
+            cells[#cells + 1] = { text = _("☰ Categories"), action = "categories" }
+        end
+        cells[#cells + 1] = { text = _("↻ Refresh"), action = "refresh" }
+        local handlers = {
+            back = function() if self.on_back then self.on_back() end end,
+            search = function() if self.on_search then self.on_search() end end,
+            categories = function() if self.on_categories then self.on_categories() end end,
+            refresh = function() if self.on_refresh then self.on_refresh() end end,
+        }
+        local row = HorizontalGroup:new{}
+        local buttons = {}
+        local count = #cells
+        local cell_w = math.floor(self.screen_w / count)
+        for index, cell in ipairs(cells) do
+            local width = index == count
+                and self.screen_w - cell_w * (count - 1) or cell_w
+            local button = Button:new{
+                text = cell.text,
+                width = width,
+                height = Screen:scaleBySize(38),
+                text_font_size = 18,
+                radius = 0, margin = 0, bordersize = 0,
+                text_font_bold = false,
+                show_parent = self,
+                callback = handlers[cell.action] or function() end,
+            }
+            buttons[#buttons + 1] = button
+            table.insert(row, button)
+        end
+        self._action_secondary = {}
+        self._action_primary = buttons
+        return FrameContainer:new{
+            bordersize = 0, padding = 0, margin = 0,
+            row,
+        }
+    end
     if self.back_label and self.back_label ~= "" then
         local back_button = Button:new{
             text = self.back_label,
@@ -345,23 +391,6 @@ function LibraryView:actionBar()
         return FrameContainer:new{
             bordersize = 0, padding = 0, margin = 0,
             HorizontalGroup:new{ back_button },
-        }
-    end    if self.mode == "store" then
-        -- The shelf actions (sort / filter / search shelf) mean nothing here;
-        -- the store has its own search and category rows.
-        local refresh_button = Button:new{
-            text = _("↻ Get latest"),
-            width = self.screen_w,
-            radius = 0, margin = 0, bordersize = 0,
-            text_font_bold = false,
-            show_parent = self,
-            callback = function() if self.on_refresh then self.on_refresh() end end,
-        }
-        self._action_secondary = {}
-        self._action_primary = { refresh_button }
-        return FrameContainer:new{
-            bordersize = 0, padding = 0, margin = 0,
-            HorizontalGroup:new{ refresh_button },
         }
     end    if self.mode == "favorites" or self.mode == "floating" then
         local refresh_button = Button:new{
@@ -735,34 +764,50 @@ function LibraryView:coverWallContent()
     local cell_height = math.floor(math.max(1,
         tonumber(self.cover_cell_height) or Screen:scaleBySize(220)))
     local grid_row, grid_focus, grid_kind, grid_span
+    local grid_gap, grid_cell_w, grid_cell_h, grid_placed
     local function flush_grid()
         if not grid_row then return end
-        -- Pad the tail so the last row keeps the same cell widths.
-        while #grid_row < grid_span do
+        -- Pad the tail with cells of the SAME width as this row, so the last
+        -- row keeps its alignment (a book-width filler here used to mangle the
+        -- two-column category rows).
+        while grid_placed < grid_span do
+            if grid_gap > 0 and grid_placed > 0 then
+                grid_row[#grid_row + 1] = HorizontalSpan:new{ width = grid_gap }
+            end
             grid_row[#grid_row + 1] = FrameContainer:new{
                 bordersize = 0, padding = 0, margin = 0,
                 background = Blitbuffer.COLOR_WHITE,
                 CenterContainer:new{
-                    dimen = Geom:new{ w = cell_width, h = cell_height },
+                    dimen = Geom:new{ w = grid_cell_w, h = grid_cell_h },
                     TextWidget:new{ text = "", face = Font:getFace("cfont", 12) },
                 },
             }
+            grid_placed = grid_placed + 1
         end
         table.insert(content, HorizontalGroup:new(grid_row))
         grid_row, grid_focus, grid_kind, grid_span = nil, nil, nil, nil
+        grid_gap, grid_cell_w, grid_cell_h, grid_placed = nil, nil, nil, nil
     end
-    local function add_cell(kind, cell, span)
+    local function add_cell(kind, cell, span, gap, height)
         if grid_row and (grid_kind ~= kind or grid_span ~= span) then
             flush_grid()
         end
         if not grid_row then
-            grid_row, grid_focus, grid_kind, grid_span = {}, {}, kind, span
+            grid_gap = tonumber(gap) or 0
+            grid_cell_w = math.floor(
+                (self.content_width - grid_gap * (span - 1)) / span)
+            grid_cell_h = tonumber(height) or cell_height
+            grid_row, grid_focus, grid_kind, grid_span, grid_placed = {}, {}, kind, span, 0
             self._focus_item_rows[#self._focus_item_rows + 1] = grid_focus
+        end
+        if grid_gap > 0 and grid_placed > 0 then
+            grid_row[#grid_row + 1] = HorizontalSpan:new{ width = grid_gap }
         end
         grid_row[#grid_row + 1] = cell
         grid_focus[#grid_focus + 1] = cell
         self._item_rows[#self._item_rows + 1] = cell
-        if #grid_row >= span then flush_grid() end
+        grid_placed = grid_placed + 1
+        if grid_placed >= grid_span then flush_grid() end
     end
     for _i, row in ipairs(self.rows or {}) do
         if row.kind == "book" then
@@ -781,17 +826,20 @@ function LibraryView:coverWallContent()
             }, columns)
         elseif row.kind == "category" then
             local entry = row.category or {}
+            local cat_gap = Screen:scaleBySize(6)
+            local cat_height = Screen:scaleBySize(62)
+            local cat_width = math.floor((self.content_width - cat_gap) / 2)
             add_cell("category", CategoryCell:new{
                 text = entry.title or "",
                 count = (tonumber(entry.total) or 0) > 0
                     and T(_("%1 books"), tostring(entry.total)) or "",
-                width = math.floor(self.content_width / 2),
-                height = Screen:scaleBySize(64),
+                width = cat_width,
+                height = cat_height,
                 show_parent = self,
                 callback = function()
                     if self.on_select then self.on_select(row, self.mode) end
                 end,
-            }, 2)
+            }, 2, cat_gap, cat_height)
         else
             flush_grid()
             local widget = self:storeRowWidget(row)
@@ -878,6 +926,7 @@ function LibraryView:apply(data, callbacks)
     self.on_select = callbacks.on_select
     self.on_page_changed = callbacks.on_page_changed
     self.on_back = callbacks.on_back
+    self.on_categories = callbacks.on_categories
     self:build()
     UIManager:setDirty(self, function() return "ui", self.dimen end)
 end

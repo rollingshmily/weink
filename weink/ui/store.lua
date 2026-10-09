@@ -164,6 +164,8 @@ function M:storeCallbacks()
         on_switch = function(mode) self:onStoreTabSwitch(mode) end,
         on_back = function() return self:storeBack() end,
         on_refresh = function() self:storeFrameRefresh(state) end,
+        on_search = function() self:showStoreSearch() end,
+        on_categories = function() self:showStoreCategories() end,
         on_select = function(row) self:onStoreRowSelected(row) end,
     }
 end
@@ -286,10 +288,7 @@ end
 -- Flatten feed sections into display rows: a heading row per section followed
 -- by its books (capped) or category tiles.
 function M:buildStoreRows(sections)
-    local rows = {
-        { kind = "action", action = "search", label = _("Search the store") },
-        { kind = "action", action = "categories", label = _("All categories") },
-    }
+    local rows = {}
     for _i, section in ipairs(sections) do
         local has_content = #section.books > 0
             or #section.categories > 0
@@ -298,7 +297,6 @@ function M:buildStoreRows(sections)
             rows[#rows + 1] = {
                 kind = "heading",
                 text = section_title(section),
-                status = section.total > 0 and tostring(section.total) or "",
                 more = #section.books > SECTION_PREVIEW,
                 section = section,
             }
