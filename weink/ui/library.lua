@@ -380,7 +380,6 @@ function M:fetchStoreCovers(books, redraw)
         self.store_cover_job = nil
         if changed then
             pcall(cache.prune, cache)
-            if redraw then redraw() end
         end
         local pending = self.store_cover_pending
         self.store_cover_pending = nil
@@ -422,6 +421,10 @@ function M:fetchStoreCovers(books, redraw)
             self.store_cover_job = nil
             if result == "ok" and cache:pathFor(book) then
                 changed = true
+                -- The view updates only changed cells and keeps its viewport.
+                -- Show each completed cover rather than waiting for every
+                -- download in a slow batch to finish.
+                if redraw then redraw() end
             end
             index = index + 1
             fetch_next()

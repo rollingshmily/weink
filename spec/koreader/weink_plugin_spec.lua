@@ -64,6 +64,54 @@ describe("WeRead plugin integration", function()
         bb:free()
     end)
 
+    it("keeps store scroll position through append and late cover completion", function()
+        load_plugin("weink.koplugin")
+        package.path = "plugins/weink.koplugin/?.lua;plugins/weink.koplugin/?/init.lua;" .. package.path
+        local Screen = require("device").screen
+        local Blitbuffer = require("ffi/blitbuffer")
+        local UIManager = require("ui/uimanager")
+        local View = require("weink.ui.library_view")
+        local rows, loading = {}, {}
+        for index = 1, 30 do
+            local book = { book_id = tostring(index), title = "Store book " .. index }
+            rows[index] = { kind = "book", book = book }
+            loading[book] = true
+        end
+        local data = { mode = "store", rows = rows, cover_mode = true,
+            cover_columns = 5, cover_rows = 3, cover_loading = loading }
+        local view = View.show(data, {})
+        local bb = Blitbuffer.new(Screen:getWidth(), Screen:getHeight(), Blitbuffer.TYPE_BB8)
+        view:paintTo(bb, 0, 0)
+        local scroll = view._nav_scroll
+        scroll:_scrollBy(0, scroll._max_scroll_offset_y)
+        local offset = scroll:getScrolledOffset().y
+        assert.is_true(offset > 0)
+        for index = 31, 45 do
+            local book = { book_id = tostring(index), title = "Store book " .. index }
+            rows[index] = { kind = "book", book = book }
+            loading[book] = true
+        end
+        data.scroll_offset = offset
+        view:apply(data, {})
+        scroll = view._nav_scroll
+        assert.equals(offset, scroll:getScrolledOffset().y)
+        view:paintTo(bb, 0, 0)
+        assert.equals(offset, scroll:getScrolledOffset().y)
+        scroll:_scrollBy(0, math.floor(scroll.dimen.h / 2))
+        offset = scroll:getScrolledOffset().y
+        local paths = {}
+        paths[rows[16].book] = "plugins/weink.koplugin/icons/weink-ink.png"
+        loading[rows[16].book] = nil
+        view:updateCovers(paths, loading)
+        assert.equals(scroll, view._nav_scroll)
+        assert.equals(offset, scroll:getScrolledOffset().y)
+        assert.is_true(view._item_rows[16]._has_cover)
+        view:paintTo(bb, 0, 0)
+        assert.equals(offset, scroll:getScrolledOffset().y)
+        UIManager:close(view)
+        bb:free()
+    end)
+
     it("loads its startup module through the weread namespace", function()
         -- Client, settings and menu load only when the user opens Protocol.
         -- PluginLoader discovery itself requires path_index from main.lua.

@@ -187,7 +187,14 @@ function M:storeDraw()
         view:apply(data, self:storeCallbacks())
     end
     if #missing > 0 then
-        self:fetchStoreCovers(missing, function() self:storeDraw() end)
+        self:fetchStoreCovers(missing, function()
+            -- A cover batch may finish after navigation or a tab switch. It
+            -- must neither repaint a different page nor reset the live offset.
+            if self.shelf_view ~= view or view._closed or view.mode ~= "store"
+                or self:storeTop() ~= state then return end
+            self:storeCollectCovers(state.rows)
+            view:updateCovers(self._store_cover_paths, self._store_cover_loading)
+        end)
     end
     return view
 end
@@ -548,13 +555,14 @@ function M:mountCategoryBooks(replace_top)
         loader = function()
             cache.books = {}
             cache.keep_offset = 0
+            cache.autofilled = nil
             cache.has_more = false
             self:storeLoadCategoryBooks(true)
         end,
-        on_more = function(offset)
+        on_more = cache.has_more and function(offset)
             cache.keep_offset = offset
             self:storeLoadCategoryBooks(true)
-        end,
+        end or nil,
         on_fill = (not cache.autofilled) and cache.has_more and function()
             cache.autofilled = true
             cache.keep_offset = 0
@@ -658,10 +666,10 @@ function M:mountSearch(replace_top)
             self._store_search = { keyword = keyword, books = {}, has_more = false }
             self:storeLoadSearch(true)
         end,
-        on_more = function(offset)
+        on_more = state.has_more and function(offset)
             state.keep_offset = offset
             self:storeLoadSearch(true)
-        end,
+        end or nil,
         on_fill = (not state.autofilled) and state.has_more and function()
             state.autofilled = true
             self:storeLoadSearch(true)

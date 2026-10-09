@@ -170,4 +170,40 @@ single_download_options.on_complete(true, "/cache/3.epub")
 expect(single_download_refreshed,
     "single chapter completion did not notify the chapter list")
 
+-- Store covers arrive progressively, not only after the whole serial batch.
+local cover_paths, worker_result, arrivals = {}, nil, {}
+local cover_cache = {
+    pathFor = function(_self, book) return cover_paths[book] end,
+    sourcePathFor = function() return nil end,
+    thumbnailFromCached = function() return nil end,
+    store = function(_self, book)
+        cover_paths[book] = "/cache/" .. book.book_id .. ".jpg"
+        return cover_paths[book]
+    end,
+    prune = function() end,
+}
+local cover_host = setmetatable({
+    getShelfCoverCache = function() return cover_cache end,
+    isNetworkOnline = function() return true end,
+    client = { get_binary = function() return "image bytes" end },
+    shelf_cover_subprocess = {
+        run = function(callback) callback(1, 2); return 1, 2 end,
+        write_all = function(_fd, value) worker_result = value end,
+        is_done = function() return true end,
+        read_all = function() return worker_result end,
+    },
+}, { __index = Library })
+local cover_books = {
+    { book_id = "1", cover = "https://example.invalid/1.jpg" },
+    { book_id = "2", cover = "https://example.invalid/2.jpg" },
+}
+cover_host:fetchStoreCovers(cover_books, function()
+    arrivals[#arrivals + 1] = { cover_paths[cover_books[1]], cover_paths[cover_books[2]] }
+end)
+expect(#arrivals == 2, "each successfully downloaded store cover is shown immediately")
+expect(arrivals[1][1] ~= nil and arrivals[1][2] == nil,
+    "first cover reaches the view before the second download finishes")
+expect(arrivals[2][2] ~= nil and cover_host.store_cover_job == nil,
+    "final cover is delivered and the batch settles")
+
 print(("library_cache_flow_spec: %d checks"):format(checks))

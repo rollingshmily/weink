@@ -996,6 +996,32 @@ function LibraryView:init()
     self:build()
 end
 
+-- Covers arrive after the list has been painted and possibly scrolled. Keep
+-- the scroll container (and its gesture state) intact: only rebuild changed
+-- cells, then repaint through that same cropped viewport.
+function LibraryView:updateCovers(paths, loading)
+    if self._closed then return end
+    self.cover_paths = paths
+    self.cover_loading = loading
+    local changed = false
+    for _i, cell in ipairs(self._item_rows or {}) do
+        if cell.book then
+            local path = paths and paths[cell.book] or nil
+            local pending = loading and loading[cell.book] == true or false
+            if path ~= cell.cover_path or pending ~= cell.cover_loading then
+                if cell[1] and cell[1].free then cell[1]:free() end
+                cell.cover_path = path
+                cell.cover_loading = pending
+                cell:init()
+                changed = true
+            end
+        end
+    end
+    if changed then
+        UIManager:setDirty(self, function() return "ui", self.dimen end)
+    end
+end
+
 -- Re-render this same widget with new content. Closing a full-screen view and
 -- showing another one makes e-ink do a full repaint, and the repaint is what
 -- leaks the FileManager underneath for a moment; navigation reuses the widget
@@ -1039,6 +1065,12 @@ function LibraryView:apply(data, callbacks)
 end
 
 function LibraryView:build()
+    -- Discarded scroll containers own a full-screen scratch buffer; their
+    -- inherited free() only frees children, not that buffer.
+    if self._nav_scroll and self._nav_scroll.onCloseWidget then
+        self._nav_scroll:onCloseWidget()
+    end
+    if self[1] and self[1].free then self[1]:free() end
     self.screen_w = Screen:getWidth()
     self.screen_h = Screen:getHeight()
     self.dimen = Geom:new{ x = 0, y = 0, w = self.screen_w, h = self.screen_h }
@@ -1082,6 +1114,11 @@ function LibraryView:build()
         show_parent = self,
         VerticalGroup:new{ align = "left", content },
     }
+    -- KOReader's setter only changes the offset, it does NOT request a paint.
+    -- Set it before the first paint, never in a delayed callback after the
+    -- new list has already been shown at the top.
+    local keep = math.max(0, tonumber(self.scroll_offset) or 0)
+    if keep > 0 then scroll:setScrolledOffset(Geom:new{ x = 0, y = keep }) end
     self._build_generation = (self._build_generation or 0) + 1
     self._closed = nil
     local build_generation = self._build_generation
@@ -1097,6 +1134,12 @@ function LibraryView:build()
         -- firing requests forever on a page that never grows taller.
         local function watch_bottom()
             if self._closed or build_generation ~= self._build_generation then return end
+            -- Limits are computed lazily by the first paint. A not-yet-painted
+            -- list is not an empty viewport and must not trigger auto-fill.
+            if scroll._is_scrollable == nil then
+                UIManager:scheduleIn(0.5, watch_bottom)
+                return
+            end
             local max_y = tonumber(scroll._max_scroll_offset_y) or 0
             local offset_y = tonumber(scroll._scroll_offset_y) or 0
             if max_y == 0 then
@@ -1118,15 +1161,6 @@ function LibraryView:build()
             UIManager:scheduleIn(0.5, watch_bottom)
         end
         UIManager:scheduleIn(0.6, watch_bottom)
-    end
-    if tonumber(self.scroll_offset) and tonumber(self.scroll_offset) > 0 then
-        -- A freshly built page starts at the top; without restoring the
-        -- offset an auto-load looks like a jump back to the beginning.
-        local keep = tonumber(self.scroll_offset)
-        UIManager:scheduleIn(0.05, function()
-            if self._closed or build_generation ~= self._build_generation then return end
-            pcall(function() scroll:setScrolledOffset({ x = 0, y = keep }) end)
-        end)
     end
     local rows = { self._tab_buttons }
     if #self._action_secondary > 0 then rows[#rows + 1] = self._action_secondary end
