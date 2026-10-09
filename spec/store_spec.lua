@@ -245,5 +245,27 @@ test("price labels cover whole-book, per-chapter and owned", function()
     eq(Store.price_label(Store.book({ bookId = "5" })), "", "no price")
 end)
 
+test("real ranking directory is lossless with fixed home previews", function()
+    local fixture = dofile("spec/fixtures/store_rankings_20261009.lua")
+    local rankings = Store.rankings(fixture)
+    eq(#rankings, #fixture.categories - 1, "all nineteen electronic-book chart IDs retained")
+    local ids = {}
+    for _i, entry in ipairs(rankings) do
+        eq(entry.ranking, true, "rank routing flag")
+        ids[entry.category_id] = true
+    end
+    for _i, raw in ipairs(fixture.categories) do
+        eq(ids[raw.CategoryId] == true, not raw.CategoryId:match("^album_"), "retains book chart " .. raw.CategoryId)
+    end
+    local home = Store.home_rankings(rankings)
+    eq(#home, 4, "exactly four home cards")
+    for i, title in ipairs({ "飙升榜", "新书榜", "神作榜", "总榜" }) do eq(home[i].title, title, "home title and order") end
+    fixture.categories[#fixture.categories + 1] = { CategoryId = "future_chart", title = "Future chart" }
+    fixture.categories[#fixture.categories + 1] = fixture.categories[1]
+    local future = Store.rankings(fixture)
+    eq(#future, 20, "future chart retained while duplicate is removed")
+    eq(future[#future].title, "Future chart", "future title remains server supplied")
+end)
+
 print(string.format("store_spec: %d checks, %d failure(s)", checks, failures))
 if failures > 0 then os.exit(1) end

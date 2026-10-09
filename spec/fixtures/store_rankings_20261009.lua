@@ -1,0 +1,23 @@
+-- Public /market/categories metadata; captured 2026-10-09. No account data.
+return { categories = {
+    { CategoryId = "all", title = "总榜", totalCount = 200, ranklist = 1 },
+    { CategoryId = "novel_female_finished", title = "女生小说·完结", totalCount = 291, ranklist = 1 },
+    { CategoryId = "filmorigin", title = "影视原著榜", totalCount = 50, ranklist = 1 },
+    { CategoryId = "novel_male_rising", title = "飙升·男生小说", totalCount = 299, ranklist = 1 },
+    { CategoryId = "rising", title = "飙升·出版", totalCount = 50, ranklist = 1 },
+    { CategoryId = "newrating_female", title = "神作榜·女生小说", totalCount = 18, ranklist = 1 },
+    { CategoryId = "newbook_preview", title = "新书速览", totalCount = 24, ranklist = 1 },
+    { CategoryId = "novel_male_finished", title = "男生小说·完结", totalCount = 291, ranklist = 1 },
+    { CategoryId = "album_all_rising", title = "热听榜·有声", totalCount = 185, ranklist = 1 },
+    { CategoryId = "novel_female_rising", title = "飙升·女生小说", totalCount = 298, ranklist = 1 },
+    { CategoryId = "hot_search", title = "热搜榜", totalCount = 50, ranklist = 1 },
+    { CategoryId = "newrating_potential_male", title = "神作潜力榜·男生小说", totalCount = 44, ranklist = 1 },
+    { CategoryId = "newbook", title = "新书·出版", totalCount = 50, ranklist = 1 },
+    { CategoryId = "newrating_potential_publish", title = "神作潜力榜·出版", totalCount = 1850, ranklist = 1 },
+    { CategoryId = "general_novel_rising", title = "小说榜", totalCount = 50, ranklist = 1 },
+    { CategoryId = "newrating_potential_female", title = "神作潜力榜·女生小说", totalCount = 52, ranklist = 1 },
+    { CategoryId = "newrating_male", title = "神作榜·男生小说", totalCount = 24, ranklist = 1 },
+    { CategoryId = "newrating_publish", title = "神作榜·出版", totalCount = 1189, ranklist = 1 },
+    { CategoryId = "novel_male", title = "总榜·男生小说", totalCount = 50, ranklist = 1 },
+    { CategoryId = "novel_female", title = "总榜·女生小说", totalCount = 50, ranklist = 1 },
+} }

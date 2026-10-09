@@ -195,6 +195,7 @@ local function response()
 end
 fake.client = {
     store_home = function() request_count = request_count + 1; return {} end,
+    store_rankings = function() request_count = request_count + 1; return {} end,
     category_list = function() request_count = request_count + 1; return {} end,
     store_category_books = response,
     search_store = response,
@@ -207,10 +208,65 @@ StoreUI.storeLoadCategoryBooks(fake, false)
 fake._store_search = { keyword = "Sample", books = {} }
 StoreUI.storeLoadSearch(fake, false)
 StoreUI.showSimilarBooks(fake, book)
-expect(request_count == 5, "all five navigation loaders work without loading dialogs")
+expect(request_count == 6, "all five navigation loaders and ranking directory work without loading dialogs")
 fake.client.store_category_books = function() error("request failed") end
 fake.showInfo = function(_self, message) failure = message end
 StoreUI.storeLoadCategoryBooks(fake, true)
 expect(failure ~= nil, "real request failures still display an error")
+
+local Store = require("weink.lib.store")
+fake._store_rankings = Store.rankings(dofile("spec/fixtures/store_rankings_20261009.lua"))
+local home = fake:buildStoreRows({
+    { type = 12, name = "Old charts", books = {}, topics = {}, categories = { { title = "Wrong" } } },
+    { type = 14, name = "Old rankings", books = {}, topics = {}, categories = {} },
+})
+expect(#home == 5 and home[1].text == "Category rankings", "home replaces both old chart blocks with one heading and four cards")
+expect(home[1].status == "More ›" and home[1].target.rankings, "heading has a real more action")
+local wanted = { "rising", "newbook", "newrating_publish", "all" }
+for i, id in ipairs(wanted) do
+    expect(home[i + 1].category.category_id == id and home[i + 1].category.ranking,
+        "home chart order and ranking route " .. id)
+end
+fake:onStoreRowSelected(home[1])
+expect(mounted.title == "All rankings" and #mounted.rows == 19, "more opens all electronic-book charts plus both novel totals")
+local all_charts = mounted
+local ranking_flag
+fake.openCategoryBooks = function(_self, id, title, ranking)
+    selected_category = { id = id, title = title }; ranking_flag = ranking
+end
+for _i, row in ipairs(all_charts.rows) do
+    fake:onStoreRowSelected(row)
+    expect(ranking_flag and selected_category.id == row.category.category_id,
+        "all chart cards use the ranking endpoint")
+end
+local rank_calls = {}
+fake.client.store_ranking_books = function(_client, id, count, max_idx)
+    rank_calls[#rank_calls + 1] = { id = id, count = count, max_idx = max_idx }
+    return { books = { { bookId = "rank" .. max_idx, title = "Chart" } }, hasMore = max_idx == 0 and 1 or 0 }
+end
+fake._store_category_books = { id = "rising", title = "飙升榜", ranking = true, books = {} }
+fake.storeLoadCategoryBooks = StoreUI.storeLoadCategoryBooks
+StoreUI.storeLoadCategoryBooks(fake, false)
+expect(#rank_calls == 1 and rank_calls[1].max_idx == 0, "ranking page one uses its own client method")
+mounted.on_more(240)
+expect(#rank_calls == 2 and rank_calls[2].max_idx == 1 and #mounted.rows == 2,
+    "ranking continuation appends books with the next cursor")
+expect(mounted.keep_offset == 240 and mounted.on_more == nil, "ranking terminal page preserves offset and stops")
+mounted.loader()
+expect(rank_calls[3].max_idx == 0 and #mounted.rows == 1, "ranking refresh resets the cursor without changing route")
+fake.client.store_rankings = function() return dofile("spec/fixtures/store_rankings_20261009.lua") end
+fake:showStoreRankings(true)
+expect(mounted.title == "All rankings" and #mounted.rows == 19, "directory refresh remains on all chart cards")
+
+local stack = setmetatable({
+    _store_rankings = fake._store_rankings, _store_cover_layout = false,
+    requireLogin = function() return true end, storeDraw = function() end,
+}, { __index = StoreUI })
+stack:storePush({ title = "WeRead Store", rows = home })
+stack:onStoreRowSelected(home[1])
+stack:storePush({ title = "飙升榜", rows = {} })
+expect(stack:storeFrameData().back_label == "‹ Back to All rankings", "chart back button targets the all-rankings page")
+expect(stack:storeBack() and #stack:storeTop().rows == 19, "chart returns to all chart cards")
+expect(stack:storeBack() and stack:storeTop().title == "WeRead Store", "all charts returns to home")
 
 print(("store_scroll_flow_spec: %d checks"):format(checks))

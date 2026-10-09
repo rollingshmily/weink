@@ -277,7 +277,9 @@ function M:storeLoadHome(replace_top)
     self:storeFetchBegin("home")
     self:runOnlineTask(_("WeRead Store"), function()
         local ok, result = pcall(function()
-            return self.client:store_home()
+            local home = self.client:store_home()
+            self._store_rankings = Store.rankings(self.client:store_rankings())
+            return home
         end)
         self:storeFetchEnd("home")
         if not ok then
@@ -300,30 +302,46 @@ end
 -- by its books (capped) or category tiles.
 function M:buildStoreRows(sections)
     local rows = {}
-    for _i, section in ipairs(sections) do
-        local has_content = #section.books > 0
-            or #section.categories > 0
-            or #section.topics > 0
-        if has_content then
-            rows[#rows + 1] = {
-                kind = "group",
-                text = section_title(section),
-                status = #section.books > SECTION_PREVIEW and _("More ›") or "",
-                target = #section.books > SECTION_PREVIEW and section or nil,
-            }
+    local ranking_added = false
+    local function add_rankings()
+        if ranking_added then return end
+        ranking_added = true
+        rows[#rows + 1] = {
+            kind = "group", text = _("Category rankings"), status = _("More ›"),
+            target = { rankings = true },
+        }
+        for _i, ranking in ipairs(Store.home_rankings(self._store_rankings)) do
+            rows[#rows + 1] = { kind = "category", category = ranking }
         end
-        for index, book in ipairs(section.books) do
-            if index > SECTION_PREVIEW then break end
-            rows[#rows + 1] = { kind = "book", book = book }
-        end
-        for _j, category in ipairs(section.categories) do
-            rows[#rows + 1] = { kind = "category", category = category }
-        end
-        for _j, topic in ipairs(section.topics) do
-            rows[#rows + 1] = { kind = "topic", topic = topic }
-        end
-
     end
+    for _i, section in ipairs(sections) do
+        if section.type == Store.SECTION_TYPE.RANK_CATEGORY or section.type == Store.SECTION_TYPE.RANK then
+            add_rankings()
+        else
+            local has_content = #section.books > 0
+                or #section.categories > 0
+                or #section.topics > 0
+            if has_content then
+                rows[#rows + 1] = {
+                    kind = "group",
+                    text = section_title(section),
+                    status = #section.books > SECTION_PREVIEW and _("More ›") or "",
+                    target = #section.books > SECTION_PREVIEW and section or nil,
+                }
+            end
+            for index, book in ipairs(section.books) do
+                if index > SECTION_PREVIEW then break end
+                rows[#rows + 1] = { kind = "book", book = book }
+            end
+            for _j, category in ipairs(section.categories) do
+                rows[#rows + 1] = { kind = "category", category = category }
+            end
+            for _j, topic in ipairs(section.topics) do
+                rows[#rows + 1] = { kind = "topic", topic = topic }
+            end
+        end
+    end
+    add_rankings()
     return rows
 end
 
@@ -406,6 +424,39 @@ end
 
 -- ---------- category browsing ----------
 
+function M:showStoreRankings(replace_top)
+    if not self:requireLogin(true, true) then return end
+    if self._store_rankings and not replace_top then
+        self:mountStoreRankings(false)
+        return
+    end
+    if self:storeFetchBlocked("rankings") then return end
+    self:storeFetchBegin("rankings")
+    self:runOnlineTask(_("All rankings"), function()
+        local ok, result = pcall(function() return self.client:store_rankings() end)
+        self:storeFetchEnd("rankings")
+        if not ok then
+            logger.err("rankings failed:", log_error(result))
+            self:showInfo(T(_("Load rankings failed:\n%1"), display_error(result)))
+            return
+        end
+        self._store_rankings = Store.rankings(result)
+        self:mountStoreRankings(replace_top)
+    end)
+end
+
+function M:mountStoreRankings(replace_top)
+    local rows = {}
+    for _i, ranking in ipairs(self._store_rankings or {}) do
+        rows[#rows + 1] = { kind = "category", category = ranking }
+    end
+    local frame = {
+        title = _("All rankings"), rows = rows,
+        loader = function() self:showStoreRankings(true) end,
+    }
+    if replace_top then self:storeReplace(frame) else self:storePush(frame) end
+end
+
 function M:showStoreCategories()
     if not self:requireLogin(true, true) then return end
     if self._store_category_raw then
@@ -474,7 +525,7 @@ function M:openStoreCategory(entry)
     end
     local category_id = tostring(entry.category_id or "")
     if category_id ~= "" then
-        self:openCategoryBooks(category_id, entry.title)
+        self:openCategoryBooks(category_id, entry.title, entry.ranking)
         return
     end
     -- Ranking tiles (/store/list type=12) carry their top books but no
@@ -490,6 +541,7 @@ end
 -- Whole section: the "see all" row at the end of a home feed block.
 function M:openStoreSection(section)
     if type(section) ~= "table" then return end
+    if section.rankings then self:showStoreRankings(false); return end
     local rows = {}
     for _i, book in ipairs(section.books or {}) do
         rows[#rows + 1] = { kind = "book", book = book }
@@ -498,12 +550,13 @@ function M:openStoreSection(section)
     self:storePush({ title = section_title(section), rows = rows })
 end
 
-function M:openCategoryBooks(category_id, title)
+function M:openCategoryBooks(category_id, title, ranking)
     category_id = tostring(category_id or "")
     if category_id == "" then return end
     self._store_category_books = {
         id = category_id,
         title = title,
+        ranking = ranking,
         books = {},
         has_more = false,
     }
@@ -514,11 +567,14 @@ function M:storeLoadCategoryBooks(replace_top)
     local cache = self._store_category_books
     if not cache then return end
     local max_idx = #cache.books
-    local key = "category:" .. cache.id .. ":" .. tostring(max_idx)
+    local key = (cache.ranking and "ranking:" or "category:") .. cache.id .. ":" .. tostring(max_idx)
     if self:storeFetchBlocked(key) then return end
     self:storeFetchBegin(key)
     self:runOnlineTask(_("Category"), function()
         local ok, result = pcall(function()
+            if cache.ranking then
+                return self.client:store_ranking_books(cache.id, HOME_PAGE_SIZE, max_idx)
+            end
             return self.client:store_category_books(cache.id, HOME_PAGE_SIZE, max_idx)
         end)
         self:storeFetchEnd(key)

@@ -536,6 +536,34 @@ function Client:store_recommend()
     return self:eink_json("/store/recommend", {})
 end
 
+-- APK StoreService.loadAllRankList uses ranklist=1, subtype=0. The directory
+-- omits the two novel total charts, which have their own category metadata.
+function Client:store_rankings()
+    local result = self:eink_json("/market/categories", { ranklist = 1, synckey = 0, subtype = 0 })
+    local categories = result.categories or {}
+    result.categories = categories
+    local seen = {}
+    for _i, node in ipairs(categories) do
+        seen[tostring(node.CategoryId or node.categoryId or "")] = true
+    end
+    for _i, id in ipairs({ "novel_male", "novel_female" }) do
+        if not seen[id] then
+            categories[#categories + 1] = self:eink_json("/market/categories", {
+                categoryId = id, synckey = 0, rank = 1,
+            })
+        end
+    end
+    return result
+end
+
+-- Rankings are not ordinary store categories: rank=0 returns an empty chart.
+function Client:store_ranking_books(category_id, count, max_idx)
+    return self:eink_json("/market/category", {
+        categoryId = tostring(category_id or ""), synckey = 0, rank = 1,
+        count = tonumber(count) or 20, maxIdx = tonumber(max_idx) or 0,
+    })
+end
+
 -- Flat category tree: `categories` (e-books) + `novelCategories`.
 function Client:category_list()
     return self:eink_json("/category/list", {})

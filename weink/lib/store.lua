@@ -24,6 +24,53 @@ Store.SECTION_TYPE = {
     TOPIC_LIST = 10,
 }
 
+Store.HOME_RANKING_IDS = { "rising", "newbook", "newrating_publish", "all" }
+local ranking_titles = {
+    rising = "飙升榜", hot_search = "热搜榜", newbook = "新书榜",
+    general_novel_rising = "小说榜", filmorigin = "原著榜",
+    novel_male = "男生小说榜", novel_female = "女生小说榜", all = "总榜",
+    newrating_publish = "神作榜", newrating_potential_publish = "潜力榜",
+}
+local ranking_order = {
+    "rising", "hot_search", "newbook", "general_novel_rising", "filmorigin",
+    "novel_male", "novel_female", "all", "newrating_publish", "newrating_potential_publish",
+}
+
+-- Keep every electronic-book chart, including unfamiliar future IDs. Audio
+-- charts carry albums instead of books and do not belong on this reader.
+-- Only the main cards get short labels; variants keep their server titles.
+function Store.rankings(response)
+    local entries, by_id, out = {}, {}, {}
+    for _i, node in ipairs(type(response) == "table" and response.categories or {}) do
+        local id = tostring(node.CategoryId or node.categoryId or "")
+        if id ~= "" and not id:match("^album_") and not by_id[id] then
+            local entry = {
+                category_id = id, title = ranking_titles[id] or tostring(node.title or id),
+                total = tonumber(node.totalCount) or 0, ranking = true,
+            }
+            entries[#entries + 1] = entry
+            by_id[id] = entry
+        end
+    end
+    local added = {}
+    for _i, id in ipairs(ranking_order) do
+        if by_id[id] then out[#out + 1] = by_id[id]; added[id] = true end
+    end
+    for _i, entry in ipairs(entries) do
+        if not added[entry.category_id] then out[#out + 1] = entry end
+    end
+    return out
+end
+
+function Store.home_rankings(rankings)
+    local by_id, out = {}, {}
+    for _i, entry in ipairs(rankings or {}) do by_id[entry.category_id] = entry end
+    for _i, id in ipairs(Store.HOME_RANKING_IDS) do
+        if by_id[id] then out[#out + 1] = by_id[id] end
+    end
+    return out
+end
+
 -- Books whose payType carries the "whole book purchase" bit can be downloaded
 -- only after paying. payingStatus values verified live 2026-10-09:
 --   1 = already owned, 2 = purchasable, 4 = per-chapter serial.

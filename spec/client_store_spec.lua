@@ -150,5 +150,43 @@ test("search keeps the count and keyword the caller asked for", function()
     eq(calls[1].params.count, 10, "count")
 end)
 
+test("ranking directory preserves server IDs and adds omitted novel totals", function()
+    local client = stub_client()
+    client.eink_json = function(_self, path, params)
+        calls[#calls + 1] = { path = path, params = params }
+        if params.ranklist then return { categories = { { CategoryId = "rising" }, { CategoryId = "future_chart" } } } end
+        return { CategoryId = params.categoryId, title = params.categoryId }
+    end
+    local result = client:store_rankings()
+    eq(calls[1].path, "/market/categories", "directory route")
+    eq(calls[1].params.ranklist, 1, "APK directory switch")
+    eq(calls[1].params.synckey, 0, "full directory")
+    eq(calls[1].params.subtype, 0, "store subtype")
+    eq(#result.categories, 4, "server IDs retained and two totals appended")
+    eq(result.categories[2].CategoryId, "future_chart", "unknown future chart is preserved")
+    eq(calls[2].params.categoryId, "novel_male", "male total metadata")
+    eq(calls[3].params.categoryId, "novel_female", "female total metadata")
+    eq(calls[2].params.rank, 1, "novel metadata uses rank=1")
+    client.eink_json = function(_self, path, params)
+        calls[#calls + 1] = { path = path, params = params }
+        return { categories = { { CategoryId = "novel_male" }, { CategoryId = "novel_female" } } }
+    end
+    local before = #calls
+    client:store_rankings()
+    eq(#calls - before, 1, "novel totals already in the directory are not refetched")
+end)
+
+test("ranking paging always uses /market/category and rank=1", function()
+    local client = stub_client()
+    client:store_ranking_books("rising", 20, 0)
+    client:store_ranking_books("rising", 20, 20)
+    eq(calls[1].path, "/market/category", "ranking route")
+    eq(calls[1].params.rank, 1, "not ordinary category order")
+    eq(calls[1].params.synckey, 0, "full pages, not delta sync")
+    eq(calls[1].params.maxIdx, 0, "initial cursor")
+    eq(calls[2].params.maxIdx, 20, "continuation cursor")
+    eq(calls[2].params.count, 20, "page size")
+end)
+
 print(string.format("client_store_spec: %d checks, %d failure(s)", checks, failures))
 if failures > 0 then os.exit(1) end
