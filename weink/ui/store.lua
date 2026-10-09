@@ -431,7 +431,7 @@ function M:mountCategoryTree(replace_top)
     local groups = Store.category_groups(self._store_category_raw or {})
     for _i, group in ipairs(groups) do
         rows[#rows + 1] = {
-            kind = "heading",
+            kind = "group",
             text = group.title,
             status = T(_("%1 categories"), tostring(#group.children)),
         }

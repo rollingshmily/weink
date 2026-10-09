@@ -652,6 +652,64 @@ function LibraryView:content()
 end
 
 
+-- Group heading for the category screen: a solid black bar, the group name in
+-- bold, then the child count right next to it (not pushed to the far right).
+local GroupHeading = InputContainer:extend{
+    text = "",
+    count = "",
+    width = nil,
+    show_parent = nil,
+}
+
+function GroupHeading:init()
+    local pad = Size.padding.large
+    local bar_w = Screen:scaleBySize(6)
+    local bar_h = Screen:scaleBySize(22)
+    self.frame = FrameContainer:new{
+        bordersize = 0,
+        radius = 0,
+        margin = 0,
+        padding_left = pad,
+        padding_right = pad,
+        padding_top = Size.padding.default,
+        padding_bottom = Size.padding.small,
+        background = Blitbuffer.COLOR_WHITE,
+        show_parent = self.show_parent,
+        HorizontalGroup:new{
+            align = "center",
+            LineWidget:new{
+                dimen = Geom:new{ w = bar_w, h = bar_h },
+                background = Blitbuffer.COLOR_BLACK,
+            },
+            HorizontalSpan:new{ width = Size.padding.default },
+            TextWidget:new{
+                text = self.text or "",
+                face = Font:getFace("cfont", 20),
+                bold = true,
+            },
+            HorizontalSpan:new{ width = Size.padding.default },
+            TextWidget:new{
+                text = self.count or "",
+                face = Font:getFace("cfont", 14),
+                fgcolor = Blitbuffer.COLOR_DARK_GRAY,
+            },
+        },
+    }
+    self[1] = self.frame
+    self.dimen = self.frame:getSize()
+end
+
+function GroupHeading:onFocus()
+    self.frame.invert = true
+    UIManager:widgetRepaint(self.frame, self.frame.dimen.x, self.frame.dimen.y)
+    UIManager:setDirty(nil, "fast", self.frame.dimen)
+end
+
+function GroupHeading:onUnfocus()
+    self.frame.invert = false
+    UIManager:widgetRepaint(self.frame, self.frame.dimen.x, self.frame.dimen.y)
+    UIManager:setDirty(nil, "fast", self.frame.dimen)
+end
 -- Store category card: a boxed tile with the category name and its book count.
 local CategoryCell = InputContainer:extend{
     text = "",
@@ -730,6 +788,14 @@ end
 -- full width. Empty slots are padded so the last row stays aligned.
 
 function LibraryView:storeRowWidget(row)
+    if row.kind == "group" then
+        return GroupHeading:new{
+            text = row.text or "",
+            count = row.status or "",
+            width = self.list_width,
+            show_parent = self,
+        }
+    end
     local text, status, bold = "", "", false
     if row.kind == "heading" then
         text = row.text or ""
