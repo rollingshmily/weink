@@ -722,24 +722,21 @@ local CategoryCell = InputContainer:extend{
 
 function CategoryCell:init()
     local padding = Size.padding.default
-    local inner = math.max(1, self.width - 2 * padding)
-    -- The explicit CenterContainer is what pins the box to the width the grid
-    -- asked for; without it the frame shrinks to the text and the two-column
-    -- rows leave most of the page empty with a clipped right border.
+    local border = Size.border.thin
+    -- Size the CONTENT, never the frame: FrameContainer adds padding and the
+    -- border on top of an explicit width, which pushed two cards past the
+    -- screen edge and produced a horizontal scrollbar. CoverCell does the same.
+    local inner = math.max(1, self.width - 2 * (padding + border))
+    local inner_h = math.max(1, self.height - 2 * (padding + border))
     self.frame = FrameContainer:new{
-        width = self.width,
-        height = self.height,
         radius = 0,
         margin = 0,
         padding = padding,
-        bordersize = Size.border.thin,
+        bordersize = border,
         background = Blitbuffer.COLOR_WHITE,
         show_parent = self.show_parent,
         CenterContainer:new{
-            dimen = Geom:new{
-                w = inner,
-                h = math.max(1, self.height - 2 * padding),
-            },
+            dimen = Geom:new{ w = inner, h = inner_h },
             VerticalGroup:new{
                 align = "left",
                 TextWidget:new{
