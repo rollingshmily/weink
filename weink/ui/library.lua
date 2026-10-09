@@ -346,6 +346,90 @@ function M:fetchVisibleShelfCovers(view, books, options)
 end
 
 
+-- Cover downloads for store pages: same cache and background worker as the
+-- shelf, but a store page is unpaged and redraws through the caller.
+function M:fetchStoreCovers(books, redraw)
+    if not books or #books == 0 then return end
+    local cache = self:getShelfCoverCache()
+    local online = self:isNetworkOnline()
+    local missing = {}
+    for _i, book in ipairs(books) do
+        if type(book.cover) == "string" and book.cover:match("^https://")
+            and not cache:pathFor(book) then
+            if online or cache:sourcePathFor(book) then
+                missing[#missing + 1] = book
+            end
+        end
+    end
+    if #missing == 0 then return end
+    if self.store_cover_job then
+        self.store_cover_pending = { books = books, redraw = redraw }
+        return
+    end
+    local runner = self.shelf_cover_subprocess
+    if runner == nil then
+        runner = cover_subprocess_runner() or false
+        self.shelf_cover_subprocess = runner
+    end
+    if not runner then
+        logger.warn("store cover background worker is unavailable")
+        return
+    end
+    local index, changed = 1, false
+    local function finish_batch()
+        self.store_cover_job = nil
+        if changed then
+            pcall(cache.prune, cache)
+            if redraw then redraw() end
+        end
+        local pending = self.store_cover_pending
+        self.store_cover_pending = nil
+        if pending then self:fetchStoreCovers(pending.books, pending.redraw) end
+    end
+    local function fetch_next()
+        local book = missing[index]
+        if not book then
+            finish_batch()
+            return
+        end
+        local pid, read_fd = runner.run(function(_pid, child_write_fd)
+            local ok, path = pcall(cache.thumbnailFromCached, cache, book)
+            if not (ok and path) and online then
+                local downloaded, data = pcall(function()
+                    return self.client:get_binary(book.cover, { timeout = { 8, 12 } })
+                end)
+                if downloaded then ok, path = pcall(cache.store, cache, book, data) end
+            end
+            runner.write_all(child_write_fd, ok and path and "ok" or "error")
+        end)
+        if not pid then
+            index = index + 1
+            UIManager:scheduleIn(0.1, fetch_next)
+            return
+        end
+        local job = { pid = pid, read_fd = read_fd, started_at = os.time() }
+        self.store_cover_job = job
+        local poll
+        poll = function()
+            if self.store_cover_job ~= job then return end
+            if not runner.is_done(job.pid) then
+                if os.time() - job.started_at > 30 then runner.terminate(job.pid) end
+                UIManager:scheduleIn(0.15, poll)
+                return
+            end
+            local result = job.read_fd and runner.read_all(job.read_fd) or nil
+            job.read_fd = nil
+            self.store_cover_job = nil
+            if result == "ok" and cache:pathFor(book) then
+                changed = true
+            end
+            index = index + 1
+            fetch_next()
+        end
+        UIManager:scheduleIn(0.15, poll)
+    end
+    fetch_next()
+end
 function M:showShelfView(mode, keyword, old_view, options)
     local LibraryView = require("weink.ui.library_view")
     options = options or {}

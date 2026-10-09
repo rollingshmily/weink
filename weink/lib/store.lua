@@ -266,4 +266,37 @@ function Store.price_label(book)
     return ""
 end
 
+
+-- `/category/list` -> ordered groups for the two-level category screen.
+-- Level-1 entries (parent 0) are the group headers; everything whose
+-- parentCategoryId points at one of them becomes a child card.
+function Store.category_groups(response)
+    local flat = Store.category_list(response)
+    local groups = {}
+    for _i, node in ipairs(flat) do
+        if node.parent_id == "" or node.parent_id == "0" then
+            groups[#groups + 1] = {
+                category_id = node.category_id,
+                title = node.title,
+                total = node.total,
+                children = {},
+            }
+        end
+    end
+    for _i, node in ipairs(flat) do
+        if node.parent_id ~= "" and node.parent_id ~= "0" then
+            for _j, group in ipairs(groups) do
+                if group.category_id == node.parent_id then
+                    group.children[#group.children + 1] = node
+                    break
+                end
+            end
+        end
+    end
+    local out = {}
+    for _i, group in ipairs(groups) do
+        if #group.children > 0 then out[#out + 1] = group end
+    end
+    return out
+end
 return Store

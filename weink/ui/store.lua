@@ -91,16 +91,71 @@ function M:storeTop()
     return nav[#nav]
 end
 
+function M:storeCoverLayout()
+    if self._store_cover_layout ~= nil then return self._store_cover_layout end
+    local ok, layout = pcall(function()
+        local CoverLayout = require("weink.lib.cover_layout")
+        local Screen = require("device").screen
+        local scaled = tonumber(Screen:scaleBySize(1000))
+        local size_scale = scaled and scaled > 0 and scaled / 1000 or 1
+        return CoverLayout.calculate{
+            width = Screen:getWidth(),
+            height = Screen:getHeight(),
+            size_scale = size_scale,
+        }
+    end)
+    if not ok or type(layout) ~= "table" then
+        self._store_cover_layout = false
+        return false
+    end
+    self._store_cover_layout = layout
+    return layout
+end
+
+function M:storeCollectCovers(rows)
+    local paths, loading, missing = {}, {}, {}
+    local ok, cache = pcall(function() return self:getShelfCoverCache() end)
+    if not ok or not cache then
+        self._store_cover_paths = paths
+        self._store_cover_loading = loading
+        return missing
+    end
+    for _i, row in ipairs(rows or {}) do
+        if row.kind == "book" then
+            local book = row.book
+            local path = cache:pathFor(book)
+            if path then
+                paths[book] = path
+            else
+                loading[book] = true
+                missing[#missing + 1] = book
+            end
+        end
+    end
+    self._store_cover_paths = paths
+    self._store_cover_loading = loading
+    return missing
+end
+
 function M:storeFrameData()
     local state = self:storeTop()
     if not state then return nil end
-    return {
+    local data = {
         mode = "store",
         title = state.title or STORE_TITLE,
         rows = state.rows or {},
         paged = false,
         back_label = #self:storeNav() > 1 and _("‹ Back to store") or nil,
     }
+    local layout = self:storeCoverLayout()
+    if layout then
+        data.cover_mode = true
+        data.cover_columns = layout.columns
+        data.cover_rows = layout.rows
+        data.cover_paths = self._store_cover_paths
+        data.cover_loading = self._store_cover_loading
+    end
+    return data
 end
 
 function M:storeCallbacks()
@@ -114,15 +169,21 @@ function M:storeCallbacks()
 end
 
 function M:storeDraw()
+    local state = self:storeTop()
+    if not state then return nil end
+    local missing = self:storeCollectCovers(state.rows)
     local data = self:storeFrameData()
     if not data then return nil end
     local view = self.shelf_view
     if not view then
         view = LibraryView.show(data, self:storeCallbacks())
         self.shelf_view = view
-        return view
+    else
+        view:apply(data, self:storeCallbacks())
     end
-    view:apply(data, self:storeCallbacks())
+    if #missing > 0 then
+        self:fetchStoreCovers(missing, function() self:storeDraw() end)
+    end
     return view
 end
 
@@ -161,6 +222,8 @@ function M:storeLoadMore()
 end
 
 local HOME_PAGE_SIZE = 10
+-- Cover wall: two rows of three before the section offers more.
+local SECTION_PREVIEW = 10
 
 local function mp_mode(mode)
     return mode == "favorites" and 2 or 1
@@ -236,10 +299,12 @@ function M:buildStoreRows(sections)
                 kind = "heading",
                 text = section_title(section),
                 status = section.total > 0 and tostring(section.total) or "",
+                more = #section.books > SECTION_PREVIEW,
+                section = section,
             }
         end
         for index, book in ipairs(section.books) do
-            if index > HOME_PAGE_SIZE then break end
+            if index > SECTION_PREVIEW then break end
             rows[#rows + 1] = { kind = "book", book = book }
         end
         for _j, category in ipairs(section.categories) do
@@ -248,9 +313,7 @@ function M:buildStoreRows(sections)
         for _j, topic in ipairs(section.topics) do
             rows[#rows + 1] = { kind = "topic", topic = topic }
         end
-        if #section.books > HOME_PAGE_SIZE then
-            rows[#rows + 1] = { kind = "section", section = section }
-        end
+
     end
     return rows
 end
@@ -291,6 +354,8 @@ function M:onStoreRowSelected(row)
         self:openStoreCategory(row.category or row.topic)
     elseif row.kind == "section" then
         self:openStoreSection(row.section)
+    elseif row.kind == "heading" then
+        if row.more and row.section then self:openStoreSection(row.section) end
     elseif row.kind == "load_more" then
         self:storeLoadMore()
     end
@@ -336,7 +401,7 @@ end
 
 function M:showStoreCategories()
     if not self:requireLogin(true, true) then return end
-    if self._store_category_tree then
+    if self._store_category_raw then
         self:mountCategoryTree(false)
         return
     end
@@ -358,21 +423,34 @@ function M:storeLoadCategories(replace_top)
             self:showInfo(T(_("Load categories failed:\n%1"), display_error(result)))
             return
         end
-        self._store_category_tree = Store.category_list(result)
+        self._store_category_raw = result
         self:mountCategoryTree(replace_top)
     end)
 end
 
 function M:mountCategoryTree(replace_top)
     local rows = {}
-    for _i, category in ipairs(self._store_category_tree or {}) do
-        rows[#rows + 1] = { kind = "category", category = category }
+    local groups = Store.category_groups(self._store_category_raw or {})
+    for _i, group in ipairs(groups) do
+        rows[#rows + 1] = {
+            kind = "heading",
+            text = group.title,
+            status = T(_("%1 categories"), tostring(#group.children)),
+        }
+        for _j, child in ipairs(group.children) do
+            rows[#rows + 1] = { kind = "category", category = child }
+        end
+    end
+    if #rows == 0 then
+        for _i, category in ipairs(Store.category_list(self._store_category_raw or {})) do
+            rows[#rows + 1] = { kind = "category", category = category }
+        end
     end
     local frame = {
         title = _("Categories"),
         rows = rows,
         loader = function()
-            self._store_category_tree = nil
+            self._store_category_raw = nil
             self:storeLoadCategories(true)
         end,
     }

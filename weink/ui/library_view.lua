@@ -133,6 +133,7 @@ end
 
 local CoverCell = InputContainer:extend{
     book = nil,
+    status = nil,
     width = nil,
     height = nil,
     cover_path = nil,
@@ -217,11 +218,22 @@ function CoverCell:init()
     end
     local cover = OverlapGroup:new(cover_layers)
     local title = self.book.title or self.book.bookId or self.book.book_id or _("Untitled")
+    -- Store cells carry a second line (price / owned / trial); shelf cells do not.
+    local has_status = type(self.status) == "string" and self.status ~= ""
     local title_widget = TextWidget:new{
         text = title,
-        face = Font:getFace("cfont", 18),
+        face = Font:getFace("cfont", has_status and 16 or 18),
         max_width = cover_width,
     }
+    local label_group = VerticalGroup:new{ align = "center", title_widget }
+    if has_status then
+        table.insert(label_group, TextWidget:new{
+            text = self.status,
+            face = Font:getFace("cfont", 13),
+            fgcolor = Blitbuffer.COLOR_DARK_GRAY,
+            max_width = cover_width,
+        })
+    end
     self.frame = FrameContainer:new{
         bordersize = 0,
         radius = 0,
@@ -234,7 +246,7 @@ function CoverCell:init()
             VerticalGroup:new{
                 align = "center",
                 cover,
-                title_widget,
+                label_group,
             },
         },
     }
@@ -466,6 +478,9 @@ function LibraryView:preparePagination()
 end
 
 function LibraryView:content()
+    if self.rows and self.cover_mode then
+        return self:coverWallContent()
+    end
     local source = self:itemSource()
     local content = VerticalGroup:new{
         align = "left",
@@ -607,6 +622,189 @@ function LibraryView:content()
     return content
 end
 
+
+-- Store category card: a boxed tile with the category name and its book count.
+local CategoryCell = InputContainer:extend{
+    text = "",
+    count = "",
+    width = nil,
+    height = nil,
+    callback = nil,
+    show_parent = nil,
+}
+
+function CategoryCell:init()
+    local padding = Size.padding.default
+    local inner = math.max(1, self.width - 2 * padding)
+    self.frame = FrameContainer:new{
+        width = self.width,
+        height = self.height,
+        radius = 0,
+        margin = 0,
+        padding = padding,
+        bordersize = Size.border.thin,
+        background = Blitbuffer.COLOR_WHITE,
+        show_parent = self.show_parent,
+        VerticalGroup:new{
+            align = "left",
+            TextWidget:new{
+                text = self.text or "",
+                face = Font:getFace("cfont", 18),
+                max_width = inner,
+            },
+            TextWidget:new{
+                text = self.count or "",
+                face = Font:getFace("cfont", 13),
+                fgcolor = Blitbuffer.COLOR_DARK_GRAY,
+                max_width = inner,
+            },
+        },
+    }
+    self[1] = self.frame
+    self.dimen = self.frame:getSize()
+    self.ges_events = {
+        TapCategoryCell = {
+            GestureRange:new{ ges = "tap", range = self.dimen },
+        },
+    }
+end
+
+function CategoryCell:onTapCategoryCell()
+    if self.callback then self.callback() end
+    return true
+end
+
+function CategoryCell:onFocus()
+    self.frame.invert = true
+    UIManager:widgetRepaint(self.frame, self.frame.dimen.x, self.frame.dimen.y)
+    UIManager:setDirty(nil, "fast", self.frame.dimen)
+end
+
+function CategoryCell:onUnfocus()
+    self.frame.invert = false
+    UIManager:widgetRepaint(self.frame, self.frame.dimen.x, self.frame.dimen.y)
+    UIManager:setDirty(nil, "fast", self.frame.dimen)
+end
+
+-- Store pages are heterogeneous: headings, cover cells, category cards and a
+-- load-more row. Consecutive cover cells pack into grid rows of
+-- `cover_columns`, category cards into rows of two; everything else spans the
+-- full width. Empty slots are padded so the last row stays aligned.
+
+function LibraryView:storeRowWidget(row)
+    local text, status, bold = "", "", false
+    if row.kind == "heading" then
+        text = row.text or ""
+        status = row.more and _("More ›") or (row.status or "")
+        bold = true
+    elseif row.kind == "action" then
+        text = row.label or ""
+        bold = true
+    elseif row.kind == "load_more" then
+        text = row.label or _("Load more")
+        bold = true
+    elseif row.kind == "topic" or row.kind == "category" then
+        local entry = row.topic or row.category or {}
+        text = entry.title or ""
+        local total = tonumber(entry.total) or 0
+        status = total > 0 and tostring(total) or ""
+    end
+    if text == "" then return nil end
+    return ShelfRow:new{
+        text = text,
+        status = status,
+        width = self.list_width,
+        font_size = 20,
+        bold = bold,
+        show_parent = self,
+        callback = function()
+            if self.on_select then self.on_select(row, self.mode) end
+        end,
+    }
+end
+
+function LibraryView:coverWallContent()
+    local content = VerticalGroup:new{
+        align = "left",
+        HorizontalSpan:new{ width = self.list_width },
+    }
+    self._item_rows = {}
+    self._focus_item_rows = {}
+    local columns = math.max(1, math.floor(tonumber(self.cover_columns) or 3))
+    local cell_width = math.floor(self.content_width / columns)
+    local cell_height = math.floor(math.max(1,
+        tonumber(self.cover_cell_height) or Screen:scaleBySize(220)))
+    local grid_row, grid_focus, grid_kind, grid_span
+    local function flush_grid()
+        if not grid_row then return end
+        -- Pad the tail so the last row keeps the same cell widths.
+        while #grid_row < grid_span do
+            grid_row[#grid_row + 1] = FrameContainer:new{
+                bordersize = 0, padding = 0, margin = 0,
+                background = Blitbuffer.COLOR_WHITE,
+                CenterContainer:new{
+                    dimen = Geom:new{ w = cell_width, h = cell_height },
+                    TextWidget:new{ text = "", face = Font:getFace("cfont", 12) },
+                },
+            }
+        end
+        table.insert(content, HorizontalGroup:new(grid_row))
+        grid_row, grid_focus, grid_kind, grid_span = nil, nil, nil, nil
+    end
+    local function add_cell(kind, cell, span)
+        if grid_row and (grid_kind ~= kind or grid_span ~= span) then
+            flush_grid()
+        end
+        if not grid_row then
+            grid_row, grid_focus, grid_kind, grid_span = {}, {}, kind, span
+            self._focus_item_rows[#self._focus_item_rows + 1] = grid_focus
+        end
+        grid_row[#grid_row + 1] = cell
+        grid_focus[#grid_focus + 1] = cell
+        self._item_rows[#self._item_rows + 1] = cell
+        if #grid_row >= span then flush_grid() end
+    end
+    for _i, row in ipairs(self.rows or {}) do
+        if row.kind == "book" then
+            local book = row.book or {}
+            add_cell("book", CoverCell:new{
+                book = book,
+                cached = book._cached == true,
+                cover_path = self.cover_paths and self.cover_paths[book] or nil,
+                cover_loading = self.cover_loading and self.cover_loading[book] == true,
+                width = cell_width,
+                height = cell_height,
+                show_parent = self,
+                callback = function()
+                    if self.on_select then self.on_select(row, self.mode) end
+                end,
+            }, columns)
+        elseif row.kind == "category" then
+            local entry = row.category or {}
+            add_cell("category", CategoryCell:new{
+                text = entry.title or "",
+                count = (tonumber(entry.total) or 0) > 0
+                    and T(_("%1 books"), tostring(entry.total)) or "",
+                width = math.floor(self.content_width / 2),
+                height = Screen:scaleBySize(64),
+                show_parent = self,
+                callback = function()
+                    if self.on_select then self.on_select(row, self.mode) end
+                end,
+            }, 2)
+        else
+            flush_grid()
+            local widget = self:storeRowWidget(row)
+            if widget then
+                self._item_rows[#self._item_rows + 1] = widget
+                self._focus_item_rows[#self._focus_item_rows + 1] = { widget }
+                table.insert(content, widget)
+            end
+        end
+    end
+    flush_grid()
+    return content
+end
 function LibraryView:pageBar()
     if not self.paged or (self.page_count or 1) <= 1 then return nil end
     local cell_w = math.floor(self.screen_w / 3)
@@ -716,7 +914,7 @@ function LibraryView:build()
     local scroll_h = math.max(1, self.screen_h - self.title_bar:getHeight()
         - tabs:getSize().h - actions:getSize().h
         - (page_bar and page_bar:getSize().h or 0))
-    if self.cover_mode and self.mode == "books" then
+    if self.cover_mode and (self.mode == "books" or self.rows) then
         local rows = math.max(1, math.floor(tonumber(self.cover_rows) or 2))
         self.cover_content_height = scroll_h
         self.cover_cell_height = math.max(1, math.floor(scroll_h / rows))
