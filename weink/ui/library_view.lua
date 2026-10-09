@@ -665,6 +665,9 @@ local CategoryCell = InputContainer:extend{
 function CategoryCell:init()
     local padding = Size.padding.default
     local inner = math.max(1, self.width - 2 * padding)
+    -- The explicit CenterContainer is what pins the box to the width the grid
+    -- asked for; without it the frame shrinks to the text and the two-column
+    -- rows leave most of the page empty with a clipped right border.
     self.frame = FrameContainer:new{
         width = self.width,
         height = self.height,
@@ -674,18 +677,24 @@ function CategoryCell:init()
         bordersize = Size.border.thin,
         background = Blitbuffer.COLOR_WHITE,
         show_parent = self.show_parent,
-        VerticalGroup:new{
-            align = "left",
-            TextWidget:new{
-                text = self.text or "",
-                face = Font:getFace("cfont", 18),
-                max_width = inner,
+        CenterContainer:new{
+            dimen = Geom:new{
+                w = inner,
+                h = math.max(1, self.height - 2 * padding),
             },
-            TextWidget:new{
-                text = self.count or "",
-                face = Font:getFace("cfont", 13),
-                fgcolor = Blitbuffer.COLOR_DARK_GRAY,
-                max_width = inner,
+            VerticalGroup:new{
+                align = "left",
+                TextWidget:new{
+                    text = self.text or "",
+                    face = Font:getFace("cfont", 18),
+                    max_width = inner,
+                },
+                TextWidget:new{
+                    text = self.count or "",
+                    face = Font:getFace("cfont", 13),
+                    fgcolor = Blitbuffer.COLOR_DARK_GRAY,
+                    max_width = inner,
+                },
             },
         },
     }
