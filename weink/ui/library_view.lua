@@ -904,7 +904,7 @@ function LibraryView:coverWallContent()
             local entry = row.category or {}
             local cat_gap = Screen:scaleBySize(6)
             local cat_height = Screen:scaleBySize(62)
-            local cat_width = math.floor((self.content_width - cat_gap) / 2)
+            local cat_width = math.floor((self.list_width - cat_gap) / 2)
             add_cell("category", CategoryCell:new{
                 text = entry.title or "",
                 count = (tonumber(entry.total) or 0) > 0
