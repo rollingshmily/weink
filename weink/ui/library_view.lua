@@ -754,7 +754,7 @@ function CategoryCell:init()
         CenterContainer:new{
             dimen = Geom:new{ w = inner, h = inner_h },
             VerticalGroup:new{
-                align = "left",
+                align = "center",
                 TextWidget:new{
                     text = self.text or "",
                     face = Font:getFace("cfont", 18),

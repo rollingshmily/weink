@@ -273,12 +273,10 @@ end
 function M:storeLoadHome(replace_top)
     if self:storeFetchBlocked("home") then return end
     self:storeFetchBegin("home")
-    self:showBusy(_("Loading book store..."))
     self:runOnlineTask(_("WeRead Store"), function()
         local ok, result = pcall(function()
             return self.client:store_home()
         end)
-        self:closeBusy()
         self:storeFetchEnd("home")
         if not ok then
             logger.err("store home failed:", log_error(result))
@@ -378,12 +376,10 @@ function M:showSimilarBooks(book)
     local key = "similar:" .. book_id
     if self:storeFetchBlocked(key) then return end
     self:storeFetchBegin(key)
-    self:showBusy(_("Loading related books..."))
     self:runOnlineTask(_("Related books"), function()
         local ok, result = pcall(function()
             return self.client:book_similar(book_id, 20)
         end)
-        self:closeBusy()
         self:storeFetchEnd(key)
         if not ok then
             logger.err("similar books failed:", log_error(result))
@@ -420,12 +416,10 @@ end
 function M:storeLoadCategories(replace_top)
     if self:storeFetchBlocked("categories") then return end
     self:storeFetchBegin("categories")
-    self:showBusy(_("Loading categories..."))
     self:runOnlineTask(_("Categories"), function()
         local ok, result = pcall(function()
             return self.client:category_list()
         end)
-        self:closeBusy()
         self:storeFetchEnd("categories")
         if not ok then
             logger.err("category list failed:", log_error(result))
@@ -518,12 +512,10 @@ function M:storeLoadCategoryBooks(replace_top)
     local key = "category:" .. cache.id .. ":" .. tostring(max_idx)
     if self:storeFetchBlocked(key) then return end
     self:storeFetchBegin(key)
-    self:showBusy(T(_("Loading %1..."), cache.title or _("category")))
     self:runOnlineTask(_("Category"), function()
         local ok, result = pcall(function()
             return self.client:store_category_books(cache.id, HOME_PAGE_SIZE, max_idx)
         end)
-        self:closeBusy()
         self:storeFetchEnd(key)
         if not ok then
             logger.err("category books failed:", log_error(result))
@@ -620,12 +612,10 @@ function M:storeLoadSearch(replace_top)
     local key = "search:" .. state.keyword .. ":" .. tostring(max_idx)
     if self:storeFetchBlocked(key) then return end
     self:storeFetchBegin(key)
-    self:showBusy(T(_("Searching %1..."), state.keyword))
     self:runOnlineTask(_("Search"), function()
         local ok, result = pcall(function()
             return self.client:search_store(state.keyword, HOME_PAGE_SIZE, max_idx)
         end)
-        self:closeBusy()
         self:storeFetchEnd(key)
         if not ok then
             logger.err("store search failed:", log_error(result))

@@ -20,7 +20,7 @@ end
 package.preload["ui/widget/confirmbox"] = function() return {} end
 package.preload["ui/widget/inputdialog"] = function() return {} end
 package.preload["ui/uimanager"] = function() return { scheduleIn = function() end } end
-package.preload["weink.lib.logger"] = function() return {} end
+package.preload["weink.lib.logger"] = function() return { err = function() end } end
 package.preload["weink.lib.plugin_util"] = function()
     return { tr = function(text) return text end, T = function(text) return text end,
         log_error = tostring, display_error = tostring }
@@ -94,5 +94,38 @@ expect(search_requests == 1 and fake._store_search.keep_offset == 270,
 mounted.on_fill()
 fake:mountSearch(true)
 expect(mounted.on_fill == nil, "short search page is auto-filled only once")
+
+-- Navigation requests keep the current view visible, without loading dialogs.
+fake.showBusy = function() error("store navigation opened a loading dialog") end
+fake.closeBusy = function() error("store navigation closed an unrelated dialog") end
+fake.requireLogin = function() return true end
+fake.storeFetchBlocked = function() return false end
+fake.storeFetchBegin = function() end
+fake.storeFetchEnd = function() end
+fake.runOnlineTask = function(_self, _label, callback) callback() end
+local request_count, failure = 0, nil
+local function response()
+    request_count = request_count + 1
+    return { books = { { bookId = "42", title = "Sample" } }, hasMore = true }
+end
+fake.client = {
+    store_home = function() request_count = request_count + 1; return {} end,
+    category_list = function() request_count = request_count + 1; return {} end,
+    store_category_books = response,
+    search_store = response,
+    book_similar = response,
+}
+StoreUI.storeLoadHome(fake, false)
+StoreUI.storeLoadCategories(fake, false)
+fake._store_category_books = { id = "1", title = "Category", books = {} }
+StoreUI.storeLoadCategoryBooks(fake, false)
+fake._store_search = { keyword = "Sample", books = {} }
+StoreUI.storeLoadSearch(fake, false)
+StoreUI.showSimilarBooks(fake, book)
+expect(request_count == 5, "all five navigation loaders work without loading dialogs")
+fake.client.store_category_books = function() error("request failed") end
+fake.showInfo = function(_self, message) failure = message end
+StoreUI.storeLoadCategoryBooks(fake, true)
+expect(failure ~= nil, "real request failures still display an error")
 
 print(("store_scroll_flow_spec: %d checks"):format(checks))

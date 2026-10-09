@@ -159,6 +159,11 @@ local function menu_has(items, text)
 end
 
 local main_items_no_doc = host:getMainMenuItems()
+expect(not menu_has(main_items_no_doc, "Book store")
+        and menu_has(main_items_no_doc, "Bookshelf"),
+    "store is reached through the bookshelf rather than a separate plugin menu entry")
+expect(registered.weink_store and registered.weink_store.event == "ShowWeinkStore",
+    "removing the menu entry does not remove existing store gesture bindings")
 expect(not menu_has(main_items_no_doc, "WeRead favorites")
         and not menu_has(main_items_no_doc, "Local bookshelf"),
     "fork does not expose the skipped upstream local collection entry")

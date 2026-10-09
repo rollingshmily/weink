@@ -156,12 +156,6 @@ function M:getMainMenuItems()
             end),
         },
         {
-            text = _("Book store"),
-            callback = self:safeCallback(_("Book store"), function()
-                self:showStoreHome()
-            end),
-        },
-        {
             text = _("Search"),
             keep_menu_open = true,
             callback = self:safeCallback(_("Search"), function()
