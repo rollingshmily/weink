@@ -242,4 +242,28 @@ assert_eq(rejected, false, "foreign update URL rejected")
 assert(type(reject_reason) == "string" and reject_reason:find("allowed GitHub", 1, true),
     "foreign update rejection explains source")
 
+
+-- A proxy that worked on this device goes to the front of the chain, so a
+-- mirror that is dead on this network does not cost a timeout on every run.
+fake_settings.data.update.proxy_id = "ghspeedup.com"
+fake_settings.data.update.last_good_proxy_id = "ghfast.top"
+local ordered = updater:proxy_candidates()
+assert_eq(ordered[1].id, "ghfast.top", "last good proxy first")
+assert_eq(ordered[2].id, "ghspeedup.com", "preferred proxy second")
+
+-- Blank or unknown values must not break the chain.
+fake_settings.data.update.last_good_proxy_id = ""
+assert_eq(updater:proxy_candidates()[1].id, "ghspeedup.com", "blank last-good ignored")
+fake_settings.data.update.last_good_proxy_id = "nonexistent.example"
+assert_eq(updater:proxy_candidates()[1].id, "ghspeedup.com", "unknown last-good ignored")
+
+-- Remembering a success persists the id, and a custom proxy is never stored.
+fake_settings.data.update.last_good_proxy_id = ""
+updater:note_proxy_success({ id = "ghfast.top" })
+assert_eq(fake_settings.data.update.last_good_proxy_id, "ghfast.top", "success persisted")
+updater:note_proxy_success({ id = "custom" })
+assert_eq(fake_settings.data.update.last_good_proxy_id, "ghfast.top", "custom not remembered")
+updater:note_proxy_success(nil)
+assert_eq(fake_settings.data.update.last_good_proxy_id, "ghfast.top", "nil entry ignored")
+
 print("updater_spec: ok")

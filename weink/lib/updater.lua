@@ -79,6 +79,7 @@ local DEFAULT_UPDATE = {
     last_remote_source = "",
     installed_version = "",
     installed_source = "",
+    last_good_proxy_id = "",
 }
 
 local function normalize_proxy_id(proxy_id)
@@ -387,6 +388,12 @@ function Updater:proxy_candidates(cfg)
             style = style,
         }
     end
+    -- Whatever worked last time on this device wins. A proxy that is dead on
+    -- this network otherwise costs a full timeout on every single attempt.
+    local last_good = normalize_proxy_id(cfg.last_good_proxy_id)
+    if last_good ~= "" and last_good ~= "custom" then
+        push(Updater.lookup_proxy_preset(last_good))
+    end
     push(preferred)
     -- Fallbacks when the selected proxy cannot serve a given URL type.
     for _i, item in ipairs(Updater.PROXY_PRESETS) do
@@ -604,6 +611,16 @@ function Updater:http_get(url, opts)
     return body, nil, resp_headers
 end
 
+-- Persist the proxy that just worked so the next run starts with it instead
+-- of walking the whole chain again.
+function Updater:note_proxy_success(entry)
+    local id = type(entry) == "table" and entry.id or nil
+    if type(id) ~= "string" or id == "" or id == "custom" then return end
+    local cfg = self:get_config()
+    if cfg.last_good_proxy_id == id then return end
+    pcall(function() self:update_config({ last_good_proxy_id = id }) end)
+end
+
 function Updater:http_get_with_proxies(raw_url, opts)
     local errors = {}
     for _i, entry in ipairs(self:proxy_candidates()) do
@@ -616,6 +633,7 @@ function Updater:http_get_with_proxies(raw_url, opts)
             logger.info("updater GET", url)
             local body, err = self:http_get(url, opts)
             if body then
+                self:note_proxy_success(entry)
                 return body, nil, {
                     proxy = entry.url or "",
                     proxy_id = entry.id,
@@ -699,6 +717,7 @@ function Updater:download_to_file(raw_url, local_path, opts)
                             errors[#errors + 1] = string.format(
                                 "%s => SHA-256 mismatch", label)
                         else
+                            self:note_proxy_success(entry)
                             return true, nil, {
                                 proxy = entry.url or "",
                                 proxy_id = entry.id,
@@ -709,6 +728,7 @@ function Updater:download_to_file(raw_url, local_path, opts)
                             }
                         end
                     else
+                        self:note_proxy_success(entry)
                         return true, nil, {
                             proxy = entry.url or "",
                             proxy_id = entry.id,
@@ -741,8 +761,8 @@ function Updater:fetch_latest_release()
     )
     local body, err, meta = self:http_get_with_proxies(api, {
         accept = "application/vnd.github+json",
-        block_timeout = 15,
-        total_timeout = 45,
+        block_timeout = 8,
+        total_timeout = 20,
     })
     if not body then
         return nil, err
@@ -781,8 +801,8 @@ function Updater:fetch_remote_meta(ref)
     )
     local body, err, meta = self:http_get_with_proxies(raw_url, {
         accept = "text/plain",
-        block_timeout = 15,
-        total_timeout = 45,
+        block_timeout = 8,
+        total_timeout = 20,
     })
     if not body then
         return nil, err
