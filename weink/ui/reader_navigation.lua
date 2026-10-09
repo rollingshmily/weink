@@ -21,6 +21,11 @@ function M:onShowWeinkBookshelf()
     return true
 end
 
+function M:onShowWeinkStore()
+    self:showStoreHome()
+    return true
+end
+
 function M:onShowWeinkReadingStatistics()
     self:showReadStats()
     return true

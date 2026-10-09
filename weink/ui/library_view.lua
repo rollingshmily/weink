@@ -1,4 +1,4 @@
--- Full-screen, e-ink-friendly bookshelf with Books/Favorites/Floating tabs.
+-- Full-screen, e-ink-friendly bookshelf with Store/Books/Favorites/Floating tabs.
 
 local Blitbuffer = require("ffi/blitbuffer")
 local Button = require("ui/widget/button")
@@ -25,6 +25,8 @@ local VerticalSpan = require("ui/widget/verticalspan")
 local Widget = require("ui/widget/widget")
 local Screen = Device.screen
 local FocusNav = require("weink.ui.focus_nav")
+local Store = require("weink.lib.store")
+local Tabs = require("weink.ui.tabs")
 local I18n = require("weink.lib.i18n")
 local T = require("ffi/util").template
 
@@ -53,6 +55,8 @@ local ShelfRow = InputContainer:extend{
     status = "",
     width = nil,
     font_size = 22,
+    bold = false,
+    indent = false,
     callback = nil,
     show_parent = nil,
 }
@@ -60,6 +64,10 @@ local ShelfRow = InputContainer:extend{
 function ShelfRow:init()
     local padding = Size.padding.large
     local inner_width = self.width - 2 * padding
+    if self.indent then
+        padding = padding + Size.padding.default
+        inner_width = self.width - 2 * padding
+    end
     local face = Font:getFace("cfont", self.font_size)
     local status_widget = TextWidget:new{
         text = self.status or "",
@@ -71,6 +79,7 @@ function ShelfRow:init()
     local title_widget = TextWidget:new{
         text = self.text,
         face = face,
+        bold = self.bold == true,
         max_width = math.max(1, inner_width - status_width - gap),
     }
     gap = math.max(gap, inner_width - title_widget:getSize().w - status_width)
@@ -277,50 +286,34 @@ local LibraryView = FocusManager:extend{
     cover_cell_height = nil,
     cover_paths = nil,
     cover_loading = nil,
+    rows = nil,
     on_page_changed = nil,
 }
 
 function LibraryView:tabBar()
-    local tabs = {
-        { mode = "books", text = T(_("Books (%1)"), #(self.books or {})) },
-        { mode = "favorites", text = _("Favorites") },
-        { mode = "floating", text = _("Floating") },
+    local built = Tabs.build{
+        active = self.mode,
+        width = self.screen_w,
+        show_parent = self,
+        font_size = 22,
+        labels = {
+            store = _("Store"),
+            books = T(_("Books (%1)"), #(self.books or {})),
+            favorites = _("Favorites"),
+            floating = _("Floating"),
+        },
+        enabled = {
+            store = true,
+            books = true,
+            favorites = self.wp_enable ~= false,
+            floating = self.wp_enable ~= false,
+        },
+        on_switch = function(mode)
+            if self.on_switch then self.on_switch(mode) end
+        end,
     }
-    local cell_w = math.floor(self.screen_w / #tabs)
-    local row = HorizontalGroup:new{}
-    self._tab_buttons = {}
-    for index, tab in ipairs(tabs) do
-        local active = tab.mode == self.mode
-        local enabled = tab.mode == "books" or self.wp_enable ~= false
-        local width = index == #tabs and self.screen_w - cell_w * (#tabs - 1) or cell_w
-        local button = Button:new{
-            text = tab.text,
-            width = width,
-            radius = 0,
-            margin = 0,
-            bordersize = 0,
-            background = Blitbuffer.COLOR_WHITE,
-            text_font_size = 24,
-            text_font_bold = true,
-            enabled = enabled,
-            show_parent = self,
-            callback = function()
-                if enabled and not active and self.on_switch then
-                    self.on_switch(tab.mode)
-                end
-            end,
-        }
-        if enabled then self._tab_buttons[#self._tab_buttons + 1] = button end
-        table.insert(row, VerticalGroup:new{
-            align = "left",
-            button,
-            LineWidget:new{
-                dimen = Geom:new{ w = width, h = active and Screen:scaleBySize(3) or 1 },
-                background = active and Blitbuffer.COLOR_BLACK or Blitbuffer.COLOR_GRAY,
-            },
-        })
-    end
-    return FrameContainer:new{ bordersize = 0, padding = 0, margin = 0, row }
+    self._tab_buttons = built.buttons
+    return built.widget
 end
 
 function LibraryView:actionBar()
@@ -393,7 +386,18 @@ function LibraryView:actionBar()
     }
 end
 
+function LibraryView:itemSource()
+    if self.rows then return self.rows end
+    if self.mode == "favorites" or self.mode == "floating" then
+        return self.articles or {}
+    end
+    return self.books or {}
+end
+
 function LibraryView:itemStatus(book)
+    if self.rows then
+        return book.status or ""
+    end
     if self.mode == "favorites" or self.mode == "floating" then
         local account = book.account or book.mpName or ""
         return book._cached and (account ~= "" and "✓  " .. account or "✓") or account
@@ -411,8 +415,7 @@ function LibraryView:itemStatus(book)
 end
 
 function LibraryView:preparePagination()
-    local source = (self.mode == "favorites" or self.mode == "floating")
-        and (self.articles or {}) or (self.books or {})
+    local source = self:itemSource()
     self.page_size = math.max(1, math.floor(tonumber(self.page_size) or 10))
     if self.cover_mode and self.mode == "books" then
         local columns = math.max(1, math.floor(tonumber(self.cover_columns) or 3))
@@ -429,8 +432,7 @@ function LibraryView:preparePagination()
 end
 
 function LibraryView:content()
-    local source = (self.mode == "favorites" or self.mode == "floating")
-        and (self.articles or {}) or (self.books or {})
+    local source = self:itemSource()
     local content = VerticalGroup:new{
         align = "left",
         HorizontalSpan:new{ width = self.list_width },
@@ -440,9 +442,10 @@ function LibraryView:content()
     if #source == 0 then
         table.insert(content, VerticalSpan:new{ width = Size.padding.large })
         table.insert(content, TextWidget:new{
-            text = (self.mode == "favorites" or self.mode == "floating")
-                and _("No WeChat articles.")
-                or (self.keyword and self.keyword ~= "" and _("No shelf matches.") or _("No items.")),
+            text = self.rows and _("Nothing to show.")
+                or ((self.mode == "favorites" or self.mode == "floating")
+                    and _("No WeChat articles.")
+                    or (self.keyword and self.keyword ~= "" and _("No shelf matches.") or _("No items."))),
             face = Font:getFace("cfont", 20),
             max_width = self.content_width,
         })
@@ -497,11 +500,55 @@ function LibraryView:content()
     else
         for index = first, last do
             local book = source[index]
+            local text, status, font_size, bold, indent
+            if self.rows then
+                -- Store rows: "heading" / "book" / "category" / "topic" /
+                -- "more" / "load_more", all rendered as text rows.
+                local kind = book.kind
+                if kind == "heading" then
+                    text = book.text
+                    status = book.status or ""
+                    font_size = 20
+                    bold = true
+                    indent = false
+                elseif kind == "book" then
+                    local entry = book.book or {}
+                    text = entry.title or entry.book_id or _("Untitled")
+                    local parts = {}
+                    if entry.author and entry.author ~= "" then parts[#parts + 1] = entry.author end
+                    local price = Store.price_label(entry)
+                    if price ~= "" then parts[#parts + 1] = price end
+                    status = table.concat(parts, "  ·  ")
+                    font_size = 20
+                    indent = true
+                elseif kind == "category" then
+                    text = book.category and book.category.title or ""
+                    status = (book.category and book.category.total or 0) > 0
+                        and tostring(book.category.total) or ""
+                    font_size = 20
+                elseif kind == "topic" then
+                    text = book.topic and book.topic.title or ""
+                    font_size = 20
+                elseif kind == "more" or kind == "load_more" then
+                    text = book.label or _("Load more")
+                    font_size = 20
+                    bold = true
+                else
+                    text = _("Untitled")
+                    font_size = 20
+                end
+            else
+                text = book.title or book.bookId or book.book_id or _("Untitled")
+                status = self:itemStatus(book)
+                font_size = self.mode == "books" and 20 or 22
+            end
             local shelf_row = ShelfRow:new{
-                text = book.title or book.bookId or book.book_id or _("Untitled"),
-                status = self:itemStatus(book),
+                text = text,
+                status = status,
                 width = self.list_width,
-                font_size = self.mode == "books" and 20 or 22,
+                font_size = font_size,
+                bold = bold == true,
+                indent = indent == true,
                 show_parent = self,
                 callback = function()
                     if self.on_select then self.on_select(book, self.mode) end
@@ -660,6 +707,7 @@ function M.show(data, callbacks)
         wp_enable = data.wp_enable ~= false,
         books = data.books,
         articles = data.articles,
+        rows = data.rows,
         keyword = data.keyword,
         sort_label = data.sort_label,
         filter_label = data.filter_label,

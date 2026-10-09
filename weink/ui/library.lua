@@ -99,6 +99,7 @@ function M:closeWeinkUI()
     for _, field in ipairs({
         "_chapter_list_view",
         "_book_detail_view",
+        "_store_view",
         "shelf_view",
     }) do
         local view = self[field]
@@ -430,6 +431,10 @@ function M:showShelfView(mode, keyword, old_view, options)
         cover_loading = cover_loading,
     }, {
         on_switch = function(new_mode)
+            if new_mode == "store" then
+                self:showStoreHome(view)
+                return
+            end
             if new_mode == "favorites" or new_mode == "floating" then
                 self:showWeChatArticlesPage(mp_list_type(new_mode), nil, view)
                 return
@@ -995,7 +1000,9 @@ function M:renderWeChatArticleList(list_type, title, articles, old_view)
         page_size = math.max(4, list_items_per_page() - 4),
     }, {
         on_switch = function(new_mode)
-            if new_mode == "books" then
+            if new_mode == "store" then
+                self:showStoreHome(view)
+            elseif new_mode == "books" then
                 self:showShelfView("books", nil, view)
             else
                 self:showWeChatArticlesPage(mp_list_type(new_mode), nil, view)

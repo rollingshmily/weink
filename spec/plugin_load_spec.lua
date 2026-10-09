@@ -69,6 +69,7 @@ local migrations_ran = false
 local dispatcher_registered = false
 local menu_registered = false
 local bookshelf_opened = false
+local store_opened = false
 
 package.preload["weink.lib.client"] = function()
     return { new = function(_self, settings) return { settings = settings } end }
@@ -163,6 +164,15 @@ package.preload["weink.ui.library"] = function()
         end,
     }
 end
+package.preload["weink.ui.store"] = function()
+    return {
+        showStoreHome = function()
+            store_opened = true
+            return true
+        end,
+    }
+end
+
 package.preload["weink.ui.annotations_controller"] = function()
     return {}
 end
@@ -171,6 +181,10 @@ package.preload["weink.ui.reader_navigation"] = function()
         detectWeinkBook = function() return nil end,
         getChapterInfoFromFile = function() return nil end,
         openProgressTargetChapter = function() return false end,
+        onShowWeinkStore = function()
+            store_opened = true
+            return true
+        end,
     }
 end
 
@@ -201,6 +215,9 @@ expect(dispatcher_registered, "dispatcher actions were not registered")
 expect(menu_registered, "plugin was not registered in KOReader's main menu")
 expect(plugin:launch() == true and bookshelf_opened,
     "standard third-party launcher entry did not open the bookshelf")
+local store_ok, store_error = pcall(function() return plugin:onShowWeinkStore() end)
+expect(store_ok and store_opened == true,
+    "store entry did not reach the store controller: " .. tostring(store_error))
 expect(type(plugin.openBookshelf) == "function",
     "stable bookshelf entry point was not exposed")
 expect(package.loaded["weink.lib.client"] ~= nil,

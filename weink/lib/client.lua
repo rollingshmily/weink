@@ -14,6 +14,19 @@ local DEFAULT_TIMEOUT_SECONDS = 15
 local Client = {}
 Client.__index = Client
 
+-- Shelf endpoints and /book/infos only honour an ARRAY of ids. A bare
+-- `bookId` (or a comma string) comes back {"succ":1} while changing nothing
+-- (verified live 2026-10-09), so every caller is funnelled through here.
+local function normalize_book_ids(book_ids)
+    if type(book_ids) ~= "table" then book_ids = { book_ids } end
+    local ids = {}
+    for _i, value in ipairs(book_ids) do
+        local id = tostring(value or "")
+        if id ~= "" then ids[#ids + 1] = id end
+    end
+    return ids
+end
+
 local function header_value(headers, name)
     if type(headers) ~= "table" or type(name) ~= "string" then return nil end
     if headers[name] ~= nil then return headers[name] end
@@ -490,10 +503,97 @@ function Client:get_progress(book_id)
     return self:eink_json("/book/getProgress", { bookId = tostring(book_id) })
 end
 
-function Client:search_store(keyword, count)
-    return self:eink_json("/store/search", {
+function Client:search_store(keyword, count, max_idx)
+    local params = {
         keyword = tostring(keyword or ""),
         count = tonumber(count) or 10,
+    }
+    -- /store/search pages by maxIdx (verified live 2026-10-09: 3 -> next page).
+    if tonumber(max_idx) and tonumber(max_idx) > 0 then
+        params.maxIdx = tonumber(max_idx)
+    end
+    return self:eink_json("/store/search", params)
+end
+
+function Client:store_suggest(keyword)
+    return self:eink_json("/store/suggest", {
+        keyword = tostring(keyword or ""),
+    })
+end
+
+function Client:store_tags()
+    return self:eink_json("/store/tags", {})
+end
+
+-- Store home feed. Sections carry one of books / topics / categories /
+-- banners depending on `type`; see weink/lib/store.lua for the mapping.
+function Client:store_home()
+    return self:eink_json("/store/list", {})
+end
+
+-- Second home feed used by the phone app's 发现 tab (same section shape).
+function Client:store_recommend()
+    return self:eink_json("/store/recommend", {})
+end
+
+-- Flat category tree: `categories` (e-books) + `novelCategories`.
+function Client:category_list()
+    return self:eink_json("/category/list", {})
+end
+
+-- One category node: title, totalCount, covers, bookTitles, sublist.
+function Client:store_category_node(category_id)
+    return self:eink_json("/store/categories", {
+        categoryId = tostring(category_id or ""),
+    })
+end
+
+-- Books inside a category. Pages by maxIdx (verified live 2026-10-09).
+function Client:store_category_books(category_id, count, max_idx)
+    local params = {
+        categoryId = tostring(category_id or ""),
+        count = tonumber(count) or 10,
+    }
+    if tonumber(max_idx) and tonumber(max_idx) > 0 then
+        params.maxIdx = tonumber(max_idx)
+    end
+    return self:eink_json("/store/category", params)
+end
+
+function Client:book_similar(book_id, count, max_idx)
+    local params = { bookId = tostring(book_id or "") }
+    if tonumber(count) and tonumber(count) > 0 then
+        params.count = tonumber(count)
+    end
+    if tonumber(max_idx) and tonumber(max_idx) > 0 then
+        params.maxIdx = tonumber(max_idx)
+    end
+    return self:eink_json("/book/similar", params)
+end
+
+-- Shelf membership + mutation. The array key is mandatory: a bare
+-- `bookId` returns {"succ":1} and changes nothing (verified live 2026-10-09).
+function Client:eink_shelf_add(book_ids)
+    return self:eink_post_json("/shelf/add", {
+        bookIds = normalize_book_ids(book_ids),
+    })
+end
+
+function Client:eink_shelf_delete(book_ids)
+    return self:eink_post_json("/shelf/delete", {
+        bookIds = normalize_book_ids(book_ids),
+    })
+end
+
+function Client:eink_shelf_archive(book_ids)
+    return self:eink_post_json("/shelf/archive", {
+        bookIds = normalize_book_ids(book_ids),
+    })
+end
+
+function Client:eink_shelf_delete_archive(book_ids)
+    return self:eink_post_json("/shelf/deleteArchive", {
+        bookIds = normalize_book_ids(book_ids),
     })
 end
 
@@ -1215,6 +1315,15 @@ function Client:eink_delete_review(review_id)
     })
     self._eink_bookmark_cache = nil
     return data
+end
+
+-- Reading state for a batch of books. Must be POST with an ARRAY of ids:
+-- every GET shape (bookId / bookIds joined or array) answers -2003
+-- "参数格式错误" (verified live 2026-10-09). Returns {data=[...]}.
+function Client:eink_book_infos(book_ids)
+    return self:eink_post_json("/book/infos", {
+        bookIds = normalize_book_ids(book_ids),
+    })
 end
 
 function Client:eink_mp_list(list_type, synckey, count)

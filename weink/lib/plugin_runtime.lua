@@ -43,6 +43,7 @@ local function apply_mixins(plugin)
         (require("weink.ui.cache")),
         (require("weink.ui.read_report")),
         (require("weink.ui.library")),
+        (require("weink.ui.store")),
         (require("weink.ui.annotations_controller")),
         (require("weink.ui.xpointer_overlay_controller")),
         (require("weink.ui.annotation_sync_controller")),

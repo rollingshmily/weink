@@ -54,6 +54,12 @@ function M:onDispatcherRegisterActions()
         title = _("WeRead · Bookshelf"),
         general = true,
     })
+    Dispatcher:registerAction("weink_store", {
+        category = "none",
+        event = "ShowWeinkStore",
+        title = _("WeRead · Book store"),
+        general = true,
+    })
     Dispatcher:registerAction("weink_reading_statistics", {
         category = "none",
         event = "ShowWeinkReadingStatistics",
@@ -147,6 +153,12 @@ function M:getMainMenuItems()
             text = _("Bookshelf"),
             callback = self:safeCallback(_("Bookshelf"), function()
                 self:showBookshelf()
+            end),
+        },
+        {
+            text = _("Book store"),
+            callback = self:safeCallback(_("Book store"), function()
+                self:showStoreHome()
             end),
         },
         {
