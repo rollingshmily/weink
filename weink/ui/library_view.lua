@@ -302,6 +302,7 @@ local LibraryView = FocusManager:extend{
     on_page_changed = nil,
     on_back = nil,
     on_categories = nil,
+    on_reach_bottom = nil,
     back_label = nil,
 }
 
@@ -1028,6 +1029,7 @@ function LibraryView:apply(data, callbacks)
     self.on_page_changed = callbacks.on_page_changed
     self.on_back = callbacks.on_back
     self.on_categories = callbacks.on_categories
+    self.on_reach_bottom = callbacks.on_reach_bottom
     self:build()
     UIManager:setDirty(self, function() return "ui", self.dimen end)
 end
@@ -1076,6 +1078,24 @@ function LibraryView:build()
         show_parent = self,
         VerticalGroup:new{ align = "left", content },
     }
+    self._build_generation = (self._build_generation or 0) + 1
+    local build_generation = self._build_generation
+    if self.on_reach_bottom then
+        -- Auto-load the next page once the reader reaches the end, instead
+        -- of spending a whole row on a Load more line.
+        local reach = self.on_reach_bottom
+        local function watch_bottom()
+            if build_generation ~= self._build_generation then return end
+            local max_y = tonumber(scroll._max_scroll_offset_y) or 0
+            local offset_y = tonumber(scroll._scroll_offset_y) or 0
+            if max_y > 0 and offset_y >= max_y - Screen:scaleBySize(80) then
+                reach()
+                return
+            end
+            UIManager:scheduleIn(0.5, watch_bottom)
+        end
+        UIManager:scheduleIn(0.6, watch_bottom)
+    end
     local rows = { self._tab_buttons }
     if #self._action_secondary > 0 then rows[#rows + 1] = self._action_secondary end
     if #self._action_primary > 0 then rows[#rows + 1] = self._action_primary end
@@ -1162,6 +1182,8 @@ function M.show(data, callbacks)
         on_filter = callbacks.on_filter,
         on_select = callbacks.on_select,
         on_page_changed = callbacks.on_page_changed,
+        on_categories = callbacks.on_categories,
+        on_reach_bottom = callbacks.on_reach_bottom,
     }
     UIManager:show(view)
     return view

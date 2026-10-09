@@ -167,6 +167,7 @@ function M:storeCallbacks()
         on_search = function() self:showStoreSearch() end,
         on_categories = function() self:showStoreCategories() end,
         on_select = function(row) self:onStoreRowSelected(row) end,
+        on_reach_bottom = state and state.on_more or nil,
     }
 end
 
@@ -223,9 +224,10 @@ function M:storeLoadMore()
     if state and state.on_more then state.on_more() end
 end
 
-local HOME_PAGE_SIZE = 10
+local HOME_PAGE_SIZE = 15
 -- Cover wall: two rows of three before the section offers more.
-local SECTION_PREVIEW = 10
+-- Cover wall: three rows of five before the section offers more.
+local SECTION_PREVIEW = 15
 
 local function mp_mode(mode)
     return mode == "favorites" and 2 or 1
@@ -356,8 +358,6 @@ function M:onStoreRowSelected(row)
         self:openStoreSection(row.section)
     elseif row.kind == "heading" then
         if row.more and row.section then self:openStoreSection(row.section) end
-    elseif row.kind == "load_more" then
-        self:storeLoadMore()
     end
 end
 
@@ -525,7 +525,8 @@ function M:storeLoadCategoryBooks(replace_top)
         for _i, book in ipairs(parsed.books) do
             cache.books[#cache.books + 1] = book
         end
-        cache.has_more = parsed.has_more
+        -- A page that adds nothing must not keep the auto-loader firing.
+        cache.has_more = parsed.has_more and #parsed.books > 0
         self:mountCategoryBooks(replace_top)
     end)
 end
@@ -537,13 +538,15 @@ function M:mountCategoryBooks(replace_top)
     for _i, book in ipairs(cache.books) do
         rows[#rows + 1] = { kind = "book", book = book }
     end
-    if cache.has_more then
-        rows[#rows + 1] = { kind = "load_more", label = _("Load more") }
-    end
+
     local frame = {
         title = cache.title or _("Category"),
         rows = rows,
-        loader = function() self:storeLoadCategoryBooks(true) end,
+        loader = function()
+            cache.books = {}
+            cache.has_more = false
+            self:storeLoadCategoryBooks(true)
+        end,
         on_more = function() self:storeLoadCategoryBooks(true) end,
     }
     if replace_top then self:storeReplace(frame) else self:storePush(frame) end
@@ -613,7 +616,7 @@ function M:storeLoadSearch(replace_top)
         for _i, book in ipairs(parsed.books) do
             state.books[#state.books + 1] = book
         end
-        state.has_more = parsed.has_more
+        state.has_more = parsed.has_more and #parsed.books > 0
         state.correction = parsed.correction
         self:mountSearch(replace_top)
     end)
@@ -632,15 +635,14 @@ function M:mountSearch(replace_top)
     for _i, book in ipairs(state.books) do
         rows[#rows + 1] = { kind = "book", book = book }
     end
-    if state.has_more then
-        rows[#rows + 1] = { kind = "load_more", label = _("Load more") }
-    end
+
     local keyword = state.keyword
     local frame = {
         title = T(_("Search: %1"), keyword),
         rows = rows,
         loader = function()
-            self:openStoreSearch(keyword)
+            self._store_search = { keyword = keyword, books = {}, has_more = false }
+            self:storeLoadSearch(true)
         end,
         on_more = function() self:storeLoadSearch(true) end,
     }
