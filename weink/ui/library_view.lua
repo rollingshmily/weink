@@ -344,7 +344,7 @@ function LibraryView:actionBar()
             cells[#cells + 1] = { text = self.back_label, action = "back" }
         else
             cells[#cells + 1] = { text = _("⌕ Search"), action = "search" }
-            cells[#cells + 1] = { text = _("☰ Categories"), action = "categories" }
+            cells[#cells + 1] = { text = _("☰ All categories"), action = "categories" }
         end
         cells[#cells + 1] = { text = _("↻ Refresh"), action = "refresh" }
         local handlers = {
