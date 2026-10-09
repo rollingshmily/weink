@@ -288,6 +288,8 @@ local LibraryView = FocusManager:extend{
     cover_loading = nil,
     rows = nil,
     on_page_changed = nil,
+    on_back = nil,
+    back_label = nil,
 }
 
 function LibraryView:tabBar()
@@ -317,6 +319,22 @@ function LibraryView:tabBar()
 end
 
 function LibraryView:actionBar()
+    if self.back_label and self.back_label ~= "" then
+        local back_button = Button:new{
+            text = self.back_label,
+            width = self.screen_w,
+            radius = 0, margin = 0, bordersize = 0,
+            text_font_bold = false,
+            show_parent = self,
+            callback = function() if self.on_back then self.on_back() end end,
+        }
+        self._action_secondary = { back_button }
+        self._action_primary = {}
+        return FrameContainer:new{
+            bordersize = 0, padding = 0, margin = 0,
+            HorizontalGroup:new{ back_button },
+        }
+    end
     if self.mode == "favorites" or self.mode == "floating" then
         local refresh_button = Button:new{
             text = _("↻ Get latest"),
@@ -609,6 +627,48 @@ function LibraryView:pageBar()
 end
 
 function LibraryView:init()
+    self:build()
+end
+
+-- Re-render this same widget with new content. Closing a full-screen view and
+-- showing another one makes e-ink do a full repaint, and the repaint is what
+-- leaks the FileManager underneath for a moment; navigation reuses the widget
+-- instead.
+function LibraryView:apply(data, callbacks)
+    data = data or {}
+    callbacks = callbacks or {}
+    self.mode = data.mode or self.mode
+    if data.title ~= nil then self.title = data.title end
+    self.wp_enable = data.wp_enable ~= false
+    self.books = data.books
+    self.articles = data.articles
+    self.rows = data.rows
+    self.keyword = data.keyword
+    self.sort_label = data.sort_label
+    self.filter_label = data.filter_label
+    self.paged = data.paged == true
+    self.page = data.page
+    self.page_size = data.page_size
+    self.cover_mode = data.cover_mode == true
+    self.cover_columns = data.cover_columns
+    self.cover_rows = data.cover_rows
+    self.cover_cell_height = data.cover_cell_height
+    self.cover_paths = data.cover_paths
+    self.cover_loading = data.cover_loading
+    self.back_label = data.back_label
+    self.on_switch = callbacks.on_switch
+    self.on_search = callbacks.on_search
+    self.on_refresh = callbacks.on_refresh
+    self.on_sort = callbacks.on_sort
+    self.on_filter = callbacks.on_filter
+    self.on_select = callbacks.on_select
+    self.on_page_changed = callbacks.on_page_changed
+    self.on_back = callbacks.on_back
+    self:build()
+    UIManager:setDirty(self, function() return "ui", self.dimen end)
+end
+
+function LibraryView:build()
     self.screen_w = Screen:getWidth()
     self.screen_h = Screen:getHeight()
     self.dimen = Geom:new{ x = 0, y = 0, w = self.screen_w, h = self.screen_h }
@@ -625,7 +685,12 @@ function LibraryView:init()
         align = "center",
         with_bottom_line = true,
         right_icon_size_ratio = 0.75,
-        close_callback = function() self:onClose() end,
+        close_callback = function()
+            -- A nested page owns the X: it goes up one level. Only the top of
+            -- the stack closes the whole screen.
+            if self.on_back and self.on_back() then return end
+            self:onClose()
+        end,
         show_parent = self,
     }
     local tabs = self:tabBar()
@@ -712,6 +777,7 @@ function M.show(data, callbacks)
         books = data.books,
         articles = data.articles,
         rows = data.rows,
+        back_label = data.back_label,
         keyword = data.keyword,
         sort_label = data.sort_label,
         filter_label = data.filter_label,

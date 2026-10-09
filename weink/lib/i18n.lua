@@ -315,6 +315,7 @@ local zh = {
     ["Slow down a little."] = "慢一点,别连点。",
     ["Rank: #%1 in %2"] = "%2 第 %1 名",
     ["Ranking"] = "榜单",
+    ["‹ Back to store"] = "‹ 返回书城",
     ["All categories"] = "全部分类",
     ["Related books"] = "相似推荐",
     ["Loading related books..."] = "正在加载相似书籍...",

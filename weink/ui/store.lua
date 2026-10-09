@@ -20,10 +20,16 @@ local logger = require("weink.lib.logger")
 
 local M = {}
 
+local STORE_TITLE = _("WeRead Store")
+
 -- Store requests are tap-driven, so the only thing to defend against is a
 -- double tap or a re-entrant open while the first call is still in flight.
 local STORE_MIN_INTERVAL_SECONDS = 1.0
 local STORE_INFLIGHT_TTL_SECONDS = 15
+-- Re-reading the same book (or the shelf) on every detail open made a slow link
+-- feel stuck; both are cached for a while instead.
+local BOOK_INFO_TTL_SECONDS = 600
+local SHELF_CACHE_TTL_SECONDS = 120
 
 local function now_seconds()
     local ok, socket = pcall(require, "socket")
@@ -68,8 +74,93 @@ function M:storeFetchEnd(key)
     if self._store_inflight_token then self._store_inflight_token[key] = nil end
 end
 
+-- ------------------------------------------------------------- navigation
+--
+-- The storefront lives in the same persistent full-screen view as the
+-- bookshelf (self.shelf_view). Levels are frames on self._store_nav, and every
+-- move re-renders that one widget in place (LibraryView:apply). Closing and
+-- re-showing a full-screen widget makes e-ink repaint the whole screen, which
+-- flashes and briefly exposes the FileManager underneath.
+function M:storeNav()
+    self._store_nav = self._store_nav or {}
+    return self._store_nav
+end
+
+function M:storeTop()
+    local nav = self:storeNav()
+    return nav[#nav]
+end
+
+function M:storeFrameData()
+    local state = self:storeTop()
+    if not state then return nil end
+    return {
+        mode = "store",
+        title = state.title or STORE_TITLE,
+        rows = state.rows or {},
+        paged = false,
+        back_label = #self:storeNav() > 1 and _("‹ Back to store") or nil,
+    }
+end
+
+function M:storeCallbacks()
+    local state = self:storeTop()
+    return {
+        on_switch = function(mode) self:onStoreTabSwitch(mode) end,
+        on_back = function() return self:storeBack() end,
+        on_refresh = function() self:storeFrameRefresh(state) end,
+        on_select = function(row) self:onStoreRowSelected(row) end,
+    }
+end
+
+function M:storeDraw()
+    local data = self:storeFrameData()
+    if not data then return nil end
+    local view = self.shelf_view
+    if not view then
+        view = LibraryView.show(data, self:storeCallbacks())
+        self.shelf_view = view
+        return view
+    end
+    view:apply(data, self:storeCallbacks())
+    return view
+end
+
+function M:storePush(state)
+    local nav = self:storeNav()
+    nav[#nav + 1] = state
+    self:storeDraw()
+end
+
+function M:storeReplace(state)
+    local nav = self:storeNav()
+    if #nav == 0 then
+        nav[1] = state
+    else
+        nav[#nav] = state
+    end
+    self:storeDraw()
+end
+
+-- Returns true when it went up a level, so the X can close at the root.
+function M:storeBack()
+    local nav = self._store_nav
+    if not nav or #nav <= 1 then return false end
+    table.remove(nav)
+    self:storeDraw()
+    return true
+end
+
+function M:storeFrameRefresh(state)
+    if state and state.loader then state.loader() end
+end
+
+function M:storeLoadMore()
+    local state = self:storeTop()
+    if state and state.on_more then state.on_more() end
+end
+
 local HOME_PAGE_SIZE = 10
-local STORE_TITLE = _("WeRead Store")
 
 local function mp_mode(mode)
     return mode == "favorites" and 2 or 1
@@ -86,11 +177,24 @@ end
 
 function M:showStoreHome(old_view)
     if not self:requireLogin(true, true) then return end
-    if old_view then UIManager:close(old_view) end
+    if old_view then self.shelf_view = old_view end
     if self._store_sections then
-        self:loadStoreHome()
+        self._store_nav = {}
+        self:storePush(self:storeHomeFrame(self:buildStoreRows(self._store_sections)))
         return
     end
+    self:storeLoadHome(false)
+end
+
+function M:storeHomeFrame(rows)
+    return {
+        title = _("WeRead Store"),
+        rows = rows,
+        loader = function() self:storeLoadHome(true) end,
+    }
+end
+
+function M:storeLoadHome(replace_top)
     if self:storeFetchBlocked("home") then return end
     self:storeFetchBegin("home")
     self:showBusy(_("Loading book store..."))
@@ -106,20 +210,14 @@ function M:showStoreHome(old_view)
             return
         end
         self._store_sections = Store.sections(result)
-        self:loadStoreHome()
+        local frame = self:storeHomeFrame(self:buildStoreRows(self._store_sections))
+        if replace_top and #self:storeNav() > 0 then
+            self:storeReplace(frame)
+        else
+            self._store_nav = {}
+            self:storePush(frame)
+        end
     end)
-end
-
-function M:loadStoreHome()
-    local rows = self:buildStoreRows(self._store_sections or {})
-    self._store_mode = "store"
-    self:renderStoreRows(rows, _("WeRead Store"), "store", {
-        on_refresh = function()
-            self._store_sections = nil
-            self._store_page = 1
-            self:showStoreView()
-        end,
-    })
 end
 
 -- Flatten feed sections into display rows: a heading row per section followed
@@ -150,108 +248,69 @@ function M:buildStoreRows(sections)
         for _j, topic in ipairs(section.topics) do
             rows[#rows + 1] = { kind = "topic", topic = topic }
         end
-        if section.has_more and #section.books > HOME_PAGE_SIZE then
-            rows[#rows + 1] = { kind = "more", section = section }
+        if #section.books > HOME_PAGE_SIZE then
+            rows[#rows + 1] = { kind = "section", section = section }
         end
     end
     return rows
 end
 
-function M:renderStoreRows(rows, title, mode, callbacks)
-    callbacks = callbacks or {}
-    local view
-    local open_row = function(row)
-        self:onStoreRowSelected(row, view)
-    end
-    view = LibraryView.show({
-        mode = mode or "store",
-        title = title or STORE_TITLE,
-        rows = rows,
-        paged = true,
-        page = self._store_page or 1,
-        page_size = math.max(4, 12),
-    }, {
-        on_switch = function(new_mode)
-            self:onStoreTabSwitch(new_mode, view)
-        end,
-        on_refresh = callbacks.on_refresh,
-        on_select = open_row,
-        on_page_changed = function(new_page)
-            self._store_page = new_page
-            self:renderStoreRows(rows, title, mode, callbacks)
-        end,
-    })
-    self._store_view = view
-    self._store_rows = rows
-    self._store_title = title
-    self._store_mode = mode
-    self._store_callbacks = callbacks
-    return view
-end
+-- Rendering is owned by the navigation core (storeDraw).
 
 function M:showStoreView()
-    self._store_page = 1
-    if self._store_sections then
-        self:renderStoreRows(self._store_sections, self._store_title, self._store_mode,
-            self._store_callbacks)
-    else
-        self:showStoreHome()
-    end
+    self:storeDraw()
 end
 
-function M:closeStoreView(view)
-    local target = view or self._store_view
-    if target then UIManager:close(target) end
-    self._store_view = nil
+function M:closeStoreView()
+    self._store_nav = nil
 end
 
 -- Tab bar switching while a store page is open.
-function M:onStoreTabSwitch(mode, view)
+function M:onStoreTabSwitch(mode)
     if mode == "store" then return end
+    local view = self.shelf_view
+    self._store_nav = nil
     if mode == "books" then
-        self:closeStoreView(view)
-        self:showShelfView("books")
-        return
+        self:showShelfView("books", nil, view)
+    else
+        self:showWeChatArticlesPage(mp_mode(mode), nil, view)
     end
-    self:closeStoreView(view)
-    self:showWeChatArticlesPage(mp_mode(mode), nil)
 end
 
-function M:onStoreRowSelected(row, view)
+function M:onStoreRowSelected(row)
     if type(row) ~= "table" then return end
     if row.kind == "action" then
         if row.action == "search" then
-            self:showStoreSearch(view)
+            self:showStoreSearch(row.view)
         elseif row.action == "categories" then
-            self:showStoreCategories(view)
+            self:showStoreCategories()
         end
     elseif row.kind == "book" then
-        self:showStoreBookRecord(row.book, view)
+        self:showStoreBookRecord(row.book)
     elseif row.kind == "category" or row.kind == "topic" then
-        self:openStoreCategory(row.category or row.topic, view)
-    elseif row.kind == "heading" then
-        return
-    elseif row.kind == "more" then
-        self:openStoreCategory(row.section, view, { list_only = true })
+        self:openStoreCategory(row.category or row.topic)
+    elseif row.kind == "section" then
+        self:openStoreSection(row.section)
+    elseif row.kind == "load_more" then
+        self:storeLoadMore()
     end
 end
 
 -- Books related to the open one (GET /book/similar).
-function M:showSimilarBooks(book, old_view)
+function M:showSimilarBooks(book)
     if not self:requireLogin(true, true) then return end
     local book_id = tostring(book.book_id or "")
     if book_id == "" then return end
-    if old_view then UIManager:close(old_view) end
-    local throttle_key = "similar:" .. tostring(book_id)
-    if self:storeFetchBlocked(throttle_key) then return end
-    self:storeFetchBegin(throttle_key)
+    local key = "similar:" .. book_id
+    if self:storeFetchBlocked(key) then return end
+    self:storeFetchBegin(key)
     self:showBusy(_("Loading related books..."))
     self:runOnlineTask(_("Related books"), function()
         local ok, result = pcall(function()
             return self.client:book_similar(book_id, 20)
         end)
         self:closeBusy()
-        self:storeFetchEnd(throttle_key)
+        self:storeFetchEnd(key)
         if not ok then
             logger.err("similar books failed:", log_error(result))
             self:showInfo(T(_("Load related books failed:\n%1"), display_error(result)))
@@ -266,21 +325,25 @@ function M:showSimilarBooks(book, old_view)
         for _i, entry in ipairs(parsed) do
             rows[#rows + 1] = { kind = "book", book = entry }
         end
-        self:renderStoreRows(rows, T(_("Related to %1"), book.title or book_id), "store", {
-            on_refresh = function() self:showSimilarBooks(book, nil) end,
+        self:storePush({
+            title = T(_("Related to %1"), book.title or book_id),
+            rows = rows,
         })
     end)
 end
 
 -- ---------- category browsing ----------
 
-function M:showStoreCategories(old_view)
+function M:showStoreCategories()
     if not self:requireLogin(true, true) then return end
     if self._store_category_tree then
-        if old_view then UIManager:close(old_view) end
-        self:renderCategoryTree()
+        self:mountCategoryTree(false)
         return
     end
+    self:storeLoadCategories(false)
+end
+
+function M:storeLoadCategories(replace_top)
     if self:storeFetchBlocked("categories") then return end
     self:storeFetchBegin("categories")
     self:showBusy(_("Loading categories..."))
@@ -296,99 +359,101 @@ function M:showStoreCategories(old_view)
             return
         end
         self._store_category_tree = Store.category_list(result)
-        if old_view then UIManager:close(old_view) end
-        self:renderCategoryTree()
+        self:mountCategoryTree(replace_top)
     end)
 end
 
-function M:renderCategoryTree()
+function M:mountCategoryTree(replace_top)
     local rows = {}
     for _i, category in ipairs(self._store_category_tree or {}) do
         rows[#rows + 1] = { kind = "category", category = category }
     end
-    self:renderStoreRows(rows, _("Categories"), "store", {
-        on_refresh = function()
+    local frame = {
+        title = _("Categories"),
+        rows = rows,
+        loader = function()
             self._store_category_tree = nil
-            self:showStoreView()
+            self:storeLoadCategories(true)
         end,
-    })
+    }
+    if replace_top then self:storeReplace(frame) else self:storePush(frame) end
 end
+
+-- Category rendering is owned by mountCategoryTree.
 
 -- `entry` is either a category tile from a feed (has category_id + title) or a
 -- whole feed section ("more" row: list its books directly).
-function M:openStoreCategory(entry, old_view, options)
-    options = options or {}
-    if not entry then return end
-    if options.list_only then
-        local rows = {}
-        for index, book in ipairs(entry.books or {}) do
-            if index > HOME_PAGE_SIZE * 3 then break end
-            rows[#rows + 1] = { kind = "book", book = book }
-        end
-        self:renderStoreRows(rows, section_title(entry), "store")
-        return
-    end
+-- A feed category tile, a topic, or a ranking tile that carries no id.
+function M:openStoreCategory(entry)
+    if type(entry) ~= "table" then return end
     local category_id = tostring(entry.category_id or "")
-    if category_id == "" then
-        -- Ranking tiles (/store/list type=12) carry their top books but no
-        -- category id, so show those books instead of a dead end.
-        local rows = {}
-        for _i, book in ipairs(entry.books or {}) do
-            rows[#rows + 1] = { kind = "book", book = book }
-        end
-        if #rows == 0 then return end
-        self:renderStoreRows(rows, entry.title or _("Ranking"), "store")
+    if category_id ~= "" then
+        self:openCategoryBooks(category_id, entry.title)
         return
     end
-    if old_view then UIManager:close(old_view) end
-    self:showCategoryBooks(category_id, entry.title, nil, 1)
+    -- Ranking tiles (/store/list type=12) carry their top books but no
+    -- category id, so show those books instead of a dead end.
+    local rows = {}
+    for _i, book in ipairs(entry.books or {}) do
+        rows[#rows + 1] = { kind = "book", book = book }
+    end
+    if #rows == 0 then return end
+    self:storePush({ title = entry.title or _("Ranking"), rows = rows })
 end
 
-function M:showCategoryBooks(category_id, title, old_view, page)
-    if not self:requireLogin(true, true) then return end
-    page = tonumber(page) or 1
-    local throttle_key = "category:" .. tostring(category_id) .. ":" .. tostring(page)
-    if self:storeFetchBlocked(throttle_key) then return end
-    self:storeFetchBegin(throttle_key)
-    self:showBusy(T(_("Loading %1..."), title or _("category")))
+-- Whole section: the "see all" row at the end of a home feed block.
+function M:openStoreSection(section)
+    if type(section) ~= "table" then return end
+    local rows = {}
+    for _i, book in ipairs(section.books or {}) do
+        rows[#rows + 1] = { kind = "book", book = book }
+    end
+    if #rows == 0 then return end
+    self:storePush({ title = section_title(section), rows = rows })
+end
+
+function M:openCategoryBooks(category_id, title)
+    category_id = tostring(category_id or "")
+    if category_id == "" then return end
+    self._store_category_books = {
+        id = category_id,
+        title = title,
+        books = {},
+        has_more = false,
+    }
+    self:storeLoadCategoryBooks(false)
+end
+
+function M:storeLoadCategoryBooks(replace_top)
+    local cache = self._store_category_books
+    if not cache then return end
+    local max_idx = #cache.books
+    local key = "category:" .. cache.id .. ":" .. tostring(max_idx)
+    if self:storeFetchBlocked(key) then return end
+    self:storeFetchBegin(key)
+    self:showBusy(T(_("Loading %1..."), cache.title or _("category")))
     self:runOnlineTask(_("Category"), function()
         local ok, result = pcall(function()
-            return self.client:store_category_books(category_id, HOME_PAGE_SIZE)
+            return self.client:store_category_books(cache.id, HOME_PAGE_SIZE, max_idx)
         end)
         self:closeBusy()
-        self:storeFetchEnd(throttle_key)
+        self:storeFetchEnd(key)
         if not ok then
             logger.err("category books failed:", log_error(result))
             self:showInfo(T(_("Load category failed:\n%1"), display_error(result)))
             return
         end
         local parsed = Store.category_books(result)
-        if self._store_category_cache and self._store_category_cache.id == category_id then
-            for _i, book in ipairs(parsed.books) do
-                self._store_category_cache.books[#self._store_category_cache.books + 1] = book
-            end
-            self._store_category_cache.has_more = parsed.has_more
-            self._store_category_cache.max_idx = parsed.max_idx
-        else
-            self._store_category_cache = {
-                id = category_id,
-                title = title,
-                books = parsed.books,
-                has_more = parsed.has_more,
-                max_idx = parsed.max_idx,
-                loaded_pages = 1,
-            }
+        for _i, book in ipairs(parsed.books) do
+            cache.books[#cache.books + 1] = book
         end
-        local cache = self._store_category_cache
-        cache.loaded_pages = math.max(cache.loaded_pages or 1, page)
-        cache.title = title or cache.title
-        if old_view then UIManager:close(old_view) end
-        self:renderCategoryBooks()
+        cache.has_more = parsed.has_more
+        self:mountCategoryBooks(replace_top)
     end)
 end
 
-function M:renderCategoryBooks()
-    local cache = self._store_category_cache
+function M:mountCategoryBooks(replace_top)
+    local cache = self._store_category_books
     if not cache then return end
     local rows = {}
     for _i, book in ipairs(cache.books) do
@@ -397,49 +462,19 @@ function M:renderCategoryBooks()
     if cache.has_more then
         rows[#rows + 1] = { kind = "load_more", label = _("Load more") }
     end
-    local view
-    view = LibraryView.show({
-        mode = "store",
+    local frame = {
         title = cache.title or _("Category"),
         rows = rows,
-        paged = true,
-        page = cache.loaded_pages or 1,
-        page_size = HOME_PAGE_SIZE,
-    }, {
-        on_switch = function(new_mode) self:onStoreTabSwitch(new_mode, view) end,
-        on_refresh = function()
-            self._store_category_cache = nil
-            self:showStoreView()
-        end,
-        on_select = function(row)
-            if row.kind == "load_more" then
-                self:showCategoryBooks(cache.id, cache.title, view,
-                    (cache.loaded_pages or 1) + 1)
-                return
-            end
-            self:onStoreRowSelected(row, view)
-        end,
-        on_page_changed = function(new_page)
-            cache.loaded_pages = new_page
-            if new_page > (cache.pages_loaded or 0) then
-                cache.pages_loaded = new_page
-            end
-            self:renderCategoryBooks()
-        end,
-    })
-    self._store_view = view
-    self._store_mode = "store"
+        loader = function() self:storeLoadCategoryBooks(true) end,
+        on_more = function() self:storeLoadCategoryBooks(true) end,
+    }
+    if replace_top then self:storeReplace(frame) else self:storePush(frame) end
 end
 
 -- ---------- search ----------
 
-function M:showStoreSearch(old_view, keyword)
+function M:showStoreSearch()
     if not self:requireLogin(true, true) then return end
-    if keyword and keyword ~= "" then
-        if old_view then UIManager:close(old_view) end
-        self:searchStore(keyword, nil, 1)
-        return
-    end
     local dialog
     dialog = InputDialog:new{
         title = _("Search WeRead"),
@@ -458,8 +493,7 @@ function M:showStoreSearch(old_view, keyword)
                     local value = dialog:getInputText()
                     UIManager:close(dialog)
                     if value and value ~= "" then
-                        if old_view then UIManager:close(old_view) end
-                        self:searchStore(value, nil, 1)
+                        self:openStoreSearch(value)
                     end
                 end,
             },
@@ -468,50 +502,50 @@ function M:showStoreSearch(old_view, keyword)
     self:showInputDialog(dialog)
 end
 
-function M:searchStore(keyword, old_view, page)
-    page = tonumber(page) or 1
-    local throttle_key = "search:" .. tostring(keyword) .. ":" .. tostring(page)
-    if self:storeFetchBlocked(throttle_key) then return end
-    self:storeFetchBegin(throttle_key)
-    self:showBusy(T(_("Searching %1..."), keyword))
+function M:openStoreSearch(keyword)
+    self._store_search = {
+        keyword = keyword,
+        books = {},
+        has_more = false,
+        correction = nil,
+    }
+    self:storeLoadSearch(false)
+end
+
+function M:storeLoadSearch(replace_top)
+    local state = self._store_search
+    if not state then return end
+    local max_idx = #state.books
+    local key = "search:" .. state.keyword .. ":" .. tostring(max_idx)
+    if self:storeFetchBlocked(key) then return end
+    self:storeFetchBegin(key)
+    self:showBusy(T(_("Searching %1..."), state.keyword))
     self:runOnlineTask(_("Search"), function()
         local ok, result = pcall(function()
-            return self.client:search_store(keyword, 10, (page - 1) * 10)
+            return self.client:search_store(state.keyword, HOME_PAGE_SIZE, max_idx)
         end)
         self:closeBusy()
-        self:storeFetchEnd(throttle_key)
+        self:storeFetchEnd(key)
         if not ok then
             logger.err("store search failed:", log_error(result))
             self:showInfo(T(_("Search failed:\n%1"), display_error(result)))
             return
         end
         local parsed = Store.search_result(result)
-        if self._store_search and self._store_search.keyword == keyword and page > 1 then
-            for _i, book in ipairs(parsed.books) do
-                self._store_search.books[#self._store_search.books + 1] = book
-            end
-        else
-            self._store_search = {
-                keyword = keyword,
-                books = parsed.books,
-                has_more = parsed.has_more,
-                correction = parsed.correction,
-                pages = 1,
-            }
+        for _i, book in ipairs(parsed.books) do
+            state.books[#state.books + 1] = book
         end
-        local state = self._store_search
-        state.pages = math.max(state.pages or 1, page)
         state.has_more = parsed.has_more
-        if old_view then UIManager:close(old_view) end
-        self:renderSearchResults()
+        state.correction = parsed.correction
+        self:mountSearch(replace_top)
     end)
 end
 
-function M:renderSearchResults()
+function M:mountSearch(replace_top)
     local state = self._store_search
     if not state then return end
     local rows = {}
-    if state.correction and (state.pages or 1) == 1 then
+    if state.correction and #state.books <= HOME_PAGE_SIZE then
         rows[#rows + 1] = {
             kind = "heading",
             text = T(_("Showing results for \"%1\""), state.correction),
@@ -523,44 +557,24 @@ function M:renderSearchResults()
     if state.has_more then
         rows[#rows + 1] = { kind = "load_more", label = _("Load more") }
     end
-    local view
-    view = LibraryView.show({
-        mode = "store",
-        title = T(_("Search: %1"), state.keyword),
+    local keyword = state.keyword
+    local frame = {
+        title = T(_("Search: %1"), keyword),
         rows = rows,
-        paged = true,
-        page = state.pages or 1,
-        page_size = 10,
-    }, {
-        on_switch = function(new_mode) self:onStoreTabSwitch(new_mode, view) end,
-        on_refresh = function() self:searchStore(state.keyword, nil, 1) end,
-        on_select = function(row)
-            if row.kind == "load_more" then
-                self:searchStore(state.keyword, view, (state.pages or 1) + 1)
-                return
-            end
-            if row.kind == "heading" then return end
-            self:onStoreRowSelected(row, view)
+        loader = function()
+            self:openStoreSearch(keyword)
         end,
-        on_page_changed = function(new_page)
-            state.pages = new_page
-            self:renderSearchResults()
-        end,
-    })
-    self._store_view = view
-    self._store_mode = "store"
+        on_more = function() self:storeLoadSearch(true) end,
+    }
+    if replace_top then self:storeReplace(frame) else self:storePush(frame) end
 end
 
 -- ---------- book record ----------
 
-function M:showStoreBookRecord(book, old_view)
+function M:showStoreBookRecord(book)
     if type(book) ~= "table" then return end
-    if old_view then UIManager:close(old_view) end
-    local book_id = tostring(book.book_id or "")
-    if book_id == "" then return end
-    local cached = self.settings:get("books", {})[book_id]
-    local known = cached and cached._shelf_member
-    self:_showStoreBookDetail(book, known, nil)
+    if tostring(book.book_id or "") == "" then return end
+    self:_showStoreBookDetail(book, nil)
 end
 
 -- One shared detail sheet for store rows. `shelf_member` is nil while unknown
@@ -728,29 +742,46 @@ function M:loadStoreBookState(book, callback)
         return
     end
     self:runOnlineTask(_("Book info"), function()
-        local info_ok, info = pcall(function()
-            return self.client:get_book_info(book_id)
-        end)
-        if info_ok and type(info) == "table" then
-            local updated = Store.book(info)
-            if updated then
-                for key, value in pairs(updated) do book[key] = value end
+        local cached = self._store_book_info and self._store_book_info[book_id]
+        if not (cached and (now_seconds() - cached.at) < BOOK_INFO_TTL_SECONDS) then
+            local ok, info = pcall(function()
+                return self.client:get_book_info(book_id)
+            end)
+            if ok and type(info) == "table" then
+                local updated = Store.book(info)
+                if updated then
+                    for key, value in pairs(updated) do book[key] = value end
+                    self._store_book_info = self._store_book_info or {}
+                    self._store_book_info[book_id] = { at = now_seconds(), book = updated }
+                end
             end
         end
-        local member = false
-        local shelf_ok, shelf = pcall(function()
+        if callback then callback(self:shelfMemberFrom(book_id)) end
+    end)
+end
+
+function M:shelfMemberFrom(book_id, force)
+    local cache = self._store_shelf_ids
+    if force or not (cache and (now_seconds() - cache.at) < SHELF_CACHE_TTL_SECONDS) then
+        local ok, shelf = pcall(function()
             return self.client:get_shelf()
         end)
-        if shelf_ok and type(shelf) == "table" then
-            local members = {}
-            for _i, item in ipairs(shelf.books or {}) do
-                members[tostring(item.bookId or item.book_id or "")] = true
-            end
-            self._shelf_member_cache = members
-            member = members[book_id] == true
+        if not (ok and type(shelf) == "table") then
+            return cache and cache.ids[book_id] == true or false
         end
-        if callback then callback(member) end
-    end)
+        local ids = {}
+        for _i, item in ipairs(shelf.books or {}) do
+            ids[tostring(item.bookId or item.book_id or "")] = true
+        end
+        self._store_shelf_ids = { at = now_seconds(), ids = ids }
+        self._shelf_member_cache = ids
+    end
+    return self._store_shelf_ids.ids[book_id] == true
+end
+
+function M:markShelfMember(book_id, member)
+    self._store_shelf_ids = self._store_shelf_ids or { at = now_seconds(), ids = {} }
+    self._store_shelf_ids.ids[book_id] = member or nil
 end
 
 function M:addToShelf(book, callback)
@@ -772,7 +803,7 @@ function M:addToShelf(book, callback)
             self:showInfo(T(_("Add to bookshelf failed:\n%1"), display_error(result)))
             return
         end
-        if self._shelf_member_cache then self._shelf_member_cache[book_id] = true end
+        self:markShelfMember(book_id, true)
         self:showTransientInfo(T(_("\"%1\" added to bookshelf"), book.title or book_id), 2)
         self:invalidateShelfSnapshot()
         self:verifyShelfMember(book_id, true)
@@ -813,7 +844,7 @@ function M:removeFromShelf(book, callback)
             self:showInfo(T(_("Remove from bookshelf failed:\n%1"), display_error(result)))
             return
         end
-        if self._shelf_member_cache then self._shelf_member_cache[book_id] = false end
+        self:markShelfMember(book_id, false)
         self:showTransientInfo(T(_("\"%1\" removed from bookshelf"), book.title or book_id), 2)
         self:invalidateShelfSnapshot()
         self:verifyShelfMember(book_id, false)
