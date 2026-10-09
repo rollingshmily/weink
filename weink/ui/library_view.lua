@@ -1079,16 +1079,20 @@ function LibraryView:build()
         VerticalGroup:new{ align = "left", content },
     }
     self._build_generation = (self._build_generation or 0) + 1
+    self._closed = nil
     local build_generation = self._build_generation
     if self.on_reach_bottom then
-        -- Auto-load the next page once the reader reaches the end, instead
-        -- of spending a whole row on a Load more line.
+        -- Auto-load the next page once the reader reaches the end, instead of
+        -- spending a row on a Load more line. A page that already fits on
+        -- screen counts as the end too, otherwise a short first page could
+        -- never pull in more and the reader sits on a half-empty screen.
         local reach = self.on_reach_bottom
         local function watch_bottom()
-            if build_generation ~= self._build_generation then return end
+            if self._closed or build_generation ~= self._build_generation then return end
             local max_y = tonumber(scroll._max_scroll_offset_y) or 0
             local offset_y = tonumber(scroll._scroll_offset_y) or 0
-            if max_y > 0 and offset_y >= max_y - Screen:scaleBySize(80) then
+            local reached = max_y == 0 or offset_y >= max_y - Screen:scaleBySize(80)
+            if reached then
                 reach()
                 return
             end
@@ -1144,6 +1148,8 @@ function LibraryView:onShow()
 end
 
 function LibraryView:onCloseWidget()
+    -- Stop the reach-bottom watcher from firing against a closed page.
+    self._closed = true
     UIManager:setDirty(nil, function() return "ui", self.dimen end)
 end
 
