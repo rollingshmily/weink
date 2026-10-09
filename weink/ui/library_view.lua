@@ -832,7 +832,11 @@ function LibraryView:coverWallContent()
     self._item_rows = {}
     self._focus_item_rows = {}
     local columns = math.max(1, math.floor(tonumber(self.cover_columns) or 3))
-    local cell_width = math.floor(self.content_width / columns)
+    -- ScrollableContainer reserves ~6px for its vertical bar, so the full screen
+    -- width overflows by that much and grows a horizontal scrollbar. The list
+    -- rows use list_width for the same reason.
+    local wall_width = self.list_width
+    local cell_width = math.floor(wall_width / columns)
     local cell_height = math.floor(math.max(1,
         tonumber(self.cover_cell_height) or Screen:scaleBySize(220)))
     local grid_row, grid_focus, grid_kind, grid_span
@@ -867,7 +871,7 @@ function LibraryView:coverWallContent()
         if not grid_row then
             grid_gap = tonumber(gap) or 0
             grid_cell_w = math.floor(
-                (self.content_width - grid_gap * (span - 1)) / span)
+                (self.list_width - grid_gap * (span - 1)) / span)
             grid_cell_h = tonumber(height) or cell_height
             grid_row, grid_focus, grid_kind, grid_span, grid_placed = {}, {}, kind, span, 0
             self._focus_item_rows[#self._focus_item_rows + 1] = grid_focus
