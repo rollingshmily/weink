@@ -316,6 +316,7 @@ local zh = {
     ["⌕ Search"] = "⌕ 搜索",
     ["☰ Categories"] = "☰ 分类",
     ["↻ Refresh"] = "↻ 刷新",
+    ["More ›"] = "更多 ›",
     ["%1 books"] = "%1 本",
     ["%1 categories"] = "%1 个分类",
     ["Rank: #%1 in %2"] = "%2 第 %1 名",

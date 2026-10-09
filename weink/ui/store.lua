@@ -295,10 +295,10 @@ function M:buildStoreRows(sections)
             or #section.topics > 0
         if has_content then
             rows[#rows + 1] = {
-                kind = "heading",
+                kind = "group",
                 text = section_title(section),
-                more = #section.books > SECTION_PREVIEW,
-                section = section,
+                status = #section.books > SECTION_PREVIEW and _("More ›") or "",
+                target = #section.books > SECTION_PREVIEW and section or nil,
             }
         end
         for index, book in ipairs(section.books) do
@@ -350,6 +350,8 @@ function M:onStoreRowSelected(row)
         self:showStoreBookRecord(row.book)
     elseif row.kind == "category" or row.kind == "topic" then
         self:openStoreCategory(row.category or row.topic)
+    elseif row.kind == "group" then
+        if row.target then self:openStoreSection(row.target) end
     elseif row.kind == "section" then
         self:openStoreSection(row.section)
     elseif row.kind == "heading" then

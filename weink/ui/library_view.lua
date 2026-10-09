@@ -554,6 +554,9 @@ function LibraryView:content()
                 grid_row = {}
                 self._focus_item_rows[#self._focus_item_rows + 1] = grid_row
                 table.insert(content, HorizontalGroup:new(grid_row))
+        if kind == "category" then
+            table.insert(content, VerticalSpan:new{ width = Screen:scaleBySize(8) })
+        end
             end
             local width = column == columns
                 and self.content_width - cell_width * (columns - 1)
@@ -657,6 +660,7 @@ end
 local GroupHeading = InputContainer:extend{
     text = "",
     count = "",
+    callback = nil,
     width = nil,
     show_parent = nil,
 }
@@ -697,6 +701,18 @@ function GroupHeading:init()
     }
     self[1] = self.frame
     self.dimen = self.frame:getSize()
+    if self.callback then
+        self.ges_events = {
+            TapGroupHeading = {
+                GestureRange:new{ ges = "tap", range = self.dimen },
+            },
+        }
+    end
+end
+
+function GroupHeading:onTapGroupHeading()
+    if self.callback then self.callback() end
+    return true
 end
 
 function GroupHeading:onFocus()
@@ -791,6 +807,9 @@ function LibraryView:storeRowWidget(row)
             count = row.status or "",
             width = self.list_width,
             show_parent = self,
+            callback = (row.target or row.section) and function()
+                if self.on_select then self.on_select(row, self.mode) end
+            end or nil,
         }
     end
     local text, status, bold = "", "", false
@@ -835,14 +854,16 @@ function LibraryView:coverWallContent()
     -- ScrollableContainer reserves ~6px for its vertical bar, so the full screen
     -- width overflows by that much and grows a horizontal scrollbar. The list
     -- rows use list_width for the same reason.
-    local wall_width = self.list_width
+    local inset = Screen:scaleBySize(9)
+    local wall_width = self.screen_w - 2 * inset
     local cell_width = math.floor(wall_width / columns)
     local cell_height = math.floor(math.max(1,
         tonumber(self.cover_cell_height) or Screen:scaleBySize(220)))
     local grid_row, grid_focus, grid_kind, grid_span
-    local grid_gap, grid_cell_w, grid_cell_h, grid_placed
+    local grid_gap, grid_cell_w, grid_cell_h, grid_placed, grid_inset
     local function flush_grid()
         if not grid_row then return end
+        local kind = grid_kind
         -- Pad the tail with cells of the SAME width as this row, so the last
         -- row keeps its alignment (a book-width filler here used to mangle the
         -- two-column category rows).
@@ -861,8 +882,11 @@ function LibraryView:coverWallContent()
             grid_placed = grid_placed + 1
         end
         table.insert(content, HorizontalGroup:new(grid_row))
+        if kind == "category" then
+            table.insert(content, VerticalSpan:new{ width = Screen:scaleBySize(8) })
+        end
         grid_row, grid_focus, grid_kind, grid_span = nil, nil, nil, nil
-        grid_gap, grid_cell_w, grid_cell_h, grid_placed = nil, nil, nil, nil
+        grid_gap, grid_cell_w, grid_cell_h, grid_placed, grid_inset = nil, nil, nil, nil, nil
     end
     local function add_cell(kind, cell, span, gap, height)
         if grid_row and (grid_kind ~= kind or grid_span ~= span) then
@@ -870,10 +894,14 @@ function LibraryView:coverWallContent()
         end
         if not grid_row then
             grid_gap = tonumber(gap) or 0
+            grid_inset = inset
             grid_cell_w = math.floor(
-                (self.list_width - grid_gap * (span - 1)) / span)
+                (wall_width - grid_gap * (span - 1)) / span)
             grid_cell_h = tonumber(height) or cell_height
             grid_row, grid_focus, grid_kind, grid_span, grid_placed = {}, {}, kind, span, 0
+            if grid_inset and grid_inset > 0 then
+                grid_row[1] = HorizontalSpan:new{ width = grid_inset }
+            end
             self._focus_item_rows[#self._focus_item_rows + 1] = grid_focus
         end
         if grid_gap > 0 and grid_placed > 0 then
@@ -904,7 +932,7 @@ function LibraryView:coverWallContent()
             local entry = row.category or {}
             local cat_gap = Screen:scaleBySize(6)
             local cat_height = Screen:scaleBySize(62)
-            local cat_width = math.floor((self.list_width - cat_gap) / 2)
+            local cat_width = math.floor((wall_width - cat_gap) / 2)
             add_cell("category", CategoryCell:new{
                 text = entry.title or "",
                 count = (tonumber(entry.total) or 0) > 0
@@ -1047,6 +1075,7 @@ function LibraryView:build()
     local content = self:content()
     local scroll = ScrollableContainer:new{
         dimen = Geom:new{ w = self.screen_w, h = scroll_h },
+        scroll_bar_width = self.rows and 0 or Screen:scaleBySize(6),
         show_parent = self,
         VerticalGroup:new{ align = "left", content },
     }
