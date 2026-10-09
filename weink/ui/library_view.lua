@@ -298,7 +298,7 @@ function LibraryView:tabBar()
         font_size = 22,
         labels = {
             store = _("Store"),
-            books = T(_("Books (%1)"), #(self.books or {})),
+            books = _("Books"),
             favorites = _("Favorites"),
             floating = _("Floating"),
         },

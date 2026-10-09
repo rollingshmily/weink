@@ -312,6 +312,7 @@ local zh = {
     ["This book can only be read after purchase. Buy it in the WeRead phone app."] = "本书需购买后才能阅读。请在微信读书手机端购买。",
     ["Load book info failed:\n%1"] = "加载书籍信息失败:\n%1",
     ["Search the store"] = "搜索书城",
+    ["Slow down a little."] = "慢一点,别连点。",
     ["All categories"] = "全部分类",
     ["Related books"] = "相似推荐",
     ["Loading related books..."] = "正在加载相似书籍...",

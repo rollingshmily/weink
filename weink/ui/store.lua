@@ -20,6 +20,54 @@ local logger = require("weink.lib.logger")
 
 local M = {}
 
+-- Store requests are tap-driven, so the only thing to defend against is a
+-- double tap or a re-entrant open while the first call is still in flight.
+local STORE_MIN_INTERVAL_SECONDS = 1.0
+local STORE_INFLIGHT_TTL_SECONDS = 15
+
+local function now_seconds()
+    local ok, socket = pcall(require, "socket")
+    if ok and type(socket) == "table" and type(socket.gettime) == "function" then
+        return socket.gettime()
+    end
+    return os.time()
+end
+
+function M:storeFetchAllowed(key)
+    local now = now_seconds()
+    local at = self._store_fetch_at and self._store_fetch_at[key]
+    if at and (now - at) < STORE_MIN_INTERVAL_SECONDS then return false end
+    if self._store_inflight and self._store_inflight[key] then return false end
+    return true
+end
+
+function M:storeFetchBlocked(key)
+    if self:storeFetchAllowed(key) then return false end
+    self:showTransientInfo(_("Slow down a little."), 1)
+    return true
+end
+
+function M:storeFetchBegin(key)
+    self._store_fetch_at = self._store_fetch_at or {}
+    self._store_inflight = self._store_inflight or {}
+    self._store_inflight_token = self._store_inflight_token or {}
+    self._store_fetch_at[key] = now_seconds()
+    local token = {}
+    self._store_inflight_token[key] = token
+    self._store_inflight[key] = true
+    -- Safety net: never let a lost callback wedge the button forever.
+    UIManager:scheduleIn(STORE_INFLIGHT_TTL_SECONDS, function()
+        if self._store_inflight_token[key] == token then
+            self._store_inflight[key] = nil
+        end
+    end)
+end
+
+function M:storeFetchEnd(key)
+    if self._store_inflight then self._store_inflight[key] = nil end
+    if self._store_inflight_token then self._store_inflight_token[key] = nil end
+end
+
 local HOME_PAGE_SIZE = 10
 local STORE_TITLE = _("WeRead Store")
 
@@ -43,12 +91,15 @@ function M:showStoreHome(old_view)
         self:loadStoreHome()
         return
     end
+    if self:storeFetchBlocked("home") then return end
+    self:storeFetchBegin("home")
     self:showBusy(_("Loading book store..."))
     self:runOnlineTask(_("WeRead Store"), function()
         local ok, result = pcall(function()
             return self.client:store_home()
         end)
         self:closeBusy()
+        self:storeFetchEnd("home")
         if not ok then
             logger.err("store home failed:", log_error(result))
             self:showInfo(T(_("Load book store failed:\n%1"), display_error(result)))
@@ -191,12 +242,16 @@ function M:showSimilarBooks(book, old_view)
     local book_id = tostring(book.book_id or "")
     if book_id == "" then return end
     if old_view then UIManager:close(old_view) end
+    local throttle_key = "similar:" .. tostring(book_id)
+    if self:storeFetchBlocked(throttle_key) then return end
+    self:storeFetchBegin(throttle_key)
     self:showBusy(_("Loading related books..."))
     self:runOnlineTask(_("Related books"), function()
         local ok, result = pcall(function()
             return self.client:book_similar(book_id, 20)
         end)
         self:closeBusy()
+        self:storeFetchEnd(throttle_key)
         if not ok then
             logger.err("similar books failed:", log_error(result))
             self:showInfo(T(_("Load related books failed:\n%1"), display_error(result)))
@@ -226,12 +281,15 @@ function M:showStoreCategories(old_view)
         self:renderCategoryTree()
         return
     end
+    if self:storeFetchBlocked("categories") then return end
+    self:storeFetchBegin("categories")
     self:showBusy(_("Loading categories..."))
     self:runOnlineTask(_("Categories"), function()
         local ok, result = pcall(function()
             return self.client:category_list()
         end)
         self:closeBusy()
+        self:storeFetchEnd("categories")
         if not ok then
             logger.err("category list failed:", log_error(result))
             self:showInfo(T(_("Load categories failed:\n%1"), display_error(result)))
@@ -279,12 +337,16 @@ end
 function M:showCategoryBooks(category_id, title, old_view, page)
     if not self:requireLogin(true, true) then return end
     page = tonumber(page) or 1
+    local throttle_key = "category:" .. tostring(category_id) .. ":" .. tostring(page)
+    if self:storeFetchBlocked(throttle_key) then return end
+    self:storeFetchBegin(throttle_key)
     self:showBusy(T(_("Loading %1..."), title or _("category")))
     self:runOnlineTask(_("Category"), function()
         local ok, result = pcall(function()
             return self.client:store_category_books(category_id, HOME_PAGE_SIZE)
         end)
         self:closeBusy()
+        self:storeFetchEnd(throttle_key)
         if not ok then
             logger.err("category books failed:", log_error(result))
             self:showInfo(T(_("Load category failed:\n%1"), display_error(result)))
@@ -398,12 +460,16 @@ end
 
 function M:searchStore(keyword, old_view, page)
     page = tonumber(page) or 1
+    local throttle_key = "search:" .. tostring(keyword) .. ":" .. tostring(page)
+    if self:storeFetchBlocked(throttle_key) then return end
+    self:storeFetchBegin(throttle_key)
     self:showBusy(T(_("Searching %1..."), keyword))
     self:runOnlineTask(_("Search"), function()
         local ok, result = pcall(function()
             return self.client:search_store(keyword, 10, (page - 1) * 10)
         end)
         self:closeBusy()
+        self:storeFetchEnd(throttle_key)
         if not ok then
             logger.err("store search failed:", log_error(result))
             self:showInfo(T(_("Search failed:\n%1"), display_error(result)))
@@ -668,12 +734,16 @@ function M:addToShelf(book, callback)
     if not self:requireLogin(true, true) then return end
     local book_id = tostring(book.book_id or "")
     if book_id == "" then return end
+    local throttle_key = "shelf:add:" .. tostring(book_id)
+    if self:storeFetchBlocked(throttle_key) then return end
+    self:storeFetchBegin(throttle_key)
     self:showBusy(_("Adding to bookshelf..."))
     self:runOnlineTask(_("Add to bookshelf"), function()
         local ok, result = pcall(function()
             return self.client:eink_shelf_add({ book_id })
         end)
         self:closeBusy()
+        self:storeFetchEnd(throttle_key)
         if not ok then
             logger.err("shelf add failed:", log_error(result))
             self:showInfo(T(_("Add to bookshelf failed:\n%1"), display_error(result)))
@@ -705,12 +775,16 @@ end
 
 function M:removeFromShelf(book, callback)
     local book_id = tostring(book.book_id or "")
+    local throttle_key = "shelf:del:" .. tostring(book_id)
+    if self:storeFetchBlocked(throttle_key) then return end
+    self:storeFetchBegin(throttle_key)
     self:showBusy(_("Removing from bookshelf..."))
     self:runOnlineTask(_("Remove from bookshelf"), function()
         local ok, result = pcall(function()
             return self.client:eink_shelf_delete({ book_id })
         end)
         self:closeBusy()
+        self:storeFetchEnd(throttle_key)
         if not ok then
             logger.err("shelf delete failed:", log_error(result))
             self:showInfo(T(_("Remove from bookshelf failed:\n%1"), display_error(result)))
