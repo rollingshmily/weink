@@ -554,9 +554,6 @@ function LibraryView:content()
                 grid_row = {}
                 self._focus_item_rows[#self._focus_item_rows + 1] = grid_row
                 table.insert(content, HorizontalGroup:new(grid_row))
-        if kind == "category" then
-            table.insert(content, VerticalSpan:new{ width = Screen:scaleBySize(8) })
-        end
             end
             local width = column == columns
                 and self.content_width - cell_width * (columns - 1)
