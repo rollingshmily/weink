@@ -140,13 +140,15 @@ end
 function M:storeFrameData()
     local state = self:storeTop()
     if not state then return nil end
+    local nav = self:storeNav()
+    local parent = nav[#nav - 1]
     local data = {
         mode = "store",
         title = state.title or STORE_TITLE,
         rows = state.rows or {},
         paged = false,
         scroll_offset = state.keep_offset,
-        back_label = #self:storeNav() > 1 and _("‹ Back to store") or nil,
+        back_label = parent and T(_("‹ Back to %1"), parent.title or STORE_TITLE) or nil,
     }
     local layout = self:storeCoverLayout()
     if layout then
@@ -435,23 +437,7 @@ function M:mountCategoryTree(replace_top)
     local rows = {}
     local groups = Store.category_groups(self._store_category_raw or {})
     for _i, group in ipairs(groups) do
-        if #group.children == 0 then
-            rows[#rows + 1] = { kind = "category", category = group }
-        else
-            rows[#rows + 1] = {
-                kind = "group",
-                text = group.title,
-                status = T(_("%1 categories"), tostring(#group.children)),
-            }
-            for _j, child in ipairs(group.children) do
-                rows[#rows + 1] = { kind = "category", category = child }
-            end
-        end
-    end
-    if #rows == 0 then
-        for _i, category in ipairs(Store.category_list(self._store_category_raw or {})) do
-            rows[#rows + 1] = { kind = "category", category = category }
-        end
+        rows[#rows + 1] = { kind = "category", category = group }
     end
     local frame = {
         title = _("All categories"),
@@ -464,13 +450,28 @@ function M:mountCategoryTree(replace_top)
     if replace_top then self:storeReplace(frame) else self:storePush(frame) end
 end
 
--- Category rendering is owned by mountCategoryTree.
+function M:mountCategoryChildren(entry, replace_top)
+    local rows = {}
+    for _i, child in ipairs(entry.children) do
+        rows[#rows + 1] = { kind = "category", category = child }
+    end
+    local frame = {
+        title = entry.title,
+        rows = rows,
+        loader = function() self:mountCategoryChildren(entry, true) end,
+    }
+    if replace_top then self:storeReplace(frame) else self:storePush(frame) end
+end
 
 -- `entry` is either a category tile from a feed (has category_id + title) or a
 -- whole feed section ("more" row: list its books directly).
 -- A feed category tile, a topic, or a ranking tile that carries no id.
 function M:openStoreCategory(entry)
     if type(entry) ~= "table" then return end
+    if type(entry.children) == "table" and #entry.children > 0 then
+        self:mountCategoryChildren(entry, false)
+        return
+    end
     local category_id = tostring(entry.category_id or "")
     if category_id ~= "" then
         self:openCategoryBooks(category_id, entry.title)
