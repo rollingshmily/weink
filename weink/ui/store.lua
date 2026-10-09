@@ -329,7 +329,17 @@ function M:openStoreCategory(entry, old_view, options)
         return
     end
     local category_id = tostring(entry.category_id or "")
-    if category_id == "" then return end
+    if category_id == "" then
+        -- Ranking tiles (/store/list type=12) carry their top books but no
+        -- category id, so show those books instead of a dead end.
+        local rows = {}
+        for _i, book in ipairs(entry.books or {}) do
+            rows[#rows + 1] = { kind = "book", book = book }
+        end
+        if #rows == 0 then return end
+        self:renderStoreRows(rows, entry.title or _("Ranking"), "store")
+        return
+    end
     if old_view then UIManager:close(old_view) end
     self:showCategoryBooks(category_id, entry.title, nil, 1)
 end
@@ -558,7 +568,6 @@ end
 function M:_showStoreBookDetail(book, shelf_member, old_view)
     local BookDetailView = require("weink.ui.book_detail_view")
     if old_view then UIManager:close(old_view) end
-    local book_id = tostring(book.book_id or "")
     local view
     local function redraw(new_member)
         self:_showStoreBookDetail(book, new_member, view)
@@ -587,6 +596,12 @@ function M:_showStoreBookDetail(book, shelf_member, old_view)
     if book.category and book.category ~= "" then
         metadata[#metadata + 1] = { text = T(_("Category: %1"), book.category) }
     end
+    local rank = book.ranklist
+    if type(rank) == "table" and tonumber(rank.seq) and tostring(rank.categoryName or "") ~= "" then
+        metadata[#metadata + 1] = {
+            text = T(_("Rank: #%1 in %2"), tostring(rank.seq), tostring(rank.categoryName)),
+        }
+    end
 
     local statuses = {}
     if availability.label and availability.label ~= "" then
@@ -601,7 +616,7 @@ function M:_showStoreBookDetail(book, shelf_member, old_view)
 
     if shelf_member == nil then
         statuses[#statuses + 1] = _("Checking bookshelf...")
-        self:checkShelfMember(book_id, function(is_member)
+        self:loadStoreBookState(book, function(is_member)
             redraw(is_member)
         end)
     elseif shelf_member then
@@ -702,31 +717,39 @@ end
 
 -- ---------- shelf membership ----------
 
-function M:checkShelfMember(book_id, callback)
-    book_id = tostring(book_id or "")
+-- One background round for the detail sheet: refresh the book metadata
+-- (which is where the ranking position comes from) and resolve shelf
+-- membership. The result is a boolean so a failed lookup cannot loop the
+-- caller.
+function M:loadStoreBookState(book, callback)
+    local book_id = tostring(book.book_id or "")
     if book_id == "" then
-        if callback then callback(nil) end
+        if callback then callback(false) end
         return
     end
-    local cache = self._shelf_member_cache
-    if cache and cache[book_id] ~= nil then
-        if callback then callback(cache[book_id]) end
-        return
-    end
-    self:runOnlineTask(_("Bookshelf"), function()
-        local ok, result = pcall(function()
+    self:runOnlineTask(_("Book info"), function()
+        local info_ok, info = pcall(function()
+            return self.client:get_book_info(book_id)
+        end)
+        if info_ok and type(info) == "table" then
+            local updated = Store.book(info)
+            if updated then
+                for key, value in pairs(updated) do book[key] = value end
+            end
+        end
+        local member = false
+        local shelf_ok, shelf = pcall(function()
             return self.client:get_shelf()
         end)
-        if not ok then
-            if callback then callback(nil) end
-            return
+        if shelf_ok and type(shelf) == "table" then
+            local members = {}
+            for _i, item in ipairs(shelf.books or {}) do
+                members[tostring(item.bookId or item.book_id or "")] = true
+            end
+            self._shelf_member_cache = members
+            member = members[book_id] == true
         end
-        local members = {}
-        for _i, item in ipairs((type(result) == "table" and result.books) or {}) do
-            members[tostring(item.bookId or item.book_id or "")] = true
-        end
-        self._shelf_member_cache = members
-        if callback then callback(members[book_id] == true) end
+        if callback then callback(member) end
     end)
 end
 
