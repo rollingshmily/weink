@@ -150,6 +150,28 @@ test("category list merges novel roots and e-book categories once", function()
     eq(tree[2].total, 1821, "category total")
 end)
 
+test("live category tree preserves every root and its descendants", function()
+    local fixture = dofile("spec/fixtures/store_categories_20261009.lua")
+    local flat = Store.category_list(fixture)
+    local groups = Store.category_groups(fixture)
+    eq(#flat, 57, "public category fixture contains 57 unique IDs")
+    eq(#groups, 22, "all 22 roots are retained, not only the three with children")
+    local represented, leaves, child_count = {}, 0, 0
+    for _i, group in ipairs(groups) do
+        represented[group.category_id] = true
+        if #group.children == 0 then leaves = leaves + 1 end
+        for _j, child in ipairs(group.children) do
+            represented[child.category_id] = true
+            child_count = child_count + 1
+        end
+    end
+    eq(leaves, 19, "19 standalone categories are not filtered out")
+    eq(child_count, 35, "existing novel subcategories are unchanged")
+    for _i, node in ipairs(flat) do
+        eq(represented[node.category_id], true, "category retained: " .. node.title)
+    end
+end)
+
 test("category node exposes children for a second drill-down", function()
     local node = Store.category_node({
         CategoryId = "100000",

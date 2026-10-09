@@ -95,6 +95,33 @@ mounted.on_fill()
 fake:mountSearch(true)
 expect(mounted.on_fill == nil, "short search page is auto-filled only once")
 
+-- All categories include selectable standalone roots as well as novel groups.
+fake._store_category_raw = dofile("spec/fixtures/store_categories_20261009.lua")
+fake:mountCategoryTree(false)
+expect(mounted.title == "All categories", "category screen uses the all-categories title")
+local headers, cards, category_ids = 0, 0, {}
+for _i, row in ipairs(mounted.rows) do
+    if row.kind == "group" then
+        headers = headers + 1
+    elseif row.kind == "category" then
+        cards = cards + 1
+        expect(not category_ids[row.category.category_id], "category card is not duplicated")
+        category_ids[row.category.category_id] = true
+    end
+end
+expect(headers == 3 and cards == 54, "three novel headings coexist with all 54 selectable categories")
+expect(category_ids["300000"] and category_ids["200000"] and category_ids["700000"],
+    "literature, history and computers are directly selectable")
+local selected_category
+fake.openCategoryBooks = function(_self, id, title) selected_category = { id = id, title = title } end
+for _i, row in ipairs(mounted.rows) do
+    if row.kind == "category" and row.category.category_id == "700000" then
+        fake:onStoreRowSelected(row)
+    end
+end
+expect(selected_category and selected_category.id == "700000" and selected_category.title == "计算机",
+    "restored standalone category routes to its own book list")
+
 -- Navigation requests keep the current view visible, without loading dialogs.
 fake.showBusy = function() error("store navigation opened a loading dialog") end
 fake.closeBusy = function() error("store navigation closed an unrelated dialog") end

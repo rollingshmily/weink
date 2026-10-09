@@ -270,6 +270,8 @@ end
 -- `/category/list` -> ordered groups for the two-level category screen.
 -- Level-1 entries (parent 0) are the group headers; everything whose
 -- parentCategoryId points at one of them becomes a child card.
+-- A root with no child nodes is itself a browsable category, not an empty
+-- group to discard (literature, history, computers, etc.).
 function Store.category_groups(response)
     local flat = Store.category_list(response)
     local groups = {}
@@ -293,10 +295,6 @@ function Store.category_groups(response)
             end
         end
     end
-    local out = {}
-    for _i, group in ipairs(groups) do
-        if #group.children > 0 then out[#out + 1] = group end
-    end
-    return out
+    return groups
 end
 return Store
