@@ -145,6 +145,7 @@ function M:storeFrameData()
         title = state.title or STORE_TITLE,
         rows = state.rows or {},
         paged = false,
+        scroll_offset = state.keep_offset,
         back_label = #self:storeNav() > 1 and _("‹ Back to store") or nil,
     }
     local layout = self:storeCoverLayout()
@@ -168,6 +169,7 @@ function M:storeCallbacks()
         on_categories = function() self:showStoreCategories() end,
         on_select = function(row) self:onStoreRowSelected(row) end,
         on_reach_bottom = state and state.on_more or nil,
+        on_fill_page = state and state.on_fill or nil,
     }
 end
 
@@ -541,13 +543,23 @@ function M:mountCategoryBooks(replace_top)
 
     local frame = {
         title = cache.title or _("Category"),
+        keep_offset = cache.keep_offset,
         rows = rows,
         loader = function()
             cache.books = {}
+            cache.keep_offset = 0
             cache.has_more = false
             self:storeLoadCategoryBooks(true)
         end,
-        on_more = function() self:storeLoadCategoryBooks(true) end,
+        on_more = function(offset)
+            cache.keep_offset = offset
+            self:storeLoadCategoryBooks(true)
+        end,
+        on_fill = (not cache.autofilled) and cache.has_more and function()
+            cache.autofilled = true
+            cache.keep_offset = 0
+            self:storeLoadCategoryBooks(true)
+        end or nil,
     }
     if replace_top then self:storeReplace(frame) else self:storePush(frame) end
 end
@@ -639,12 +651,21 @@ function M:mountSearch(replace_top)
     local keyword = state.keyword
     local frame = {
         title = T(_("Search: %1"), keyword),
+        keep_offset = state.keep_offset,
         rows = rows,
         loader = function()
+            state.keep_offset = 0
             self._store_search = { keyword = keyword, books = {}, has_more = false }
             self:storeLoadSearch(true)
         end,
-        on_more = function() self:storeLoadSearch(true) end,
+        on_more = function(offset)
+            state.keep_offset = offset
+            self:storeLoadSearch(true)
+        end,
+        on_fill = (not state.autofilled) and state.has_more and function()
+            state.autofilled = true
+            self:storeLoadSearch(true)
+        end or nil,
     }
     if replace_top then self:storeReplace(frame) else self:storePush(frame) end
 end

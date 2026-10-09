@@ -303,6 +303,8 @@ local LibraryView = FocusManager:extend{
     on_back = nil,
     on_categories = nil,
     on_reach_bottom = nil,
+    on_fill_page = nil,
+    scroll_offset = nil,
     back_label = nil,
 }
 
@@ -1030,6 +1032,8 @@ function LibraryView:apply(data, callbacks)
     self.on_back = callbacks.on_back
     self.on_categories = callbacks.on_categories
     self.on_reach_bottom = callbacks.on_reach_bottom
+    self.on_fill_page = callbacks.on_fill_page
+    self.scroll_offset = data.scroll_offset
     self:build()
     UIManager:setDirty(self, function() return "ui", self.dimen end)
 end
@@ -1081,24 +1085,48 @@ function LibraryView:build()
     self._build_generation = (self._build_generation or 0) + 1
     self._closed = nil
     local build_generation = self._build_generation
-    if self.on_reach_bottom then
-        -- Auto-load the next page once the reader reaches the end, instead of
-        -- spending a row on a Load more line. A page that already fits on
-        -- screen counts as the end too, otherwise a short first page could
-        -- never pull in more and the reader sits on a half-empty screen.
-        local reach = self.on_reach_bottom
+    local reach = self.on_reach_bottom
+    local fill = self.on_fill_page
+    if reach or fill then
+        -- Two triggers, each strictly one-shot per render:
+        --   fill  - the page is shorter than the screen, so pull exactly one
+        --           more page to fill it (otherwise a short first page can
+        --           never load more);
+        --   reach - the page is scrollable and the reader hit the end.
+        -- The one-shot guard is the whole point: a repeating fill would keep
+        -- firing requests forever on a page that never grows taller.
         local function watch_bottom()
             if self._closed or build_generation ~= self._build_generation then return end
             local max_y = tonumber(scroll._max_scroll_offset_y) or 0
             local offset_y = tonumber(scroll._scroll_offset_y) or 0
-            local reached = max_y == 0 or offset_y >= max_y - Screen:scaleBySize(80)
-            if reached then
-                reach()
+            if max_y == 0 then
+                if fill then
+                    local run = fill
+                    fill = nil
+                    run(0)
+                end
+                return
+            end
+            if offset_y >= max_y - Screen:scaleBySize(80) then
+                if reach then
+                    local run = reach
+                    reach = nil
+                    run(offset_y)
+                end
                 return
             end
             UIManager:scheduleIn(0.5, watch_bottom)
         end
         UIManager:scheduleIn(0.6, watch_bottom)
+    end
+    if tonumber(self.scroll_offset) and tonumber(self.scroll_offset) > 0 then
+        -- A freshly built page starts at the top; without restoring the
+        -- offset an auto-load looks like a jump back to the beginning.
+        local keep = tonumber(self.scroll_offset)
+        UIManager:scheduleIn(0.05, function()
+            if self._closed or build_generation ~= self._build_generation then return end
+            pcall(function() scroll:setScrolledOffset({ x = 0, y = keep }) end)
+        end)
     end
     local rows = { self._tab_buttons }
     if #self._action_secondary > 0 then rows[#rows + 1] = self._action_secondary end
@@ -1190,6 +1218,8 @@ function M.show(data, callbacks)
         on_page_changed = callbacks.on_page_changed,
         on_categories = callbacks.on_categories,
         on_reach_bottom = callbacks.on_reach_bottom,
+        on_fill_page = callbacks.on_fill_page,
+        scroll_offset = data.scroll_offset,
     }
     UIManager:show(view)
     return view
