@@ -13,6 +13,9 @@ local Store = {}
 -- Section types seen in /store/list and /store/recommend. `books` sections
 -- carry a book list; `categories` sections carry entry tiles; `topics` carry
 -- curated lists; `banners` are image-only and get skipped by the UI.
+-- Audio (24) has no use on an e-ink reader, so it never reaches the UI.
+Store.SKIPPED_SECTION_TYPES = { [24] = true }
+
 Store.SECTION_TYPE = {
     BANNER = 11,
     CATEGORY_ENTRANCE = 13,
@@ -116,7 +119,7 @@ function Store.sections(response)
     if type(response) ~= "table" then return out end
     for _i, raw in ipairs(response.data or {}) do
         local kind = number(raw.type) or 0
-        if kind ~= Store.SECTION_TYPE.BANNER then
+        if kind ~= Store.SECTION_TYPE.BANNER and not Store.SKIPPED_SECTION_TYPES[kind] then
             local entry = {
                 type = kind,
                 name = tostring(raw.name or ""):gsub("^%s+", ""):gsub("%s+$", ""),

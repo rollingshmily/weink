@@ -334,8 +334,24 @@ function LibraryView:actionBar()
             bordersize = 0, padding = 0, margin = 0,
             HorizontalGroup:new{ back_button },
         }
-    end
-    if self.mode == "favorites" or self.mode == "floating" then
+    end    if self.mode == "store" then
+        -- The shelf actions (sort / filter / search shelf) mean nothing here;
+        -- the store has its own search and category rows.
+        local refresh_button = Button:new{
+            text = _("↻ Get latest"),
+            width = self.screen_w,
+            radius = 0, margin = 0, bordersize = 0,
+            text_font_bold = false,
+            show_parent = self,
+            callback = function() if self.on_refresh then self.on_refresh() end end,
+        }
+        self._action_secondary = {}
+        self._action_primary = { refresh_button }
+        return FrameContainer:new{
+            bordersize = 0, padding = 0, margin = 0,
+            HorizontalGroup:new{ refresh_button },
+        }
+    end    if self.mode == "favorites" or self.mode == "floating" then
         local refresh_button = Button:new{
             text = _("↻ Get latest"),
             width = self.screen_w,
