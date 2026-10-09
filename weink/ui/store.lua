@@ -74,7 +74,10 @@ end
 -- Flatten feed sections into display rows: a heading row per section followed
 -- by its books (capped) or category tiles.
 function M:buildStoreRows(sections)
-    local rows = {}
+    local rows = {
+        { kind = "action", action = "search", label = _("Search the store") },
+        { kind = "action", action = "categories", label = _("All categories") },
+    }
     for _i, section in ipairs(sections) do
         local has_content = #section.books > 0
             or #section.categories > 0
@@ -165,7 +168,13 @@ end
 
 function M:onStoreRowSelected(row, view)
     if type(row) ~= "table" then return end
-    if row.kind == "book" then
+    if row.kind == "action" then
+        if row.action == "search" then
+            self:showStoreSearch(view)
+        elseif row.action == "categories" then
+            self:showStoreCategories(view)
+        end
+    elseif row.kind == "book" then
         self:showStoreBookRecord(row.book, view)
     elseif row.kind == "category" or row.kind == "topic" then
         self:openStoreCategory(row.category or row.topic, view)
@@ -174,6 +183,38 @@ function M:onStoreRowSelected(row, view)
     elseif row.kind == "more" then
         self:openStoreCategory(row.section, view, { list_only = true })
     end
+end
+
+-- Books related to the open one (GET /book/similar).
+function M:showSimilarBooks(book, old_view)
+    if not self:requireLogin(true, true) then return end
+    local book_id = tostring(book.book_id or "")
+    if book_id == "" then return end
+    if old_view then UIManager:close(old_view) end
+    self:showBusy(_("Loading related books..."))
+    self:runOnlineTask(_("Related books"), function()
+        local ok, result = pcall(function()
+            return self.client:book_similar(book_id, 20)
+        end)
+        self:closeBusy()
+        if not ok then
+            logger.err("similar books failed:", log_error(result))
+            self:showInfo(T(_("Load related books failed:\n%1"), display_error(result)))
+            return
+        end
+        local parsed = Store.books(type(result) == "table" and result.books or {})
+        if #parsed == 0 then
+            self:showInfo(_("No related books."))
+            return
+        end
+        local rows = {}
+        for _i, entry in ipairs(parsed) do
+            rows[#rows + 1] = { kind = "book", book = entry }
+        end
+        self:renderStoreRows(rows, T(_("Related to %1"), book.title or book_id), "store", {
+            on_refresh = function() self:showSimilarBooks(book, nil) end,
+        })
+    end)
 end
 
 -- ---------- category browsing ----------
@@ -503,7 +544,14 @@ function M:_showStoreBookDetail(book, shelf_member, old_view)
         statuses[#statuses + 1] = _("Not in bookshelf")
     end
 
-    local actions = {}
+    local actions = {
+        {
+            text = _("Related books"),
+            callback = function()
+                self:showSimilarBooks(book, view)
+            end,
+        },
+    }
     if shelf_member == true then
         actions[#actions + 1] = {
             text = _("Remove from bookshelf"),

@@ -521,6 +521,10 @@ function LibraryView:content()
                     status = table.concat(parts, "  ·  ")
                     font_size = 20
                     indent = true
+                elseif kind == "action" then
+                    text = book.label or ""
+                    font_size = 20
+                    bold = true
                 elseif kind == "category" then
                     text = book.category and book.category.title or ""
                     status = (book.category and book.category.total or 0) > 0
